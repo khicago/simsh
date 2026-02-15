@@ -1,0 +1,14 @@
+[
+  {
+    "name": "echo-basic",
+    "script": "echo hello",
+    "stdout": "hello",
+    "exit_code": 0
+  },
+  {
+    "name": "pipeline-basic",
+    "script": "echo hello | cat",
+    "stdout": "hello",
+    "exit_code": 0
+  }
+]
