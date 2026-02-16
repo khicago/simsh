@@ -15,6 +15,7 @@ func specRm() engine.CommandSpec {
 		Manual: "rm ABS_PATH...",
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
+			"Mount-backed virtual paths are immutable and cannot be removed.",
 		},
 		Examples:       ExamplesFor("rm"),
 		DetailedManual: LoadEmbeddedManual("rm"),
@@ -41,6 +42,12 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "rm: missing operand", contract.ExitCodeUsage
 	}
 	for _, p := range paths {
+		if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRemove, p); err != nil {
+			if errors.Is(err, contract.ErrUnsupported) {
+				return "rm: not supported", contract.ExitCodeUnsupported
+			}
+			return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
+		}
 		if err := runtime.Ops.RemoveFile(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "rm: not supported", contract.ExitCodeUnsupported

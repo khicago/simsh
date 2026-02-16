@@ -73,20 +73,24 @@ type Filesystem interface {
 
 // Ops is callback wiring used by the engine and adapters.
 type Ops struct {
-	RootDir              string
-	RequireAbsolutePath  func(raw string) (string, error)
-	ListChildren         func(ctx context.Context, dir string) ([]string, error)
-	IsDirPath            func(ctx context.Context, path string) (bool, error)
-	DescribePath         func(ctx context.Context, path string) (PathMeta, error)
-	FormatLSLongRow      LSLongRowFormatter
-	ReadRawContent       func(ctx context.Context, path string) (string, error)
-	ResolveSearchPaths   func(ctx context.Context, target string, recursive bool) ([]string, error)
-	CollectFilesUnder    func(ctx context.Context, target string) ([]string, error)
-	WriteFile            func(ctx context.Context, filePath string, content string) error
-	AppendFile           func(ctx context.Context, filePath string, content string) error
-	EditFile             func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error
-	MakeDir              func(ctx context.Context, dirPath string) error
-	RemoveFile           func(ctx context.Context, filePath string) error
+	RootDir             string
+	RequireAbsolutePath func(raw string) (string, error)
+	ListChildren        func(ctx context.Context, dir string) ([]string, error)
+	IsDirPath           func(ctx context.Context, path string) (bool, error)
+	DescribePath        func(ctx context.Context, path string) (PathMeta, error)
+	FormatLSLongRow     LSLongRowFormatter
+	ReadRawContent      func(ctx context.Context, path string) (string, error)
+	ResolveSearchPaths  func(ctx context.Context, target string, recursive bool) ([]string, error)
+	CollectFilesUnder   func(ctx context.Context, target string) ([]string, error)
+	WriteFile           func(ctx context.Context, filePath string, content string) error
+	AppendFile          func(ctx context.Context, filePath string, content string) error
+	EditFile            func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error
+	MakeDir             func(ctx context.Context, dirPath string) error
+	RemoveFile          func(ctx context.Context, filePath string) error
+	// CheckPathOp is an optional preflight hook for commands to validate path
+	// access before executing multi-step mutations. Virtual overlays may use it
+	// to provide consistent "unsupported" errors and avoid partial writes.
+	CheckPathOp          func(ctx context.Context, op PathOp, path string) error
 	ListExternalCommands func(ctx context.Context) ([]ExternalCommand, error)
 	RunExternalCommand   func(ctx context.Context, req ExternalCommandRequest) (ExternalCommandResult, error)
 	ReadExternalManual   func(ctx context.Context, command string) (string, error)

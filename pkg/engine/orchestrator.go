@@ -97,6 +97,9 @@ func (e *Engine) normalizeOps(ops contract.Ops) (contract.Ops, error) {
 	if ops.RemoveFile == nil {
 		ops.RemoveFile = func(context.Context, string) error { return contract.ErrUnsupported }
 	}
+	if ops.CheckPathOp == nil {
+		ops.CheckPathOp = func(context.Context, contract.PathOp, string) error { return nil }
+	}
 	if ops.Policy.WriteMode == "" {
 		ops.Policy = contract.DefaultPolicy()
 	}

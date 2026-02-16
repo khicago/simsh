@@ -14,6 +14,7 @@ func specMv() engine.CommandSpec {
 		Manual: "mv SRC_ABS DEST_ABS",
 		Tips: []string{
 			"Moves a file from source to destination. Both paths must be absolute.",
+			"Mount-backed virtual paths are immutable and cannot be moved.",
 		},
 		Examples:       ExamplesFor("mv"),
 		DetailedManual: LoadEmbeddedManual("mv"),
@@ -32,9 +33,27 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
 	}
+	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRead, src); err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return "mv: source path is not supported", contract.ExitCodeUnsupported
+		}
+		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+	}
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
+	}
+	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRemove, src); err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return "mv: remove is not supported", contract.ExitCodeUnsupported
+		}
+		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+	}
+	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpWrite, dest); err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return "mv: write is not supported", contract.ExitCodeUnsupported
+		}
+		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 	}
 	content, err := runtime.Ops.ReadRawContent(runtime.Ctx, src)
 	if err != nil {

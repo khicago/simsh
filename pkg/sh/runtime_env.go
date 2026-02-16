@@ -44,6 +44,8 @@ func DescribeMarkdown() string {
 		"- deterministic script operators: `;`, `&&`, `||`, `|`",
 		"- deterministic redirections: `>`, `>>`, `<`, `<<`",
 		"- command mounts: `/sys/bin` (builtin), `/bin` (injected external)",
+		"- parent directories of mount points are exposed as synthetic virtual directories (e.g. `/sys`)",
+		"- mount-backed virtual paths are immutable (no write/edit/remove/mkdir/cp/mv on those paths)",
 		"- builtin commands: `" + strings.Join(names, "`, `") + "`",
 		"- profile gates: `core-strict`, `bash-plus`, `zsh-lite`",
 		"",

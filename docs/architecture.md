@@ -37,6 +37,8 @@ These names are intentionally explicit so an agent can infer write intent direct
   - `/sys/bin`: builtin commands
   - `/bin`: injected external commands
   - `/test`: optional regression corpus mount
+  - synthetic parent mount directories are exposed (e.g. `/sys` for `/sys/bin`)
+  - mount-backed paths are immutable for write/mkdir/remove and move/copy flows
 
 ## Current Status
 - [x] Core package split (`sh/fs/cmd`).

@@ -14,6 +14,7 @@ func specCp() engine.CommandSpec {
 		Manual: "cp SRC_ABS DEST_ABS",
 		Tips: []string{
 			"Copies a file from source to destination. Both paths must be absolute.",
+			"Mount-backed virtual paths are immutable and not valid copy operands.",
 		},
 		Examples:       ExamplesFor("cp"),
 		DetailedManual: LoadEmbeddedManual("cp"),
@@ -32,9 +33,21 @@ func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
 	}
+	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRead, src); err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return "cp: source path is not supported", contract.ExitCodeUnsupported
+		}
+		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
+	}
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
+	}
+	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpWrite, dest); err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return "cp: write is not supported", contract.ExitCodeUnsupported
+		}
+		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
 	}
 	content, err := runtime.Ops.ReadRawContent(runtime.Ctx, src)
 	if err != nil {
