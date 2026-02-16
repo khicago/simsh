@@ -246,12 +246,51 @@ func TestEngineBuiltinAndExternalMounts(t *testing.T) {
 		t.Fatalf("expected /sys/bin/ls in output: %q", out)
 	}
 
+	out, code = eng.Execute(context.Background(), "ls /sys", ops)
+	if code != 0 {
+		t.Fatalf("ls /sys failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "/sys/bin") {
+		t.Fatalf("expected /sys/bin in output: %q", out)
+	}
+
 	out, code = eng.Execute(context.Background(), "ls /bin", ops)
 	if code != 0 {
 		t.Fatalf("ls /bin failed: code=%d out=%q", code, out)
 	}
 	if !strings.Contains(out, "/bin/report_tool") {
 		t.Fatalf("expected /bin/report_tool in output: %q", out)
+	}
+}
+
+func TestEngineMountParentIsImmutable(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := writableOps(fs)
+
+	out, code := eng.Execute(context.Background(), "mkdir /sys", ops)
+	if code == 0 {
+		t.Fatalf("expected mkdir /sys to fail: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "rm /sys/bin/ls", ops)
+	if code == 0 {
+		t.Fatalf("expected rm /sys/bin/ls to fail: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "cp /sys/bin/ls /workspace/copied", ops)
+	if code == 0 {
+		t.Fatalf("expected cp from /sys/bin to fail: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "cp /workspace/readme.md /sys/bin/copied", ops)
+	if code == 0 {
+		t.Fatalf("expected cp into /sys/bin to fail: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "mv /sys/bin/ls /workspace/moved", ops)
+	if code == 0 {
+		t.Fatalf("expected mv from /sys/bin to fail: out=%q", out)
 	}
 }
 

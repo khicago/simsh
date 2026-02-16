@@ -55,4 +55,6 @@ curl -sS http://127.0.0.1:18080/v1/execute \
 - profiles: `core-strict`, `bash-plus`, `zsh-lite`
 - policies: `disabled`, `read-only`, `write-limited`, `full`
 - mounts: `/sys/bin`, `/bin`, optional `/test`
+- synthetic parent mount dirs are visible (e.g. `/sys` for `/sys/bin`)
+- mount-backed virtual paths are immutable for write/mkdir/rm/cp/mv flows
 - interactive runtime: full-screen TUI by default, fallback line REPL via `--repl`/`--no-tui`

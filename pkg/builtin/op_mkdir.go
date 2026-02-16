@@ -15,6 +15,7 @@ func specMkdir() engine.CommandSpec {
 		Manual: "mkdir [-p] ABS_PATH...",
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
+			"Mount-backed virtual paths are immutable and cannot be created.",
 		},
 		Examples:       ExamplesFor("mkdir"),
 		DetailedManual: LoadEmbeddedManual("mkdir"),
@@ -44,6 +45,12 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "mkdir: missing operand", contract.ExitCodeUsage
 	}
 	for _, p := range paths {
+		if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpMkdir, p); err != nil {
+			if errors.Is(err, contract.ErrUnsupported) {
+				return "mkdir: not supported", contract.ExitCodeUnsupported
+			}
+			return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
+		}
 		if err := runtime.Ops.MakeDir(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "mkdir: not supported", contract.ExitCodeUnsupported

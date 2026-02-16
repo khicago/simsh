@@ -18,6 +18,29 @@ type mountRouter struct {
 	mounts []mountedMount
 }
 
+// isSyntheticPrefix reports whether pathValue is a synthetic directory that
+// exists solely to parent one or more mount points (e.g. "/sys" for "/sys/bin").
+//
+// Note: this check is purely structural (no ctx), so it may return true even
+// when the descendant mount is inactive. The actual directory existence and
+// children are still determined by the ctx-aware synthetic helpers.
+func (r mountRouter) isSyntheticPrefix(pathValue string) bool {
+	pathValue = normalizeAbsolutePath(pathValue)
+	if pathValue == "/" {
+		return false
+	}
+	prefix := pathValue + "/"
+	for _, mounted := range r.mounts {
+		if mounted.point == pathValue {
+			continue
+		}
+		if strings.HasPrefix(mounted.point, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 func newMountRouter(mounts []contract.VirtualMount) (mountRouter, error) {
 	normalized := make([]mountedMount, 0, len(mounts))
 	seen := map[string]struct{}{}
@@ -178,12 +201,15 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 	origWriteFile := ops.WriteFile
 	origAppendFile := ops.AppendFile
 	origEditFile := ops.EditFile
+	origMakeDir := ops.MakeDir
+	origRemoveFile := ops.RemoveFile
+	origCheckPathOp := ops.CheckPathOp
 
 	ops.RequireAbsolutePath = func(raw string) (string, error) {
 		trimmed := strings.TrimSpace(raw)
 		if strings.HasPrefix(trimmed, "/") {
 			pathValue := normalizeAbsolutePath(trimmed)
-			if _, ok := r.match(pathValue); ok {
+			if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
 				return pathValue, nil
 			}
 		}
@@ -307,24 +333,54 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.WriteFile = func(ctx context.Context, filePath string, content string) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok {
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
 			return contract.ErrUnsupported
 		}
 		return origWriteFile(ctx, filePath, content)
 	}
 	ops.AppendFile = func(ctx context.Context, filePath string, content string) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok {
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
 			return contract.ErrUnsupported
 		}
 		return origAppendFile(ctx, filePath, content)
 	}
 	ops.EditFile = func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok {
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
 			return contract.ErrUnsupported
 		}
 		return origEditFile(ctx, filePath, oldString, newString, replaceAll)
+	}
+
+	ops.MakeDir = func(ctx context.Context, dirPath string) error {
+		pathValue := normalizeAbsolutePath(dirPath)
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		return origMakeDir(ctx, dirPath)
+	}
+
+	ops.RemoveFile = func(ctx context.Context, filePath string) error {
+		pathValue := normalizeAbsolutePath(filePath)
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		return origRemoveFile(ctx, filePath)
+	}
+
+	ops.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {
+		switch op {
+		case contract.PathOpRead, contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
+			abs := normalizeAbsolutePath(pathValue)
+			if _, ok := r.match(abs); ok || r.isSyntheticPrefix(abs) {
+				return contract.ErrUnsupported
+			}
+		}
+		if origCheckPathOp != nil {
+			return origCheckPathOp(ctx, op, pathValue)
+		}
+		return nil
 	}
 
 	return ops
