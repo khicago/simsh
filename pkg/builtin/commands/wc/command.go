@@ -1,6 +1,7 @@
-package builtin
+package wc
 
 import (
+	"embed"
 	"fmt"
 	"strings"
 
@@ -8,20 +9,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specWc() engine.CommandSpec {
+var examples = []string{"wc /task_outputs/report.md", "wc -l /knowledge_base/data.txt"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandWc,
+		Name:   "wc",
 		Manual: "wc [-l] [-w] [-c] [ABS_FILE]",
 		Tips: []string{
 			"Counts lines, words, and bytes. Use stdin when no file is given.",
 		},
-		Examples:       ExamplesFor("wc"),
-		DetailedManual: LoadEmbeddedManual("wc"),
-		Run:            runWc,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runWc(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	showLines := false
 	showWords := false
 	showBytes := false
@@ -59,7 +73,7 @@ func runWc(runtime engine.CommandRuntime, args []string) (string, int) {
 		showBytes = true
 	}
 
-	raw, out, code := loadWcSource(runtime, filePath)
+	raw, out, code := loadSource(runtime, filePath)
 	if code != 0 {
 		return out, code
 	}
@@ -87,7 +101,7 @@ func runWc(runtime engine.CommandRuntime, args []string) (string, int) {
 	return strings.Join(parts, " "), 0
 }
 
-func loadWcSource(runtime engine.CommandRuntime, filePath string) (string, string, int) {
+func loadSource(runtime engine.CommandRuntime, filePath string) (string, string, int) {
 	if runtime.HasStdin && filePath == "" {
 		return runtime.Stdin, "", 0
 	}

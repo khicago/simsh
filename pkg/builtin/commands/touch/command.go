@@ -1,6 +1,7 @@
-package builtin
+package touch
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,20 +10,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specTouch() engine.CommandSpec {
+var examples = []string{"touch /task_outputs/notes.md"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandTouch,
+		Name:   "touch",
 		Manual: "touch ABS_PATH...",
 		Tips: []string{
 			"Creates empty files if they do not exist.",
 		},
-		Examples:       ExamplesFor("touch"),
-		DetailedManual: LoadEmbeddedManual("touch"),
-		Run:            runTouch,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if !runtime.Ops.Policy.AllowWrite() {
 		return "touch: write is not supported", contract.ExitCodeUnsupported
 	}

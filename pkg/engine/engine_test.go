@@ -886,13 +886,15 @@ func TestManVerboseMode(t *testing.T) {
 	fs := newTestFS()
 	ops := readOnlyOps(fs)
 
-	out, code := eng.Execute(context.Background(), "man -v ls", ops)
-	if code != 0 {
-		t.Fatalf("man -v ls failed: code=%d out=%q", code, out)
-	}
-	// Should contain full markdown headers
-	if !strings.Contains(out, "SYNOPSIS") || !strings.Contains(out, "DESCRIPTION") {
-		t.Fatalf("expected full markdown in man -v ls: %q", out)
+	for _, cmd := range []string{"ls", "cp", "rm", "wc"} {
+		out, code := eng.Execute(context.Background(), "man -v "+cmd, ops)
+		if code != 0 {
+			t.Fatalf("man -v %s failed: code=%d out=%q", cmd, code, out)
+		}
+		// Should contain full markdown headers
+		if !strings.Contains(out, "SYNOPSIS") || !strings.Contains(out, "DESCRIPTION") {
+			t.Fatalf("expected full markdown in man -v %s: %q", cmd, out)
+		}
 	}
 }
 

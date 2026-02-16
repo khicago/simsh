@@ -1,6 +1,7 @@
-package builtin
+package mv
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 
@@ -8,20 +9,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specMv() engine.CommandSpec {
+var examples = []string{"mv /task_outputs/draft.md /task_outputs/final.md"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandMv,
+		Name:   "mv",
 		Manual: "mv SRC_ABS DEST_ABS",
 		Tips: []string{
 			"Moves a file from source to destination. Both paths must be absolute.",
 		},
-		Examples:       ExamplesFor("mv"),
-		DetailedManual: LoadEmbeddedManual("mv"),
-		Run:            runMv,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if !runtime.Ops.Policy.AllowWrite() {
 		return "mv: write is not supported", contract.ExitCodeUnsupported
 	}

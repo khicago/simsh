@@ -1,6 +1,7 @@
-package builtin
+package mkdir
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,20 +10,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specMkdir() engine.CommandSpec {
+var examples = []string{"mkdir /task_outputs/reports", "mkdir -p /task_outputs/a/b/c"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandMkdir,
+		Name:   "mkdir",
 		Manual: "mkdir [-p] ABS_PATH...",
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
 		},
-		Examples:       ExamplesFor("mkdir"),
-		DetailedManual: LoadEmbeddedManual("mkdir"),
-		Run:            runMkdir,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if !runtime.Ops.Policy.AllowWrite() {
 		return "mkdir: write is not supported", contract.ExitCodeUnsupported
 	}

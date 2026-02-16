@@ -1,6 +1,7 @@
-package builtin
+package rm
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,20 +10,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specRm() engine.CommandSpec {
+var examples = []string{"rm /task_outputs/old.md", "rm /task_outputs/temp1.txt /task_outputs/temp2.txt"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandRm,
+		Name:   "rm",
 		Manual: "rm ABS_PATH...",
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
 		},
-		Examples:       ExamplesFor("rm"),
-		DetailedManual: LoadEmbeddedManual("rm"),
-		Run:            runRm,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if !runtime.Ops.Policy.AllowWrite() {
 		return "rm: write is not supported", contract.ExitCodeUnsupported
 	}

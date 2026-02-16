@@ -1,28 +1,43 @@
-package builtin
+package diff
 
 import (
+	"embed"
 	"fmt"
 	"strings"
 
+	"github.com/khicago/simsh/pkg/builtin/shared"
 	"github.com/khicago/simsh/pkg/contract"
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specDiff() engine.CommandSpec {
+var examples = []string{"diff /knowledge_base/v1.md /knowledge_base/v2.md"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandDiff,
+		Name:   "diff",
 		Manual: "diff ABS_FILE1 ABS_FILE2",
 		Tips: []string{
 			"Compares two files line by line.",
 			"Exit code 0 if identical, 1 if different.",
 		},
-		Examples:       ExamplesFor("diff"),
-		DetailedManual: LoadEmbeddedManual("diff"),
-		Run:            runDiff,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runDiff(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(args) != 2 {
 		return "diff: expected exactly two file paths", contract.ExitCodeUsage
 	}
@@ -45,8 +60,8 @@ func runDiff(runtime engine.CommandRuntime, args []string) (string, int) {
 	if raw1 == raw2 {
 		return "", 0
 	}
-	lines1 := splitRawLines(raw1)
-	lines2 := splitRawLines(raw2)
+	lines1 := shared.SplitRawLines(raw1)
+	lines2 := shared.SplitRawLines(raw2)
 	out := simpleDiff(path1, path2, lines1, lines2)
 	return out, contract.ExitCodeGeneral
 }

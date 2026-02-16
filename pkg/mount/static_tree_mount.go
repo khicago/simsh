@@ -47,7 +47,11 @@ func NewStaticMount(mountPoint string, kindPrefix string, files map[string]strin
 	}
 	childSet := map[string]map[string]struct{}{}
 	for dirPath := range dirs {
-		childSet[dirPath] = map[string]struct{}{}
+		// Do not overwrite existing entries. Parent directories may already
+		// contain children discovered while visiting other dirs.
+		if _, ok := childSet[dirPath]; !ok {
+			childSet[dirPath] = map[string]struct{}{}
+		}
 		if dirPath != point {
 			parent := path.Dir(dirPath)
 			if _, ok := dirs[parent]; ok {

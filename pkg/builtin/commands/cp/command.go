@@ -1,6 +1,7 @@
-package builtin
+package cp
 
 import (
+	"embed"
 	"errors"
 	"fmt"
 
@@ -8,20 +9,33 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specCp() engine.CommandSpec {
+var examples = []string{"cp /knowledge_base/template.md /task_outputs/report.md", "cp /task_outputs/input.txt /task_outputs/output.txt"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandCp,
+		Name:   "cp",
 		Manual: "cp SRC_ABS DEST_ABS",
 		Tips: []string{
 			"Copies a file from source to destination. Both paths must be absolute.",
 		},
-		Examples:       ExamplesFor("cp"),
-		DetailedManual: LoadEmbeddedManual("cp"),
-		Run:            runCp,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	if !runtime.Ops.Policy.AllowWrite() {
 		return "cp: write is not supported", contract.ExitCodeUnsupported
 	}

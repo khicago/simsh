@@ -1,31 +1,45 @@
-package builtin
+package sort
 
 import (
+	"embed"
 	"fmt"
+	gosort "sort"
 	"strconv"
 	"strings"
 
-	gosort "sort"
-
+	"github.com/khicago/simsh/pkg/builtin/shared"
 	"github.com/khicago/simsh/pkg/contract"
 	"github.com/khicago/simsh/pkg/engine"
 )
 
-func specSort() engine.CommandSpec {
+var examples = []string{"sort /task_outputs/names.txt", "sort -rn /task_outputs/scores.txt"}
+
+//go:embed manual.md
+var manualFS embed.FS
+
+func detailedManual() string {
+	data, err := manualFS.ReadFile("manual.md")
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
-		Name:   CommandSort,
+		Name:   "sort",
 		Manual: "sort [-r] [-n] [-u] [ABS_FILE]",
 		Tips: []string{
 			"Sorts lines. Use stdin when no file is given.",
 			"-r reverses order, -n sorts numerically, -u removes duplicates.",
 		},
-		Examples:       ExamplesFor("sort"),
-		DetailedManual: LoadEmbeddedManual("sort"),
-		Run:            runSort,
+		Examples:       append([]string(nil), examples...),
+		DetailedManual: detailedManual(),
+		Run:            run,
 	}
 }
 
-func runSort(runtime engine.CommandRuntime, args []string) (string, int) {
+func run(runtime engine.CommandRuntime, args []string) (string, int) {
 	reverse := false
 	numeric := false
 	unique := false
@@ -57,12 +71,12 @@ func runSort(runtime engine.CommandRuntime, args []string) (string, int) {
 		filePath = pathValue
 	}
 
-	raw, out, code := loadSortSource(runtime, filePath)
+	raw, out, code := loadSource(runtime, filePath)
 	if code != 0 {
 		return out, code
 	}
 
-	lines := splitRawLines(raw)
+	lines := shared.SplitRawLines(raw)
 	if len(lines) == 0 {
 		return "", 0
 	}
@@ -98,7 +112,7 @@ func runSort(runtime engine.CommandRuntime, args []string) (string, int) {
 	return strings.Join(lines, "\n"), 0
 }
 
-func loadSortSource(runtime engine.CommandRuntime, filePath string) (string, string, int) {
+func loadSource(runtime engine.CommandRuntime, filePath string) (string, string, int) {
 	if runtime.HasStdin && filePath == "" {
 		return runtime.Stdin, "", 0
 	}
