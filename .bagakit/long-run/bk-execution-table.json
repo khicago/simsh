@@ -4,11 +4,11 @@
     "strategy": "highest_priority_first"
   },
   "detection": {
-    "status": "draft",
-    "last_reviewed_at": "",
-    "reviewed_by": "",
-    "upstream_systems": [],
-    "notes": "Run detect_prompt.md once, update adapters/guidance, then set status=ready."
+    "status": "ready",
+    "last_reviewed_at": "2026-02-17T14:25:00Z",
+    "reviewed_by": "bagaking",
+    "upstream_systems": ["bagakit-ft"],
+    "notes": "已安装并初始化 bagakit 技能，包含 f-20260217-vfs-mount-ancestors 功能。"
   },
   "adapters": [
     {
