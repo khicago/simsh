@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260217-vfs-mount-ancestors",
+  "updated_at": "2026-02-17T14:22:33Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement first scoped change for this feat",
+      "status": "todo",
+      "summary": "Replace this placeholder with actual task detail.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "2026-02-17T14:22:33Z",
+      "notes": []
+    }
+  ]
+}

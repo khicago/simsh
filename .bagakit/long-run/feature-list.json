@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "project": {
+    "name": "replace-with-project-name",
+    "goal": "replace-with-project-goal"
+  },
+  "status_legend": {
+    "todo": "Ready to start",
+    "in_progress": "Currently being implemented",
+    "done": "Implemented and validated",
+    "blocked": "Cannot continue until unblocked"
+  },
+  "features": []
+}
