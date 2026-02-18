@@ -95,8 +95,9 @@ Examples:
     head -n 5 /task_outputs/report.md
 
 #### ls
-    ls [-a] [-R] [-l] [ABS_PATH...]
+    ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]
 - Use -l to include semantic metadata.
+- Use --fmt md|json only with -l and a single non-recursive target.
 - Use -R for recursive traversal.
 
 Examples:
