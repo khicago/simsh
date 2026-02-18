@@ -176,7 +176,17 @@ func NewOps(opts Options) (contract.Ops, error) {
 				return contract.PathMeta{}, err
 			}
 			if isDir {
-				return contract.PathMeta{Exists: true, IsDir: true, Kind: "dir", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "unknown"}, nil
+				return contract.PathMeta{
+					Exists:           true,
+					IsDir:            true,
+					Kind:             "dir",
+					Access:           contract.PathAccessReadWrite,
+					Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilityMkdir, contract.PathCapabilityRemove, contract.PathCapabilitySearch, contract.PathCapabilityWrite},
+					LineCount:        -1,
+					FrontMatterLines: -1,
+					SpeakerRows:      -1,
+					UserRelevance:    "unknown",
+				}, nil
 			}
 			raw, err := readRawContent(ctx, pathValue)
 			if err != nil {
@@ -186,7 +196,17 @@ func NewOps(opts Options) (contract.Ops, error) {
 			if strings.TrimSpace(raw) == "" {
 				lineCount = 0
 			}
-			return contract.PathMeta{Exists: true, IsDir: false, Kind: "file", LineCount: lineCount, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "unknown"}, nil
+			return contract.PathMeta{
+				Exists:           true,
+				IsDir:            false,
+				Kind:             "file",
+				Access:           contract.PathAccessReadWrite,
+				Capabilities:     []string{contract.PathCapabilityAppend, contract.PathCapabilityDescribe, contract.PathCapabilityEdit, contract.PathCapabilityRead, contract.PathCapabilityRemove, contract.PathCapabilityWrite},
+				LineCount:        lineCount,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "unknown",
+			}, nil
 		}
 	}
 

@@ -263,6 +263,46 @@ func TestEngineBuiltinAndExternalMounts(t *testing.T) {
 	}
 }
 
+func TestEngineLSLongFormatAccessColumns(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := contract.OpsFromFilesystem(fs)
+
+	out, code := eng.Execute(context.Background(), "ls -l /sys", ops)
+	if code != 0 {
+		t.Fatalf("ls -l /sys failed: code=%d out=%q", code, out)
+	}
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	if len(lines) < 2 {
+		t.Fatalf("expected at least 2 lines (row + legend), got %d: %q", len(lines), out)
+	}
+	if lines[len(lines)-1] != "# columns: mode access kind lines path" {
+		t.Fatalf("expected legend line at end, got %q", lines[len(lines)-1])
+	}
+	legendCount := 0
+	for _, line := range lines {
+		if strings.HasPrefix(line, "# columns:") {
+			legendCount++
+		}
+	}
+	if legendCount != 1 {
+		t.Fatalf("expected exactly one legend line, got %d: %q", legendCount, out)
+	}
+
+	foundSysBin := false
+	for _, line := range lines {
+		if strings.HasSuffix(line, "/sys/bin") {
+			foundSysBin = true
+			if !strings.HasPrefix(line, "d ro sys_bin_dir ") {
+				t.Fatalf("unexpected /sys/bin row format: %q", line)
+			}
+		}
+	}
+	if !foundSysBin {
+		t.Fatalf("expected /sys/bin row in output: %q", out)
+	}
+}
+
 func TestEngineMountParentIsImmutable(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()

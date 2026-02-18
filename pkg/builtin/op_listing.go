@@ -69,7 +69,15 @@ func runLS(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(targets) > 1 {
 		sep = "\n\n"
 	}
-	return strings.Join(sections, sep), 0
+	out := strings.Join(sections, sep)
+	if longFormat {
+		out = strings.TrimRight(out, "\n")
+		if out != "" {
+			out += "\n"
+		}
+		out += "# columns: mode access kind lines path"
+	}
+	return out, 0
 }
 
 func runLSTarget(runtime engine.CommandRuntime, target string, includeDots bool, recursive bool, longFormat bool) (string, int) {
@@ -167,15 +175,55 @@ func formatLongRow(runtime engine.CommandRuntime, displayPath string, absPath st
 }
 
 func buildLongRow(runtime engine.CommandRuntime, displayPath string, absPath string) contract.LSLongRow {
-	meta := contract.PathMeta{Exists: false, IsDir: false, Kind: "unknown", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "unknown"}
+	meta := contract.PathMeta{
+		Exists:           false,
+		IsDir:            false,
+		Kind:             "unknown",
+		Access:           contract.PathAccessReadOnly,
+		Capabilities:     []string{contract.PathCapabilityDescribe},
+		LineCount:        -1,
+		FrontMatterLines: -1,
+		SpeakerRows:      -1,
+		UserRelevance:    "unknown",
+	}
 	if runtime.Ops.DescribePath != nil {
 		if described, err := runtime.Ops.DescribePath(runtime.Ctx, absPath); err == nil {
 			meta = described
 		}
 	} else {
 		if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, absPath); err == nil {
-			meta = contract.PathMeta{Exists: true, IsDir: isDir, Kind: ternary(isDir, "dir", "file"), LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "unknown"}
+			meta = contract.PathMeta{
+				Exists:           true,
+				IsDir:            isDir,
+				Kind:             ternary(isDir, "dir", "file"),
+				Access:           contract.PathAccessReadOnly,
+				Capabilities:     []string{contract.PathCapabilityDescribe},
+				LineCount:        -1,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "unknown",
+			}
 		}
+	}
+
+	// Fill defaults for older adapters that don't emit SSOT access/capabilities yet.
+	if strings.TrimSpace(meta.Access) == "" {
+		meta.Access = contract.PathAccessReadOnly
+		if runtime.Ops.Policy.AllowWrite() {
+			meta.Access = contract.PathAccessReadWrite
+		}
+	}
+	meta.Access = contract.NormalizePathAccess(meta.Access)
+	if len(meta.Capabilities) == 0 {
+		if meta.IsDir {
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch}
+		} else {
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead}
+		}
+	}
+	meta.Capabilities = contract.NormalizePathCapabilities(meta.Capabilities)
+	if meta.Access == contract.PathAccessReadOnly {
+		meta.Capabilities = contract.StripWriteCapabilities(meta.Capabilities)
 	}
 	return contract.LSLongRow{
 		DisplayPath:      displayPath,
@@ -183,6 +231,8 @@ func buildLongRow(runtime engine.CommandRuntime, displayPath string, absPath str
 		Exists:           meta.Exists,
 		IsDir:            meta.IsDir,
 		Kind:             meta.Kind,
+		Access:           meta.Access,
+		Capabilities:     meta.Capabilities,
 		LineCount:        meta.LineCount,
 		FrontMatterLines: meta.FrontMatterLines,
 		SpeakerRows:      meta.SpeakerRows,
@@ -203,7 +253,8 @@ func formatDefaultLongRow(row contract.LSLongRow) string {
 	if row.IsDir {
 		mode = "d"
 	}
-	return fmt.Sprintf("%s kind=%s lines=%s %s", mode, kind, dashIfNegative(row.LineCount), row.DisplayPath)
+	access := contract.NormalizePathAccess(strings.TrimSpace(row.Access))
+	return fmt.Sprintf("%s %s %s %s %s", mode, access, kind, dashIfNegative(row.LineCount), row.DisplayPath)
 }
 
 func dashIfNegative(v int) string {

@@ -133,13 +133,33 @@ func (m *sysBinMount) DescribePath(ctx context.Context, pathValue string) (contr
 	_ = ctx
 	pathValue = normalizeAbsPath(pathValue)
 	if pathValue == contract.VirtualSystemBinDir {
-		return contract.PathMeta{Exists: true, IsDir: true, Kind: "sys_bin_dir", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+		return contract.PathMeta{
+			Exists:           true,
+			IsDir:            true,
+			Kind:             "sys_bin_dir",
+			Access:           contract.PathAccessReadOnly,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+			LineCount:        -1,
+			FrontMatterLines: -1,
+			SpeakerRows:      -1,
+			UserRelevance:    "n/a",
+		}, nil
 	}
 	if isExecutableUnder(pathValue, contract.VirtualSystemBinDir) {
 		name := strings.TrimPrefix(pathValue, contract.VirtualSystemBinDir+"/")
 		if m.catalog != nil {
 			if _, ok := m.catalog.LookupBuiltinDoc(name); ok {
-				return contract.PathMeta{Exists: true, IsDir: false, Kind: "sys_binary", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+				return contract.PathMeta{
+					Exists:           true,
+					IsDir:            false,
+					Kind:             "sys_binary",
+					Access:           contract.PathAccessReadOnly,
+					Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+					LineCount:        -1,
+					FrontMatterLines: -1,
+					SpeakerRows:      -1,
+					UserRelevance:    "n/a",
+				}, nil
 			}
 		}
 	}

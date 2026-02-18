@@ -19,7 +19,7 @@ lists the virtual root directory. Entries are returned one per line.
 
 - `-a` -- Include entries starting with `.` (dot files), adding `.` and `..` entries.
 - `-R` -- Recursive listing. Traverses subdirectories breadth-first, printing each directory header followed by its children.
-- `-l` -- Long format. Shows semantic metadata per entry: mode, kind, line count, and path.
+- `-l` -- Long format. Shows semantic metadata per entry: mode, access, kind, line count, and path.
 
 Flags may be combined (e.g. `ls -alR`).
 
@@ -48,9 +48,11 @@ List a specific file (returns the path):
 ## NOTES
 
 - All paths must be absolute (start with `/`).
-- Long format columns: `MODE kind=TYPE lines=N PATH`
+- Long format columns: `MODE ACCESS KIND LINES PATH`
 - Mode is `d` for directories, `-` for files.
+- Access is `ro|rw` derived from SSOT path metadata (mount-backed + synthetic mount parents are `ro`).
 - Line count shows `-` when unavailable.
+- `ls -l` prints a legend line once at the end: `# columns: mode access kind lines path`
 
 ## SEE ALSO
 

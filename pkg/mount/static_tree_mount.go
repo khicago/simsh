@@ -163,14 +163,34 @@ func (m *staticMount) DescribePath(ctx context.Context, pathValue string) (contr
 	_ = ctx
 	pathValue = normalizeAbsPath(pathValue)
 	if _, ok := m.dirs[pathValue]; ok {
-		return contract.PathMeta{Exists: true, IsDir: true, Kind: m.kindPrefix + "_dir", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+		return contract.PathMeta{
+			Exists:           true,
+			IsDir:            true,
+			Kind:             m.kindPrefix + "_dir",
+			Access:           contract.PathAccessReadOnly,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+			LineCount:        -1,
+			FrontMatterLines: -1,
+			SpeakerRows:      -1,
+			UserRelevance:    "n/a",
+		}, nil
 	}
 	if raw, ok := m.files[pathValue]; ok {
 		kind := m.kindPrefix + "_file"
 		if strings.HasSuffix(pathValue, ".sh") {
 			kind = m.kindPrefix + "_script"
 		}
-		return contract.PathMeta{Exists: true, IsDir: false, Kind: kind, LineCount: len(splitRawLines(raw)), FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+		return contract.PathMeta{
+			Exists:           true,
+			IsDir:            false,
+			Kind:             kind,
+			Access:           contract.PathAccessReadOnly,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+			LineCount:        len(splitRawLines(raw)),
+			FrontMatterLines: -1,
+			SpeakerRows:      -1,
+			UserRelevance:    "n/a",
+		}, nil
 	}
 	return contract.PathMeta{}, fmt.Errorf("%s: No such file or directory", pathValue)
 }

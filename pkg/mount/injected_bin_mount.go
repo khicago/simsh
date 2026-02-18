@@ -142,7 +142,17 @@ func (m *externalBinMount) DescribePath(ctx context.Context, pathValue string) (
 			return contract.PathMeta{}, err
 		}
 		if exists {
-			return contract.PathMeta{Exists: true, IsDir: true, Kind: "binary_dir", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+			return contract.PathMeta{
+				Exists:           true,
+				IsDir:            true,
+				Kind:             "binary_dir",
+				Access:           contract.PathAccessReadOnly,
+				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+				LineCount:        -1,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "n/a",
+			}, nil
 		}
 	}
 	if isExecutableUnder(pathValue, contract.VirtualExternalBinDir) {
@@ -151,7 +161,17 @@ func (m *externalBinMount) DescribePath(ctx context.Context, pathValue string) (
 			return contract.PathMeta{}, err
 		}
 		if exists {
-			return contract.PathMeta{Exists: true, IsDir: false, Kind: "binary", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+			return contract.PathMeta{
+				Exists:           true,
+				IsDir:            false,
+				Kind:             "binary",
+				Access:           contract.PathAccessReadOnly,
+				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+				LineCount:        -1,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "n/a",
+			}, nil
 		}
 	}
 	if strings.HasPrefix(pathValue, contract.VirtualExternalBinDir+"/") {
