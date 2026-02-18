@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"path"
 	"path/filepath"
@@ -300,6 +301,66 @@ func TestEngineLSLongFormatAccessColumns(t *testing.T) {
 	}
 	if !foundSysBin {
 		t.Fatalf("expected /sys/bin row in output: %q", out)
+	}
+}
+
+func TestEngineLSLongFormatMarkdown(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := contract.OpsFromFilesystem(fs)
+
+	out, code := eng.Execute(context.Background(), "ls -l --fmt md /sys", ops)
+	if code != 0 {
+		t.Fatalf("ls -l --fmt md /sys failed: code=%d out=%q", code, out)
+	}
+	if !strings.HasPrefix(out, "| mode | access | kind | lines | path |") {
+		t.Fatalf("expected markdown table header, got %q", out)
+	}
+	if !strings.Contains(out, "| d | ro | sys_bin_dir | - | /sys/bin |") {
+		t.Fatalf("expected /sys/bin row in markdown output, got %q", out)
+	}
+}
+
+func TestEngineLSLongFormatJSON(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := contract.OpsFromFilesystem(fs)
+
+	out, code := eng.Execute(context.Background(), "ls -l --fmt json /sys", ops)
+	if code != 0 {
+		t.Fatalf("ls -l --fmt json /sys failed: code=%d out=%q", code, out)
+	}
+	var resp struct {
+		Columns []string `json:"columns"`
+		Entries []struct {
+			Mode         string   `json:"mode"`
+			Access       string   `json:"access"`
+			Kind         string   `json:"kind"`
+			Lines        int      `json:"lines"`
+			Path         string   `json:"path"`
+			Capabilities []string `json:"capabilities"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal json failed: %v out=%q", err, out)
+	}
+	if len(resp.Columns) == 0 || len(resp.Entries) == 0 {
+		t.Fatalf("expected non-empty json payload, got columns=%v entries=%v", resp.Columns, resp.Entries)
+	}
+	found := false
+	for _, row := range resp.Entries {
+		if row.Path == "/sys/bin" {
+			found = true
+			if row.Mode != "d" || row.Access != "ro" || row.Kind != "sys_bin_dir" {
+				t.Fatalf("unexpected /sys/bin row: %+v", row)
+			}
+			if len(row.Capabilities) == 0 {
+				t.Fatalf("expected capabilities for /sys/bin row: %+v", row)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected /sys/bin entry in json output: %q", out)
 	}
 }
 

@@ -1,6 +1,6 @@
 ---
 name: ls
-synopsis: "ls [-a] [-R] [-l] [ABS_PATH...]"
+synopsis: "ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]"
 category: navigation
 ---
 
@@ -8,7 +8,7 @@ category: navigation
 
 ## SYNOPSIS
 
-    ls [-a] [-R] [-l] [ABS_PATH...]
+    ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]
 
 ## DESCRIPTION
 
@@ -20,6 +20,7 @@ lists the virtual root directory. Entries are returned one per line.
 - `-a` -- Include entries starting with `.` (dot files), adding `.` and `..` entries.
 - `-R` -- Recursive listing. Traverses subdirectories breadth-first, printing each directory header followed by its children.
 - `-l` -- Long format. Shows semantic metadata per entry: mode, access, kind, line count, and path.
+- `--fmt text|md|json` -- Output format for long listings (requires `-l`). `md` and `json` currently only support a single non-recursive target.
 
 Flags may be combined (e.g. `ls -alR`).
 
