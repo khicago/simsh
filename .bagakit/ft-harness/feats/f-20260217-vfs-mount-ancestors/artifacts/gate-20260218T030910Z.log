@@ -1,0 +1,6 @@
+gate_time=2026-02-18T03:09:10Z
+project_type=non_ui
+result=pass
+commands:
+- (cd .worktrees/wt-f-20260217-vfs-mount-ancestors && go test ./pkg/engine -run "TestEngineBuiltinAndExternalMounts|TestEngineMountParentIsImmutable") => pass (0)
+- (cd .worktrees/wt-f-20260217-vfs-mount-ancestors && go test ./...) => pass (0)

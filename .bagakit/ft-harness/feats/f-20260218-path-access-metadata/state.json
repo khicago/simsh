@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "feat_id": "f-20260218-path-access-metadata",
+  "title": "Path access metadata + ls/API formats",
+  "slug": "path-access-metadata",
+  "goal": "Implement SSOT path access metadata (access=ro|rw + capabilities[]) and surface it consistently in ls -l (short columns + legend, --fmt md/json) and /v1/execute (include_meta opt-in).",
+  "status": "archived",
+  "branch": "feat/f-20260218-path-access-metadata",
+  "worktree_name": "wt-f-20260218-path-access-metadata",
+  "worktree_path": ".worktrees/wt-f-20260218-path-access-metadata",
+  "created_at": "2026-02-18T06:05:18Z",
+  "updated_at": "2026-02-18T12:33:01Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 3
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-003",
+    "last_checked_at": "2026-02-18T12:17:52Z",
+    "last_check_commands": [
+      {
+        "command": "(cd .worktrees/wt-f-20260218-path-access-metadata && go test ./...)",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260218-path-access-metadata/artifacts/gate-20260218T121752Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-02-18T06:05:18Z",
+      "action": "feat_created",
+      "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-02-18T06:08:58Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-02-18T11:36:17Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-02-18T11:47:36Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-02-18T11:51:52Z",
+      "action": "task_started",
+      "detail": "T-002"
+    },
+    {
+      "at": "2026-02-18T12:02:07Z",
+      "action": "task_gate",
+      "detail": "T-002 => pass"
+    },
+    {
+      "at": "2026-02-18T12:03:30Z",
+      "action": "task_finished",
+      "detail": "T-002 => done"
+    },
+    {
+      "at": "2026-02-18T12:07:46Z",
+      "action": "task_started",
+      "detail": "T-003"
+    },
+    {
+      "at": "2026-02-18T12:17:52Z",
+      "action": "task_gate",
+      "detail": "T-003 => pass"
+    },
+    {
+      "at": "2026-02-18T12:29:10Z",
+      "action": "task_finished",
+      "detail": "T-003 => done"
+    },
+    {
+      "at": "2026-02-18T12:33:01Z",
+      "action": "feat_closed",
+      "detail": "archived"
+    }
+  ],
+  "archived_at": "2026-02-18T12:33:01Z"
+}

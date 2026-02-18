@@ -24,6 +24,11 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 - Link to the most authoritative spec or README.
 - Consider adding a suggested charter doc (e.g. `docs/notes-project-charter.md`) if the project lacks a stable intent/scope reference.
 - If this repo already has many docs and you're adopting Bagakit: consider adding/reading `docs/notes-adopting-living-docs.md` (adoption playbook).
+- Project architecture:
+  - `docs/architecture.md`
+  - `docs/architecture-path-access-metadata.md`
+- Release plan:
+  - `docs/first_version_plan.md`
 
 3) Current changes or proposals
 - Link to active proposals or change logs.

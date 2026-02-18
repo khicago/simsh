@@ -1,0 +1,5 @@
+gate_time=2026-02-18T12:17:52Z
+project_type=non_ui
+result=pass
+commands:
+- (cd .worktrees/wt-f-20260218-path-access-metadata && go test ./...) => pass (0)

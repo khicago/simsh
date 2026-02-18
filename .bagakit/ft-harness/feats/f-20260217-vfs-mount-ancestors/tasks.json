@@ -1,21 +1,34 @@
 {
   "version": 1,
   "feat_id": "f-20260217-vfs-mount-ancestors",
-  "updated_at": "2026-02-17T14:22:33Z",
+  "updated_at": "2026-02-18T03:11:08Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Implement first scoped change for this feat",
-      "status": "todo",
-      "summary": "Replace this placeholder with actual task detail.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
-      "last_commit_hash": null,
-      "started_at": null,
-      "finished_at": null,
-      "updated_at": "2026-02-17T14:22:33Z",
-      "notes": []
+      "status": "done",
+      "summary": "Expose synthetic mount parents (e.g. /sys) and enforce immutable mount/synthetic paths for write/mkdir/rm/cp/mv.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-18T03:09:10Z",
+      "last_gate_commands": [
+        {
+          "command": "(cd .worktrees/wt-f-20260217-vfs-mount-ancestors && go test ./pkg/engine -run \"TestEngineBuiltinAndExternalMounts|TestEngineMountParentIsImmutable\")",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "(cd .worktrees/wt-f-20260217-vfs-mount-ancestors && go test ./...)",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "55a7c33a3af0fe3b38919383fe6ae27821e07cd8",
+      "started_at": "2026-02-18T03:08:48Z",
+      "finished_at": "2026-02-18T03:09:25Z",
+      "updated_at": "2026-02-18T03:11:08Z",
+      "notes": [
+        "Gate: pass (see artifacts/gate-20260218T030910Z.log); commit 55a7c33"
+      ]
     }
   ]
 }

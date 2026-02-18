@@ -39,6 +39,7 @@ These names are intentionally explicit so an agent can infer write intent direct
   - `/test`: optional regression corpus mount
   - synthetic parent mount directories are exposed (e.g. `/sys` for `/sys/bin`)
   - mount-backed paths are immutable for write/mkdir/remove and move/copy flows
+- Path access SSOT + `ls -l`/API formats: `docs/architecture-path-access-metadata.md`
 
 ## Current Status
 - [x] Core package split (`sh/fs/cmd`).

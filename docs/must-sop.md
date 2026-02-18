@@ -11,6 +11,12 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## SOP Items
 
+### Path Access Metadata and Listing/API Formats
+Source: `docs/architecture-path-access-metadata.md`
+- Read this doc before changing PathMeta access/capabilities, ls -l output formats, or /v1/execute metadata.
+- Update this doc when schema/flags/output formats change.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Doc Co-Authoring Workflow (Guidelines)
 Source: `docs/guidelines-doc-coauthoring.md`
 - Use this workflow when drafting substantial docs (proposals, specs, decision docs, RFCs).

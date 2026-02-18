@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "feat_id": "f-20260218-path-access-metadata",
+  "updated_at": "2026-02-18T12:33:01Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "SSOT access/capabilities + compact ls -l columns",
+      "status": "done",
+      "summary": "Add PathMeta/LSLongRow access+capabilities SSOT and switch ls -l default to fixed short columns + legend; update man ls and tests.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-18T11:36:17Z",
+      "last_gate_commands": [
+        {
+          "command": "(cd .worktrees/wt-f-20260218-path-access-metadata && go test ./...)",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "f81a7f1d6f5dd7da3f824e1938cbb75ee51d3747",
+      "started_at": "2026-02-18T06:08:58Z",
+      "finished_at": "2026-02-18T11:47:36Z",
+      "updated_at": "2026-02-18T11:47:36Z",
+      "notes": [
+        "Gate: pass; commit f81a7f1"
+      ]
+    },
+    {
+      "id": "T-002",
+      "title": "ls -l alternate formats (--fmt md|json)",
+      "status": "done",
+      "summary": "Add --fmt md|json for ls -l (markdown table + JSON) and add tests.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-18T12:02:07Z",
+      "last_gate_commands": [
+        {
+          "command": "(cd .worktrees/wt-f-20260218-path-access-metadata && go test ./...)",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "0d88ab96f3b5c2f55dada0c07610bec2e819c858",
+      "started_at": "2026-02-18T11:51:52Z",
+      "finished_at": "2026-02-18T12:03:30Z",
+      "updated_at": "2026-02-18T12:03:30Z",
+      "notes": [
+        "Gate: pass; commit 0d88ab9"
+      ]
+    },
+    {
+      "id": "T-003",
+      "title": "/v1/execute include_meta response metadata",
+      "status": "done",
+      "summary": "Extend /v1/execute with include_meta opt-in and return meta derived from SSOT access/capabilities.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-18T12:17:52Z",
+      "last_gate_commands": [
+        {
+          "command": "(cd .worktrees/wt-f-20260218-path-access-metadata && go test ./...)",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "48a86f70c7b73b5ba8ce6571a0b0f95648b12abe",
+      "started_at": "2026-02-18T12:07:46Z",
+      "finished_at": "2026-02-18T12:29:10Z",
+      "updated_at": "2026-02-18T12:29:10Z",
+      "notes": [
+        "Gate: pass; commit 48a86f7"
+      ]
+    }
+  ]
+}
