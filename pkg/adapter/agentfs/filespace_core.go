@@ -411,11 +411,17 @@ func (f *aiFilesystem) DescribePath(ctx context.Context, pathValue string) (cont
 		return contract.PathMeta{}, err
 	}
 	pathValue = normalizeVirtualPath(pathValue)
+	access := contract.PathAccessReadOnly
+	if z, _, ok := f.resolveZone(pathValue); ok && z.writable {
+		access = contract.PathAccessReadWrite
+	}
 	if isDir {
 		meta := contract.PathMeta{
 			Exists:           true,
 			IsDir:            true,
 			Kind:             "dir",
+			Access:           access,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
 			LineCount:        -1,
 			FrontMatterLines: -1,
 			SpeakerRows:      -1,
@@ -423,6 +429,9 @@ func (f *aiFilesystem) DescribePath(ctx context.Context, pathValue string) (cont
 		}
 		if z, _, ok := f.resolveZone(pathValue); ok && strings.TrimSpace(z.kind) != "" {
 			meta.Kind = z.kind
+			if z.writable {
+				meta.Capabilities = append(meta.Capabilities, contract.PathCapabilityMkdir, contract.PathCapabilityWrite)
+			}
 		}
 		if f.relevanceEval != nil {
 			meta.UserRelevance = nonEmpty(f.relevanceEval(pathValue, meta), meta.UserRelevance)
@@ -439,10 +448,15 @@ func (f *aiFilesystem) DescribePath(ctx context.Context, pathValue string) (cont
 		Exists:           true,
 		IsDir:            false,
 		Kind:             kind,
+		Access:           access,
+		Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
 		LineCount:        len(lines),
 		FrontMatterLines: countFrontMatterLines(lines),
 		SpeakerRows:      countSpeakerRows(lines),
 		UserRelevance:    "unknown",
+	}
+	if access == contract.PathAccessReadWrite {
+		meta.Capabilities = append(meta.Capabilities, contract.PathCapabilityWrite, contract.PathCapabilityAppend, contract.PathCapabilityEdit, contract.PathCapabilityRemove)
 	}
 	if f.relevanceEval != nil {
 		meta.UserRelevance = nonEmpty(f.relevanceEval(pathValue, meta), meta.UserRelevance)

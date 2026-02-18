@@ -313,7 +313,17 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		if isSynthetic, err := r.isSyntheticDir(ctx, pathValue); err != nil {
 			return contract.PathMeta{}, err
 		} else if isSynthetic {
-			return contract.PathMeta{Exists: true, IsDir: true, Kind: "virtual_dir", LineCount: -1, FrontMatterLines: -1, SpeakerRows: -1, UserRelevance: "n/a"}, nil
+			return contract.PathMeta{
+				Exists:           true,
+				IsDir:            true,
+				Kind:             "virtual_dir",
+				Access:           contract.PathAccessReadOnly,
+				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+				LineCount:        -1,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "n/a",
+			}, nil
 		}
 		if origDescribePath != nil {
 			return origDescribePath(ctx, pathValue)

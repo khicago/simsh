@@ -7,6 +7,8 @@ type PathMeta struct {
 	Exists           bool
 	IsDir            bool
 	Kind             string
+	Access           string
+	Capabilities     []string
 	LineCount        int
 	FrontMatterLines int
 	SpeakerRows      int
@@ -20,6 +22,8 @@ type LSLongRow struct {
 	Exists           bool
 	IsDir            bool
 	Kind             string
+	Access           string
+	Capabilities     []string
 	LineCount        int
 	FrontMatterLines int
 	SpeakerRows      int

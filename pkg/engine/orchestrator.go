@@ -109,7 +109,11 @@ func (e *Engine) normalizeOps(ops contract.Ops) (contract.Ops, error) {
 	if _, err := contract.ParseProfile(string(ops.Profile)); err != nil {
 		return ops, err
 	}
-	return e.withMountRouter(ops)
+	withMounts, err := e.withMountRouter(ops)
+	if err != nil {
+		return ops, err
+	}
+	return withPathAccessPolicy(withMounts), nil
 }
 
 func (e *Engine) withMountRouter(ops contract.Ops) (contract.Ops, error) {
@@ -273,6 +277,33 @@ func appendUniquePath(paths []string, candidate string) []string {
 	paths = append(paths, candidate)
 	sort.Strings(paths)
 	return paths
+}
+
+func withPathAccessPolicy(ops contract.Ops) contract.Ops {
+	origDescribePath := ops.DescribePath
+	ops.DescribePath = func(ctx context.Context, pathValue string) (contract.PathMeta, error) {
+		if origDescribePath == nil {
+			return contract.PathMeta{}, contract.ErrUnsupported
+		}
+		meta, err := origDescribePath(ctx, pathValue)
+		if err != nil {
+			return contract.PathMeta{}, err
+		}
+		if strings.TrimSpace(meta.Access) == "" {
+			meta.Access = contract.PathAccessReadOnly
+			if ops.Policy.AllowWrite() {
+				meta.Access = contract.PathAccessReadWrite
+			}
+		}
+		meta.Access = contract.NormalizePathAccess(meta.Access)
+		meta.Capabilities = contract.NormalizePathCapabilities(meta.Capabilities)
+		if !ops.Policy.AllowWrite() || meta.Access == contract.PathAccessReadOnly {
+			meta.Access = contract.PathAccessReadOnly
+			meta.Capabilities = contract.StripWriteCapabilities(meta.Capabilities)
+		}
+		return meta, nil
+	}
+	return ops
 }
 
 func isNullDevice(pathValue string) bool {
