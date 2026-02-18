@@ -376,7 +376,7 @@ func formatJSONLongRows(rows []contract.LSLongRow) string {
 			Access:       contract.NormalizePathAccess(strings.TrimSpace(row.Access)),
 			Kind:         longRowKind(row),
 			Lines:        row.LineCount,
-			Path:         row.DisplayPath,
+			Path:         row.Path,
 			Capabilities: contract.NormalizePathCapabilities(row.Capabilities),
 		})
 	}
