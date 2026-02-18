@@ -129,9 +129,12 @@ Extend response with:
 
 `meta` SHOULD include:
 - `paths`: list of paths involved in execution with `access` + `capabilities` + `kind`
-- `denials`: rejected operations with `{op, path, reason}` for fast agent recovery
 
 The API meta is derived from the same SSOT schema as `ls -l --fmt json`.
+
+Current implementation note:
+- `meta.paths` is implemented.
+- `meta.denials` is deferred and can be added in a follow-up without changing the SSOT schema.
 
 ## Test Matrix (when implementing)
 - `ls -l` output (default) uses short columns and includes the legend line once.
@@ -140,5 +143,4 @@ The API meta is derived from the same SSOT schema as `ls -l --fmt json`.
 - Synthetic mount parents (`/sys`) show `access=ro`.
 - Mount-backed entries show `access=ro`.
 - Zone-backed writable paths show `access=rw` only when policy + adapter allow it.
-- `/v1/execute include_meta=true` returns meta and denials for unsupported operations.
-
+- `/v1/execute include_meta=true` returns `meta.paths` with SSOT access/capabilities.
