@@ -27,36 +27,13 @@
       "risks": [],
       "why_now": "",
       "updates": [
-        "2026-02-18T16:12:02Z synced from bk-execution-table"
+        "2026-02-19T05:06:20Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "source_system": "bagakit-ft",
       "source_item": "bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
       "source_ref": ".bagakit/ft-harness/feats/f-20260217-vfs-mount-ancestors/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260218-path-access-metadata:T-001",
-      "title": "Path access metadata + ls/API formats / SSOT access/capabilities + compact ls -l columns",
-      "status": "done",
-      "priority": 201,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260218-path-access-metadata:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260218-path-access-metadata:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-02-18T16:12:02Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260218-path-access-metadata:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260218-path-access-metadata/tasks.json"
     }
   ],
-  "updated_at": "2026-02-18T16:12:02Z"
+  "updated_at": "2026-02-19T05:06:20Z"
 }
