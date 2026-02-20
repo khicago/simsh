@@ -4,12 +4,12 @@
   "title": "支持 mount 父路径访问和路径保护",
   "slug": "vfs-mount-ancestors",
   "goal": "允许显式访问 mount 的父目录（如 /sys），并对 mount/synthetic 路径统一施加不可变写保护（rm/mv/cp/mkdir/重定向等），避免 mv 半写入。",
-  "status": "done",
+  "status": "archived",
   "branch": "feat/f-20260217-vfs-mount-ancestors",
   "worktree_name": "wt-f-20260217-vfs-mount-ancestors",
   "worktree_path": ".worktrees/wt-f-20260217-vfs-mount-ancestors",
   "created_at": "2026-02-17T14:22:33Z",
-  "updated_at": "2026-02-18T03:11:08Z",
+  "updated_at": "2026-02-20T11:53:01Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
@@ -54,6 +54,20 @@
       "at": "2026-02-18T03:09:25Z",
       "action": "task_finished",
       "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-02-20T11:53:01Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
     }
-  ]
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-02-20T11:53:01Z",
+  "archived_cleanup": {
+    "base_ref": "main",
+    "branch_merged": true,
+    "worktree_removed": true,
+    "branch_deleted": true,
+    "note": "worktree removed; branch deleted only when merged into base"
+  }
 }

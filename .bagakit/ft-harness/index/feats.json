@@ -1,15 +1,15 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-02-18T12:33:01Z",
+  "updated_at": "2026-02-20T11:53:01Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
       "title": "支持 mount 父路径访问和路径保护",
-      "status": "done",
+      "status": "archived",
       "branch": "feat/f-20260217-vfs-mount-ancestors",
       "worktree_name": "wt-f-20260217-vfs-mount-ancestors",
-      "updated_at": "2026-02-18T03:11:08Z"
+      "updated_at": "2026-02-20T11:53:01Z"
     },
     {
       "feat_id": "f-20260218-path-access-metadata",

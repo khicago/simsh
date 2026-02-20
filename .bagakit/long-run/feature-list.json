@@ -10,30 +10,6 @@
     "done": "Implemented and validated",
     "blocked": "Cannot continue until unblocked"
   },
-  "features": [
-    {
-      "id": "EXEC::bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-      "title": "支持 mount 父路径访问和路径保护 / Implement first scoped change for this feat",
-      "status": "done",
-      "priority": 101,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260217-vfs-mount-ancestors:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-02-19T05:06:20Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260217-vfs-mount-ancestors/tasks.json"
-    }
-  ],
-  "updated_at": "2026-02-19T05:06:20Z"
+  "features": [],
+  "updated_at": "2026-02-20T11:53:11Z"
 }
