@@ -14,6 +14,9 @@ type Options struct {
 	HostRoot          string
 	Profile           contract.CompatibilityProfile
 	Policy            contract.ExecutionPolicy
+	CommandAliases    map[string][]string
+	EnvVars           map[string]string
+	RCFiles           []string
 	EnableTestCorpus  bool
 	PathEnv           []string
 	ExternalCallbacks fs.ExternalCallbacks
@@ -37,6 +40,9 @@ func New(opts Options) (*Stack, error) {
 		HostRoot:          opts.HostRoot,
 		Profile:           opts.Profile,
 		Policy:            opts.Policy,
+		CommandAliases:    opts.CommandAliases,
+		EnvVars:           opts.EnvVars,
+		RCFiles:           opts.RCFiles,
 		PathEnv:           opts.PathEnv,
 		EnableTestCorpus:  opts.EnableTestCorpus,
 		ExternalCallbacks: opts.ExternalCallbacks,

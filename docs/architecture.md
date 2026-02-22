@@ -34,11 +34,23 @@ These names are intentionally explicit so an agent can infer write intent direct
   - `write-limited`
   - `full`
 - Mounts:
-  - `/sys/bin`: builtin commands
-  - `/bin`: injected external commands
+  - `/sys/bin`: system builtins
+  - `/bin`: custom external commands (injected bridge)
   - `/test`: optional regression corpus mount
   - synthetic parent mount directories are exposed (e.g. `/sys` for `/sys/bin`)
   - mount-backed paths are immutable for write/mkdir/remove and move/copy flows
+- Command introspection:
+  - `tree`: renders ASCII directory hierarchy (supports hidden/depth filters)
+  - `pwd`: prints current runtime root
+  - `which` / `type`: resolve command path and source (`alias` vs `builtin` vs `external`)
+  - `frontmatter`: stat/get/print markdown frontmatter across multiple files
+  - `rmdir`: removes empty directories only
+  - generic command aliases are supported (`ll` -> `ls -l`, `fm` -> `frontmatter`)
+  - runtime rc bootstrap supports read-only mounted config files with `export` and `alias`
+- Manual system:
+  - SSOT path: `pkg/builtin/commands/*/manual.md` (single source; remove duplicated `pkg/builtin/manuals/*`)
+  - `man <cmd>` returns concise summary + `Use-When` / `Avoid-When`
+  - `man -v <cmd>` renders full manual with frontmatter stripped
 - Path access SSOT + `ls -l`/API formats: `docs/architecture-path-access-metadata.md`
 
 ## Current Status

@@ -239,19 +239,6 @@ func formatLongRows(rows []contract.LSLongRow, style lsLongFormat) string {
 	}
 }
 
-func formatLongRow(runtime engine.CommandRuntime, displayPath string, absPath string, style lsLongFormat) string {
-	row := buildLongRow(runtime, displayPath, absPath)
-	if runtime.Ops.FormatLSLongRow != nil {
-		if formatted, handled := runtime.Ops.FormatLSLongRow(runtime.Ctx, row); handled {
-			return formatted
-		}
-	}
-	if style != lsLongFormatText {
-		return formatLongRows([]contract.LSLongRow{row}, style)
-	}
-	return formatDefaultLongRow(row)
-}
-
 func buildLongRow(runtime engine.CommandRuntime, displayPath string, absPath string) contract.LSLongRow {
 	meta := contract.PathMeta{
 		Exists:           false,

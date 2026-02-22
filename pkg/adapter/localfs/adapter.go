@@ -22,6 +22,9 @@ type Options struct {
 	RootDir             string
 	Profile             contract.CompatibilityProfile
 	Policy              contract.ExecutionPolicy
+	CommandAliases      map[string][]string
+	EnvVars             map[string]string
+	RCFiles             []string
 	PathEnv             []string
 	VirtualMounts       []contract.VirtualMount
 	ExternalCallbacks   ExternalCallbacks
@@ -77,6 +80,11 @@ func NewOps(opts Options) (contract.Ops, error) {
 		if !pathWithinRoot(root, normalized) {
 			return "", fmt.Errorf("path is outside root %s: %s", root, normalized)
 		}
+		// Resolve symlinks early so callers cannot smuggle escape paths that
+		// lexically look inside root.
+		if _, err := resolveAndCheckPath(root, normalized); err != nil {
+			return "", err
+		}
 		return normalized, nil
 	}
 
@@ -99,6 +107,12 @@ func NewOps(opts Options) (contract.Ops, error) {
 
 	isDirPath := func(ctx context.Context, pathValue string) (bool, error) {
 		_ = ctx
+		if _, err := resolveAndCheckPath(root, pathValue); err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
+		}
 		info, err := os.Stat(toNativePath(pathValue))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -111,6 +125,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 
 	listChildren := func(ctx context.Context, dir string) ([]string, error) {
 		_ = ctx
+		if _, err := resolveAndCheckPath(root, dir); err != nil {
+			return nil, err
+		}
 		entries, err := os.ReadDir(toNativePath(dir))
 		if err != nil {
 			return nil, err
@@ -125,6 +142,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 
 	collectFilesUnder := func(ctx context.Context, target string) ([]string, error) {
 		_ = ctx
+		if _, err := resolveAndCheckPath(root, target); err != nil {
+			return nil, err
+		}
 		info, err := os.Stat(toNativePath(target))
 		if err != nil {
 			return nil, err
@@ -155,6 +175,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 
 	resolveSearchPaths := func(ctx context.Context, target string, recursive bool) ([]string, error) {
 		_ = ctx
+		if _, err := resolveAndCheckPath(root, target); err != nil {
+			return nil, err
+		}
 		info, err := os.Stat(toNativePath(target))
 		if err != nil {
 			return nil, err
@@ -289,6 +312,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
+		if _, err := resolveAndCheckPath(root, dirPath); err != nil {
+			return err
+		}
 		native := toNativePath(dirPath)
 		return os.MkdirAll(native, 0o755)
 	}
@@ -298,6 +324,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
+		if _, err := resolveAndCheckPath(root, filePath); err != nil {
+			return err
+		}
 		native := toNativePath(filePath)
 		info, err := os.Stat(native)
 		if err != nil {
@@ -305,6 +334,28 @@ func NewOps(opts Options) (contract.Ops, error) {
 		}
 		if info.IsDir() {
 			return fmt.Errorf("cannot remove directory: %s", filePath)
+		}
+		return os.Remove(native)
+	}
+
+	removeDir := func(ctx context.Context, dirPath string) error {
+		_ = ctx
+		if !policy.AllowWrite() {
+			return contract.ErrUnsupported
+		}
+		if _, err := resolveAndCheckPath(root, dirPath); err != nil {
+			return err
+		}
+		if normalizeCLIPath(dirPath) == root {
+			return fmt.Errorf("cannot remove root directory: %s", dirPath)
+		}
+		native := toNativePath(dirPath)
+		info, err := os.Stat(native)
+		if err != nil {
+			return err
+		}
+		if !info.IsDir() {
+			return fmt.Errorf("not a directory: %s", dirPath)
 		}
 		return os.Remove(native)
 	}
@@ -324,9 +375,13 @@ func NewOps(opts Options) (contract.Ops, error) {
 		EditFile:             editFile,
 		MakeDir:              makeDir,
 		RemoveFile:           removeFile,
+		RemoveDir:            removeDir,
 		ListExternalCommands: opts.ExternalCallbacks.ListExternalCommands,
 		RunExternalCommand:   opts.ExternalCallbacks.RunExternalCommand,
 		ReadExternalManual:   opts.ExternalCallbacks.ReadExternalManual,
+		CommandAliases:       contract.NormalizeCommandAliases(opts.CommandAliases),
+		EnvVars:              contract.NormalizeEnvVars(opts.EnvVars),
+		RCFiles:              contract.NormalizeRCFiles(opts.RCFiles),
 		PathEnv:              append([]string(nil), opts.PathEnv...),
 		VirtualMounts:        append([]contract.VirtualMount(nil), opts.VirtualMounts...),
 		Profile:              profile,

@@ -37,6 +37,9 @@ go run ./cmd/simsh-cli -profile core-strict -c 'ls -l "/"'
 # CLI interactive TUI
 go run ./cmd/simsh-cli
 
+# CLI with read-only rc bootstrap (export + alias)
+go run ./cmd/simsh-cli --rc /etc/simshrc
+
 # CLI serve command
 go run ./cmd/simsh-cli serve -P 18080 -root "$PWD" -profile core-strict
 
@@ -49,12 +52,14 @@ curl -sS http://127.0.0.1:18080/v1/execute \
 ```
 
 ## Runtime Features
-- builtins: `ls`, `env`, `cat`, `head`, `tail`, `grep`, `find`, `echo`, `tee`, `sed`, `man`, `date`
+- builtins: `ls`, `tree`, `pwd`, `env`, `frontmatter`, `cat`, `head`, `tail`, `grep`, `find`, `which`, `type`, `echo`, `tee`, `sed`, `man`, `date`, `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `wc`, `sort`, `uniq`, `diff`
 - script operators: `;`, `&&`, `||`, `|`
 - redirections: `>`, `>>`, `<`, `<<`
 - profiles: `core-strict`, `bash-plus`, `zsh-lite`
 - policies: `disabled`, `read-only`, `write-limited`, `full`
-- mounts: `/sys/bin`, `/bin`, optional `/test`
+- command aliases: `ll` -> `ls -l`, `fm` -> `frontmatter`
+- runtime rc bootstrap: pass `--rc /abs/path/to/simshrc` (supports `export KEY=VALUE`, `alias name='cmd ...'`)
+- mounts: `/sys/bin` (system builtin), `/bin` (custom external), optional `/test`
 - synthetic parent mount dirs are visible (e.g. `/sys` for `/sys/bin`)
 - mount-backed virtual paths are immutable for write/mkdir/rm/cp/mv flows
 - interactive runtime: full-screen TUI by default, fallback line REPL via `--repl`/`--no-tui`

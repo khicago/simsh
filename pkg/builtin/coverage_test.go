@@ -55,12 +55,17 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	readme := rt.abs("workspace", "readme.md")
 	logs := rt.abs("workspace", "logs.txt")
 	other := rt.abs("workspace", "other.txt")
+	fmDoc := rt.abs("workspace", "frontmatter.md")
 	copyTarget := rt.abs("workspace", "copy.md")
 	mvTarget := rt.abs("workspace", "moved.txt")
 	newFile := rt.abs("workspace", "new.txt")
+	emptyDir := rt.abs("workspace", "empty-dir")
 
 	if out, code := rt.exec("mkdir -p " + rt.abs("workspace")); code != 0 {
 		t.Fatalf("setup mkdir failed: code=%d out=%q", code, out)
+	}
+	if out, code := rt.exec("mkdir -p " + emptyDir); code != 0 {
+		t.Fatalf("setup empty dir failed: code=%d out=%q", code, out)
 	}
 	if err := rt.ops.WriteFile(context.Background(), readme, "hello\nworld\n"); err != nil {
 		t.Fatalf("setup write readme failed: %v", err)
@@ -70,6 +75,12 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	}
 	if err := rt.ops.WriteFile(context.Background(), other, "hello\nworld\n"); err != nil {
 		t.Fatalf("setup write other failed: %v", err)
+	}
+	if err := rt.ops.WriteFile(context.Background(), fmDoc, "---\ntitle: Coverage Fixture\ntags:\n  - a\n  - b\n---\nbody\n"); err != nil {
+		t.Fatalf("setup write frontmatter fixture failed: %v", err)
+	}
+	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", ".hidden.txt"), "hidden\n"); err != nil {
+		t.Fatalf("setup write hidden file failed: %v", err)
 	}
 
 	tests := []struct {
@@ -87,11 +98,89 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "pwd",
+			cmd:  "pwd",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != rt.root {
+					t.Fatalf("pwd failed: code=%d out=%q root=%q", code, out, rt.root)
+				}
+			},
+		},
+		{
+			name: "tree",
+			cmd:  "tree " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "readme.md") {
+					t.Fatalf("tree failed: code=%d out=%q", code, out)
+				}
+				if strings.Contains(out, ".hidden.txt") {
+					t.Fatalf("tree should hide dot files by default: %q", out)
+				}
+			},
+		},
+		{
+			name: "tree-all",
+			cmd:  "tree -a " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, ".hidden.txt") {
+					t.Fatalf("tree -a failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "env",
 			cmd:  "env PATH",
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, "/sys/bin:/bin") {
 					t.Fatalf("env failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "frontmatter-stat",
+			cmd:  "frontmatter stat " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "y 1:6") || !strings.Contains(out, "title,tags") {
+					t.Fatalf("frontmatter stat failed: code=%d out=%q", code, out)
+				}
+				if !strings.Contains(out, "# columns: has fm_lines key_count keys path") {
+					t.Fatalf("frontmatter stat missing legend: %q", out)
+				}
+			},
+		},
+		{
+			name: "frontmatter-stat-md",
+			cmd:  "frontmatter stat --fmt md " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.HasPrefix(out, "| has | fm_lines | key_count | keys | path |") {
+					t.Fatalf("frontmatter stat --fmt md failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "frontmatter-stat-json",
+			cmd:  "frontmatter stat --fmt json " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"entries\"") || !strings.Contains(out, "\"has_frontmatter\":true") {
+					t.Fatalf("frontmatter stat --fmt json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "frontmatter-get-key",
+			cmd:  "frontmatter get --key title " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "Coverage Fixture" {
+					t.Fatalf("frontmatter get --key failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "frontmatter-print-context",
+			cmd:  "frontmatter print --key tags -C 1 -n " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "3:tags:") || !strings.Contains(out, "5:  - b") {
+					t.Fatalf("frontmatter print failed: code=%d out=%q", code, out)
 				}
 			},
 		},
@@ -141,6 +230,24 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "which",
+			cmd:  "which ls",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "/sys/bin/ls" {
+					t.Fatalf("which failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "type",
+			cmd:  "type ls",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "ls is /sys/bin/ls (builtin)") {
+					t.Fatalf("type failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "echo",
 			cmd:  "echo hello world",
 			want: func(t *testing.T, out string, code int) {
@@ -173,6 +280,18 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, "SYNOPSIS") {
 					t.Fatalf("man failed: code=%d out=%q", code, out)
+				}
+				if strings.HasPrefix(strings.TrimSpace(out), "---") {
+					t.Fatalf("man verbose should strip frontmatter: %q", out)
+				}
+			},
+		},
+		{
+			name: "man-summary-guidance",
+			cmd:  "man ls",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "Use-When:") || !strings.Contains(out, "Avoid-When:") {
+					t.Fatalf("man summary guidance missing: code=%d out=%q", code, out)
 				}
 			},
 		},
@@ -266,6 +385,15 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "rmdir",
+			cmd:  "rmdir " + emptyDir,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 {
+					t.Fatalf("rmdir failed: code=%d out=%q", code, out)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -311,27 +439,35 @@ func TestBuiltinCommandErrorCoverage(t *testing.T) {
 		ops  *contract.Ops
 	}{
 		{name: "ls-flag", cmd: "ls -z"},
+		{name: "tree-flag", cmd: "tree -z"},
+		{name: "pwd-arg", cmd: "pwd extra"},
 		{name: "env-too-many-args", cmd: "env A B"},
+		{name: "frontmatter-missing-subcommand", cmd: "frontmatter"},
 		{name: "cat-missing-arg", cmd: "cat"},
 		{name: "head-missing-input", cmd: "head -n 1"},
 		{name: "tail-bad-flag", cmd: "tail -x"},
 		{name: "grep-missing-pattern", cmd: "grep"},
 		{name: "find-bad-expr", cmd: "find -o"},
+		{name: "which-missing-operand", cmd: "which"},
+		{name: "type-missing-operand", cmd: "type"},
 		{name: "echo-ok", cmd: "echo x"}, // sanity command in error matrix
 		{name: "tee-missing-stdin", cmd: "tee " + rt.abs("a.txt")},
 		{name: "sed-bad-expr", cmd: "sed -i 'bad' " + rt.abs("a.txt")},
 		{name: "man-missing-name", cmd: "man"},
 		{name: "date-bad-format", cmd: "date +%Q"},
+		{name: "frontmatter-bad-flag", cmd: "frontmatter stat -z /"},
 		{name: "mkdir-missing-operand", cmd: "mkdir"},
 		{name: "cp-missing-args", cmd: "cp " + rt.abs("a.txt")},
 		{name: "mv-missing-args", cmd: "mv " + rt.abs("a.txt")},
 		{name: "rm-missing-operand", cmd: "rm"},
+		{name: "rmdir-missing-operand", cmd: "rmdir"},
 		{name: "touch-missing-operand", cmd: "touch"},
 		{name: "wc-bad-flag", cmd: "wc -z"},
 		{name: "sort-bad-flag", cmd: "sort -z"},
 		{name: "uniq-bad-flag", cmd: "uniq -z"},
 		{name: "diff-missing-args", cmd: "diff " + rt.abs("a.txt")},
 		{name: "tee-read-only", cmd: "echo x | tee " + rt.abs("deny.txt"), ops: &readOnlyOps},
+		{name: "rmdir-read-only", cmd: "rmdir " + rt.abs("deny"), ops: &readOnlyOps},
 	}
 
 	for _, tc := range errCases {

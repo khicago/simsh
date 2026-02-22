@@ -63,7 +63,7 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 	if verbose {
 		if runtime.LookupDetailedManual != nil {
 			if manual, ok := runtime.LookupDetailedManual(target); ok {
-				manual = strings.TrimSpace(manual)
+				manual = stripMarkdownFrontMatter(manual)
 				if manual != "" {
 					return manual, 0
 				}
@@ -76,6 +76,9 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 		if manual, ok := runtime.LookupManual(target); ok {
 			manual = strings.TrimSpace(manual)
 			if manual != "" {
+				if !verbose {
+					manual = ensureSummaryGuidance(target, manual)
+				}
 				return manual, 0
 			}
 		}
@@ -85,7 +88,13 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 	if runtime.Ops.ReadExternalManual != nil {
 		manual, err := runtime.Ops.ReadExternalManual(runtime.Ctx, target)
 		if err == nil {
-			if strings.TrimSpace(manual) != "" {
+			manual = strings.TrimSpace(manual)
+			if manual != "" {
+				if verbose {
+					manual = stripMarkdownFrontMatter(manual)
+				} else {
+					manual = ensureSummaryGuidance(target, manual)
+				}
 				return manual, 0
 			}
 		} else if !errors.Is(err, contract.ErrUnsupported) {
@@ -102,14 +111,40 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 		for _, c := range cmds {
 			if strings.TrimSpace(c.Name) == target {
 				if strings.TrimSpace(c.Summary) != "" {
-					return c.Summary, 0
+					summary := strings.TrimSpace(c.Summary)
+					if !verbose {
+						summary = ensureSummaryGuidance(target, summary)
+					}
+					return summary, 0
 				}
-				return fmt.Sprintf("binary: %s", c.Name), 0
+				out := fmt.Sprintf("binary: %s", c.Name)
+				if !verbose {
+					out = ensureSummaryGuidance(target, out)
+				}
+				return out, 0
 			}
 		}
 	}
 
 	return fmt.Sprintf("man: %s: not found", target), contract.ExitCodeGeneral
+}
+
+func ensureSummaryGuidance(command string, manual string) string {
+	manual = strings.TrimSpace(manual)
+	if manual == "" {
+		return ""
+	}
+	lower := strings.ToLower(manual)
+	if strings.Contains(lower, "\nuse-when:") && strings.Contains(lower, "\navoid-when:") {
+		return manual
+	}
+	var sb strings.Builder
+	sb.WriteString(manual)
+	sb.WriteString("\n\nUse-When:\n")
+	sb.WriteString(fmt.Sprintf("  - Quick syntax, flags, and examples for %s.\n", command))
+	sb.WriteString("Avoid-When:\n")
+	sb.WriteString(fmt.Sprintf("  - Need full semantics or edge cases; run man -v %s.", command))
+	return sb.String()
 }
 
 func runManList(runtime engine.CommandRuntime) (string, int) {

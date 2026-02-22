@@ -200,6 +200,30 @@ func (f *testFS) RemoveFile(ctx context.Context, filePath string) error {
 	return nil
 }
 
+func (f *testFS) RemoveDir(ctx context.Context, dirPath string) error {
+	_ = ctx
+	dirPath = normalizePath(dirPath)
+	if dirPath == "/" {
+		return fmt.Errorf("cannot remove root directory: %s", dirPath)
+	}
+	if _, ok := f.dirs[dirPath]; !ok {
+		return fmt.Errorf("%s: No such directory", dirPath)
+	}
+	prefix := dirPath + "/"
+	for existing := range f.dirs {
+		if existing != dirPath && strings.HasPrefix(existing, prefix) {
+			return fmt.Errorf("%s: Directory not empty", dirPath)
+		}
+	}
+	for filePath := range f.files {
+		if strings.HasPrefix(filePath, prefix) {
+			return fmt.Errorf("%s: Directory not empty", dirPath)
+		}
+	}
+	delete(f.dirs, dirPath)
+	return nil
+}
+
 func (f *testFS) mustWrite(filePath string, content string) {
 	filePath = normalizePath(filePath)
 	f.ensureDir(path.Dir(filePath))
@@ -255,12 +279,122 @@ func TestEngineBuiltinAndExternalMounts(t *testing.T) {
 		t.Fatalf("expected /sys/bin in output: %q", out)
 	}
 
+	out, code = eng.Execute(context.Background(), "tree -L 1 /sys", ops)
+	if code != 0 {
+		t.Fatalf("tree -L 1 /sys failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "bin") {
+		t.Fatalf("expected bin in tree output: %q", out)
+	}
+
 	out, code = eng.Execute(context.Background(), "ls /bin", ops)
 	if code != 0 {
 		t.Fatalf("ls /bin failed: code=%d out=%q", code, out)
 	}
 	if !strings.Contains(out, "/bin/report_tool") {
 		t.Fatalf("expected /bin/report_tool in output: %q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "which ls report_tool", ops)
+	if code != 0 {
+		t.Fatalf("which ls report_tool failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "/sys/bin/ls") || !strings.Contains(out, "/bin/report_tool") {
+		t.Fatalf("unexpected which output: %q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "type ls report_tool", ops)
+	if code != 0 {
+		t.Fatalf("type ls report_tool failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "ls is /sys/bin/ls (builtin)") || !strings.Contains(out, "report_tool is /bin/report_tool (external)") {
+		t.Fatalf("unexpected type output: %q", out)
+	}
+}
+
+func TestEngineDefaultCommandAliases(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := contract.OpsFromFilesystem(fs)
+
+	out, code := eng.Execute(context.Background(), "ll /sys", ops)
+	if code != 0 {
+		t.Fatalf("ll /sys failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "# columns: mode access kind lines path") {
+		t.Fatalf("ll should expand to ls -l: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "fm stat /workspace/readme.md", ops)
+	if code != 0 {
+		t.Fatalf("fm stat failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "n - 0 - /workspace/readme.md") {
+		t.Fatalf("unexpected fm output: %q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "type ll", ops)
+	if code != 0 || !strings.Contains(out, "ll is alias ll='ls -l' (alias)") {
+		t.Fatalf("type ll should show alias resolution: code=%d out=%q", code, out)
+	}
+}
+
+func TestEngineRCBootstrapFromMountedFile(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	fs.mustWrite("/workspace/frontmatter.md", "---\ntitle: RC Loaded\n---\nbody\n")
+
+	rcMount, err := mount.NewStaticMount("/etc", "config", map[string]string{
+		"/etc/simshrc": strings.Join([]string{
+			"export PROJECT=simsh",
+			"export PATH=/sys/bin:/bin:/custom/bin",
+			"alias fmget='frontmatter get --key title'",
+		}, "\n") + "\n",
+	})
+	if err != nil {
+		t.Fatalf("new rc static mount failed: %v", err)
+	}
+
+	ops := contract.OpsFromFilesystem(fs)
+	ops.VirtualMounts = append(ops.VirtualMounts, rcMount)
+	ops.RCFiles = []string{"/etc/simshrc"}
+
+	out, code := eng.Execute(context.Background(), "env PROJECT", ops)
+	if code != 0 || strings.TrimSpace(out) != "PROJECT=simsh" {
+		t.Fatalf("expected env PROJECT from rc: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "env PATH", ops)
+	if code != 0 || strings.TrimSpace(out) != "PATH=/sys/bin:/bin:/custom/bin" {
+		t.Fatalf("expected env PATH override from rc: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "fmget /workspace/frontmatter.md", ops)
+	if code != 0 || strings.TrimSpace(out) != "RC Loaded" {
+		t.Fatalf("expected alias from rc to execute: code=%d out=%q", code, out)
+	}
+}
+
+func TestEngineRCBootstrapRejectsUnsupportedStatement(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	rcMount, err := mount.NewStaticMount("/etc", "config", map[string]string{
+		"/etc/simshrc": "source /etc/bashrc\n",
+	})
+	if err != nil {
+		t.Fatalf("new rc static mount failed: %v", err)
+	}
+
+	ops := contract.OpsFromFilesystem(fs)
+	ops.VirtualMounts = append(ops.VirtualMounts, rcMount)
+	ops.RCFiles = []string{"/etc/simshrc"}
+
+	out, code := eng.Execute(context.Background(), "env", ops)
+	if code == 0 {
+		t.Fatalf("expected rc parse failure, out=%q", out)
+	}
+	if !strings.Contains(out, "rc: parse /etc/simshrc failed") || !strings.Contains(out, "unsupported statement") {
+		t.Fatalf("unexpected rc parse error: %q", out)
 	}
 }
 
@@ -1209,7 +1343,7 @@ func TestPipelineIntegration(t *testing.T) {
 // ==================== Embed Manual Tests ====================
 
 func TestEmbedManualLoading(t *testing.T) {
-	for _, name := range []string{"ls", "cat", "grep", "find", "echo", "sed", "tee", "head", "tail", "man", "env", "date", "mkdir", "cp", "mv", "rm", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		manual := builtin.LoadEmbeddedManual(name)
 		if manual == "" {
 			t.Errorf("missing embedded manual for %q", name)
@@ -1221,7 +1355,7 @@ func TestEmbedManualLoading(t *testing.T) {
 }
 
 func TestExamplesForAllCommands(t *testing.T) {
-	for _, name := range []string{"ls", "cat", "grep", "find", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		examples := builtin.ExamplesFor(name)
 		if len(examples) == 0 {
 			t.Errorf("missing examples for %q", name)

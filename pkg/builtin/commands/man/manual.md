@@ -16,7 +16,7 @@ category: system
 ## DESCRIPTION
 
 Display documentation for builtin and external commands. Supports progressive
-disclosure: the default mode shows a summary with tips and examples, while
+disclosure: the default mode shows a concise summary with quick guidance, while
 verbose mode shows the full embedded documentation.
 
 ## FLAGS
@@ -45,6 +45,8 @@ Show manual for an external command:
 ## NOTES
 
 - Builtin commands are looked up first, then external commands.
+- Summary mode appends `Use-When` and `Avoid-When` hints for quick decisions.
+- Verbose mode strips YAML frontmatter from markdown manuals before rendering.
 - The `--list` mode shows both builtin and external commands.
 - Command names can be given with or without path prefix.
 

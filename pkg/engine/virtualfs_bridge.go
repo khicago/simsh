@@ -203,6 +203,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 	origEditFile := ops.EditFile
 	origMakeDir := ops.MakeDir
 	origRemoveFile := ops.RemoveFile
+	origRemoveDir := ops.RemoveDir
 	origCheckPathOp := ops.CheckPathOp
 
 	ops.RequireAbsolutePath = func(raw string) (string, error) {
@@ -377,6 +378,13 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 			return contract.ErrUnsupported
 		}
 		return origRemoveFile(ctx, filePath)
+	}
+	ops.RemoveDir = func(ctx context.Context, dirPath string) error {
+		pathValue := normalizeAbsolutePath(dirPath)
+		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		return origRemoveDir(ctx, dirPath)
 	}
 
 	ops.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {

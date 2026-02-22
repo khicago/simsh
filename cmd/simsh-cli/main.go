@@ -34,6 +34,7 @@ type cliOptions struct {
 	rootDir    string
 	policy     string
 	profile    string
+	rcFiles    []string
 	mounts     []string
 	listenAddr string
 	port       int
@@ -66,6 +67,7 @@ func parseRunOptions(args []string) (cliOptions, error) {
 	rootDir := fs.String("root", "", "host root directory for runtime zones")
 	policy := fs.String("policy", string(contract.WriteModeReadOnly), "execution policy: disabled|read-only|write-limited|full")
 	profile := fs.String("profile", string(contract.ProfileCoreStrict), "compatibility profile: core-strict|bash-plus|zsh-lite")
+	rcList := fs.String("rc", "", "comma-separated rc files (absolute virtual paths)")
 	mountList := fs.String("mount", "", "comma-separated mounts (test)")
 	if err := fs.Parse(args); err != nil {
 		return cliOptions{}, err
@@ -88,6 +90,7 @@ func parseRunOptions(args []string) (cliOptions, error) {
 	if err != nil {
 		return cliOptions{}, err
 	}
+	rcFiles := parseCSVList(*rcList)
 
 	return cliOptions{
 		mode:       modeRun,
@@ -97,6 +100,7 @@ func parseRunOptions(args []string) (cliOptions, error) {
 		rootDir:    strings.TrimSpace(*rootDir),
 		policy:     strings.TrimSpace(*policy),
 		profile:    strings.TrimSpace(*profile),
+		rcFiles:    rcFiles,
 		mounts:     mounts,
 	}, nil
 }
@@ -108,6 +112,7 @@ func parseServeOptions(args []string) (cliOptions, error) {
 	rootDir := fs.String("root", "", "host root directory for runtime zones")
 	policy := fs.String("policy", string(contract.WriteModeReadOnly), "execution policy: disabled|read-only|write-limited|full")
 	profile := fs.String("profile", string(contract.ProfileCoreStrict), "compatibility profile: core-strict|bash-plus|zsh-lite")
+	rcList := fs.String("rc", "", "comma-separated rc files (absolute virtual paths)")
 	mountList := fs.String("mount", "", "comma-separated mounts (test)")
 	listenAddr := fs.String("listen", "", "http listen address")
 	port := fs.Int("P", 18080, "port for web runtime service")
@@ -127,12 +132,14 @@ func parseServeOptions(args []string) (cliOptions, error) {
 	if err != nil {
 		return cliOptions{}, err
 	}
+	rcFiles := parseCSVList(*rcList)
 
 	return cliOptions{
 		mode:       modeServe,
 		rootDir:    strings.TrimSpace(*rootDir),
 		policy:     strings.TrimSpace(*policy),
 		profile:    strings.TrimSpace(*profile),
+		rcFiles:    rcFiles,
 		mounts:     mounts,
 		listenAddr: strings.TrimSpace(*listenAddr),
 		port:       *port,
@@ -140,16 +147,10 @@ func parseServeOptions(args []string) (cliOptions, error) {
 }
 
 func parseMountList(raw string) ([]string, error) {
-	if strings.TrimSpace(raw) == "" {
-		return nil, nil
-	}
+	items := parseCSVList(raw)
 	seen := map[string]struct{}{}
 	mounts := make([]string, 0)
-	for _, item := range strings.Split(raw, ",") {
-		name := strings.TrimSpace(item)
-		if name == "" {
-			continue
-		}
+	for _, name := range items {
 		if name != "test" {
 			return nil, fmt.Errorf("unsupported mount %q", name)
 		}
@@ -161,6 +162,27 @@ func parseMountList(raw string) ([]string, error) {
 	}
 	sort.Strings(mounts)
 	return mounts, nil
+}
+
+func parseCSVList(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	seen := map[string]struct{}{}
+	items := make([]string, 0)
+	for _, item := range strings.Split(raw, ",") {
+		value := strings.TrimSpace(item)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		items = append(items, value)
+	}
+	sort.Strings(items)
+	return items
 }
 
 func runCLI(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
@@ -184,6 +206,7 @@ func runRunMode(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io
 		HostRoot:         rootDir,
 		Profile:          profile,
 		Policy:           policy,
+		RCFiles:          opts.rcFiles,
 		EnableTestCorpus: contains(opts.mounts, "test"),
 	})
 	if err != nil {
@@ -224,6 +247,7 @@ func runServe(opts cliOptions, stdout io.Writer, stderr io.Writer) int {
 		DefaultHostRoot: rootDir,
 		DefaultProfile:  opts.profile,
 		DefaultPolicy:   opts.policy,
+		DefaultRCFiles:  append([]string(nil), opts.rcFiles...),
 		EnableTestMount: contains(opts.mounts, "test"),
 	})
 	err := http.ListenAndServe(listenAddr, handler)

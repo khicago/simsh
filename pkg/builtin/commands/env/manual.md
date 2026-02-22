@@ -28,8 +28,9 @@ Show the PATH variable:
 
 ## NOTES
 
-- Currently exposes the PATH variable showing the command search order.
+- Exposes PATH by default, plus exported vars loaded from configured rc files.
 - PATH includes `/sys/bin` (builtins) and `/bin` (external commands).
+- `export PATH=...` in rc overrides default PATH rendering.
 - Returns empty output if the requested key does not exist.
 
 ## SEE ALSO

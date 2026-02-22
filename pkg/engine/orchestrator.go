@@ -22,7 +22,8 @@ type contextKey string
 
 const (
 	dispatchDepthKey contextKey = "simsh.dispatch.depth"
-	maxDispatchDepth            = 8
+	maxDispatchDepth int        = 8
+	maxAliasDepth    int        = 8
 )
 
 func New(registry *Registry) *Engine {
@@ -41,7 +42,7 @@ func (e *Engine) BuiltinCommandDocs() []contract.BuiltinCommandDoc {
 }
 
 func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
-	normalized, err := e.normalizeOps(ops)
+	normalized, err := e.normalizeOps(ctx, ops)
 	if err != nil {
 		return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
 	}
@@ -60,7 +61,7 @@ func (e *Engine) ExecuteWithFilesystem(ctx context.Context, cmdline string, fs c
 	return e.Execute(ctx, cmdline, contract.OpsFromFilesystem(fs))
 }
 
-func (e *Engine) normalizeOps(ops contract.Ops) (contract.Ops, error) {
+func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.Ops, error) {
 	if strings.TrimSpace(ops.RootDir) == "" {
 		ops.RootDir = "/"
 	}
@@ -97,6 +98,9 @@ func (e *Engine) normalizeOps(ops contract.Ops) (contract.Ops, error) {
 	if ops.RemoveFile == nil {
 		ops.RemoveFile = func(context.Context, string) error { return contract.ErrUnsupported }
 	}
+	if ops.RemoveDir == nil {
+		ops.RemoveDir = func(context.Context, string) error { return contract.ErrUnsupported }
+	}
 	if ops.CheckPathOp == nil {
 		ops.CheckPathOp = func(context.Context, contract.PathOp, string) error { return nil }
 	}
@@ -109,11 +113,19 @@ func (e *Engine) normalizeOps(ops contract.Ops) (contract.Ops, error) {
 	if _, err := contract.ParseProfile(string(ops.Profile)); err != nil {
 		return ops, err
 	}
+	ops.CommandAliases = contract.MergeCommandAliases(contract.DefaultCommandAliases(), ops.CommandAliases)
+	ops.EnvVars = contract.NormalizeEnvVars(ops.EnvVars)
+	ops.RCFiles = contract.NormalizeRCFiles(ops.RCFiles)
+
 	withMounts, err := e.withMountRouter(ops)
 	if err != nil {
 		return ops, err
 	}
-	return withPathAccessPolicy(withMounts), nil
+	withRuntimeBootstrap, err := e.withRuntimeBootstrap(ctx, withMounts)
+	if err != nil {
+		return ops, err
+	}
+	return withPathAccessPolicy(withRuntimeBootstrap), nil
 }
 
 func (e *Engine) withMountRouter(ops contract.Ops) (contract.Ops, error) {
@@ -137,6 +149,176 @@ func (e *Engine) withMountRouter(ops contract.Ops) (contract.Ops, error) {
 	return router.wrapOps(ops), nil
 }
 
+func (e *Engine) withRuntimeBootstrap(ctx context.Context, ops contract.Ops) (contract.Ops, error) {
+	paths := contract.NormalizeRCFiles(ops.RCFiles)
+	if len(paths) == 0 {
+		return ops, nil
+	}
+	aliases := contract.NormalizeCommandAliases(ops.CommandAliases)
+	envVars := contract.NormalizeEnvVars(ops.EnvVars)
+	for _, rawPath := range paths {
+		pathValue, err := ops.RequireAbsolutePath(rawPath)
+		if err != nil {
+			return ops, fmt.Errorf("rc: %s: %v", rawPath, err)
+		}
+		raw, err := ops.ReadRawContent(ctx, pathValue)
+		if err != nil {
+			if isNotFoundLikeError(err) {
+				continue
+			}
+			return ops, fmt.Errorf("rc: read %s failed: %v", pathValue, err)
+		}
+		rcAliases, rcEnv, err := parseRCContent(raw)
+		if err != nil {
+			return ops, fmt.Errorf("rc: parse %s failed: %v", pathValue, err)
+		}
+		aliases = contract.MergeCommandAliases(aliases, rcAliases)
+		for key, value := range rcEnv {
+			envVars[key] = value
+		}
+	}
+	ops.CommandAliases = aliases
+	ops.EnvVars = envVars
+	return ops, nil
+}
+
+func parseRCContent(raw string) (map[string][]string, map[string]string, error) {
+	aliases := map[string][]string{}
+	envVars := map[string]string{}
+	raw = strings.TrimSuffix(raw, "\n")
+	lines := []string{}
+	if raw != "" {
+		lines = strings.Split(raw, "\n")
+	}
+	for idx, line := range lines {
+		lineNo := idx + 1
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		switch {
+		case strings.HasPrefix(trimmed, "export "):
+			key, value, err := parseExportLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "export ")))
+			if err != nil {
+				return nil, nil, fmt.Errorf("line %d: %v", lineNo, err)
+			}
+			envVars[key] = value
+		case strings.HasPrefix(trimmed, "alias "):
+			name, expansion, err := parseAliasLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "alias ")))
+			if err != nil {
+				return nil, nil, fmt.Errorf("line %d: %v", lineNo, err)
+			}
+			aliases[name] = expansion
+		default:
+			return nil, nil, fmt.Errorf("line %d: unsupported statement %q", lineNo, trimmed)
+		}
+	}
+	return aliases, envVars, nil
+}
+
+func parseExportLine(raw string) (string, string, error) {
+	name, value, ok := splitAssignment(raw)
+	if !ok {
+		return "", "", fmt.Errorf("export requires KEY=VALUE")
+	}
+	key := normalizeEnvKey(name)
+	if key == "" {
+		return "", "", fmt.Errorf("invalid export key %q", name)
+	}
+	return key, trimOptionalQuotes(value), nil
+}
+
+func parseAliasLine(raw string) (string, []string, error) {
+	name, value, ok := splitAssignment(raw)
+	if !ok {
+		return "", nil, fmt.Errorf("alias requires NAME=VALUE")
+	}
+	name = strings.TrimSpace(name)
+	if strings.Contains(name, "/") || strings.HasPrefix(name, "-") || strings.Contains(name, " ") || name == "" {
+		return "", nil, fmt.Errorf("invalid alias name %q", name)
+	}
+	expansion, err := parseAliasExpansion(trimOptionalQuotes(value))
+	if err != nil {
+		return "", nil, err
+	}
+	return name, expansion, nil
+}
+
+func parseAliasExpansion(raw string) ([]string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil, fmt.Errorf("alias expansion must not be empty")
+	}
+	out := make([]string, 0, 4)
+	for idx := 0; idx < len(trimmed); {
+		idx = skipInlineSpaces(trimmed, idx)
+		if idx >= len(trimmed) {
+			break
+		}
+		word, next, err := readShellWord(trimmed, idx)
+		if err != nil {
+			return nil, fmt.Errorf("invalid alias expansion: %v", err)
+		}
+		if strings.TrimSpace(word) == "" {
+			return nil, fmt.Errorf("alias expansion must not contain empty token")
+		}
+		out = append(out, word)
+		idx = next
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("alias expansion must not be empty")
+	}
+	return out, nil
+}
+
+func splitAssignment(raw string) (string, string, bool) {
+	parts := strings.SplitN(strings.TrimSpace(raw), "=", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	key := strings.TrimSpace(parts[0])
+	if key == "" {
+		return "", "", false
+	}
+	return key, strings.TrimSpace(parts[1]), true
+}
+
+func trimOptionalQuotes(raw string) string {
+	if len(raw) >= 2 {
+		if (raw[0] == '"' && raw[len(raw)-1] == '"') || (raw[0] == '\'' && raw[len(raw)-1] == '\'') {
+			return raw[1 : len(raw)-1]
+		}
+	}
+	return raw
+}
+
+func normalizeEnvKey(raw string) string {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return ""
+	}
+	for idx, r := range name {
+		switch {
+		case r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z'):
+			// allowed
+		case idx > 0 && r >= '0' && r <= '9':
+			// allowed
+		default:
+			return ""
+		}
+	}
+	return name
+}
+
+func isNotFoundLikeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(msg, "no such file") || strings.Contains(msg, "not found")
+}
+
 func normalizeAbsolutePath(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
@@ -147,15 +329,6 @@ func normalizeAbsolutePath(raw string) string {
 		cleaned = "/" + cleaned
 	}
 	return cleaned
-}
-
-func isVirtualBinExecutable(pathValue string) bool {
-	pathValue = normalizeAbsolutePath(pathValue)
-	if !strings.HasPrefix(pathValue, contract.VirtualExternalBinDir+"/") {
-		return false
-	}
-	name := strings.TrimPrefix(pathValue, contract.VirtualExternalBinDir+"/")
-	return strings.TrimSpace(name) != "" && !strings.Contains(name, "/")
 }
 
 func isVirtualSysBinExecutable(pathValue string) bool {
@@ -201,70 +374,35 @@ func normalizeExternalCommandName(raw string) string {
 	return trimmed
 }
 
-func commandNameFromPath(pathValue string) string {
-	pathValue = normalizeAbsolutePath(pathValue)
-	if !isVirtualBinExecutable(pathValue) {
-		return ""
+func expandCommandAlias(args []string, aliases map[string][]string) ([]string, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("missing command")
 	}
-	return strings.TrimPrefix(pathValue, contract.VirtualExternalBinDir+"/")
-}
-
-func listExternalCommandPaths(ctx context.Context, lister func(context.Context) ([]contract.ExternalCommand, error)) ([]string, error) {
-	if lister == nil {
-		return nil, nil
+	if len(aliases) == 0 {
+		return append([]string(nil), args...), nil
 	}
-	commands, err := lister(ctx)
-	if err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	out := make([]string, 0, len(commands))
+	current := append([]string(nil), args...)
 	seen := map[string]struct{}{}
-	for _, command := range commands {
-		name := normalizeExternalCommandName(command.Name)
-		if name == "" {
-			continue
+	for depth := 0; depth < maxAliasDepth; depth++ {
+		name := strings.TrimSpace(current[0])
+		expansion, ok := aliases[name]
+		if !ok {
+			return current, nil
 		}
-		pathValue := contract.VirtualExternalBinDir + "/" + name
-		if _, exists := seen[pathValue]; exists {
-			continue
+		if _, exists := seen[name]; exists {
+			return nil, fmt.Errorf("alias loop detected at %q", name)
 		}
-		seen[pathValue] = struct{}{}
-		out = append(out, pathValue)
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-func lookupExternalCommand(ctx context.Context, name string, lister func(context.Context) ([]contract.ExternalCommand, error)) (contract.ExternalCommand, bool, error) {
-	name = normalizeExternalCommandName(name)
-	if name == "" || lister == nil {
-		return contract.ExternalCommand{}, false, nil
-	}
-	commands, err := lister(ctx)
-	if err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return contract.ExternalCommand{}, false, nil
+		seen[name] = struct{}{}
+		tokens := contract.NormalizeCommandAliases(map[string][]string{name: expansion})[name]
+		if len(tokens) == 0 {
+			return nil, fmt.Errorf("alias %q has empty expansion", name)
 		}
-		return contract.ExternalCommand{}, false, err
+		next := make([]string, 0, len(tokens)+len(current)-1)
+		next = append(next, tokens...)
+		next = append(next, current[1:]...)
+		current = next
 	}
-	for _, command := range commands {
-		if normalizeExternalCommandName(command.Name) == name {
-			return command, true, nil
-		}
-	}
-	return contract.ExternalCommand{}, false, nil
-}
-
-func hasExternalCommandPath(ctx context.Context, pathValue string, lister func(context.Context) ([]contract.ExternalCommand, error)) (bool, error) {
-	name := commandNameFromPath(pathValue)
-	if strings.TrimSpace(name) == "" {
-		return false, nil
-	}
-	_, found, err := lookupExternalCommand(ctx, name, lister)
-	return found, err
+	return nil, fmt.Errorf("alias expansion depth exceeds limit (%d)", maxAliasDepth)
 }
 
 func appendUniquePath(paths []string, candidate string) []string {
@@ -314,6 +452,11 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 	if len(args) == 0 {
 		return "execute: missing command", contract.ExitCodeUsage
 	}
+	expandedArgs, err := expandCommandAlias(args, ops.CommandAliases)
+	if err != nil {
+		return fmt.Sprintf("execute: %v", err), contract.ExitCodeUsage
+	}
+	args = expandedArgs
 	rawCmd := strings.TrimSpace(args[0])
 	builtinName := normalizeBuiltinCommandName(rawCmd)
 	if spec, ok := e.registry.Lookup(builtinName); ok {

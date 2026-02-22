@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -41,6 +42,47 @@ func TestExecuteHandler(t *testing.T) {
 	}
 	if !strings.Contains(out.Output, "PATH=/sys/bin:/bin") {
 		t.Fatalf("unexpected output %q", out.Output)
+	}
+}
+
+func TestExecuteHandlerDefaultRCFiles(t *testing.T) {
+	tmp := t.TempDir()
+	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")
+	if err := os.MkdirAll(filepath.Dir(rcPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(rcPath, []byte("export HTTP_BOOT=enabled\n"), 0o644); err != nil {
+		t.Fatalf("write rc file failed: %v", err)
+	}
+
+	h := NewHandler(Config{
+		DefaultHostRoot: tmp,
+		DefaultProfile:  "core-strict",
+		DefaultPolicy:   "read-only",
+		DefaultRCFiles:  []string{"/task_outputs/simshrc"},
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	body, _ := json.Marshal(map[string]any{"command": "env HTTP_BOOT"})
+	resp, err := http.Post(ts.URL+"/v1/execute", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	var out struct {
+		Output   string `json:"output"`
+		ExitCode int    `json:"exit_code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.ExitCode != 0 || strings.TrimSpace(out.Output) != "HTTP_BOOT=enabled" {
+		t.Fatalf("expected rc export in env output: code=%d out=%q", out.ExitCode, out.Output)
 	}
 }
 
@@ -221,5 +263,84 @@ func TestExecuteHandlerIncludeMeta(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected /sys in meta.paths, got %+v", out.Meta.Paths)
+	}
+}
+
+func TestExecuteHandlerIncludeMetaQuotedPath(t *testing.T) {
+	tmp := t.TempDir()
+	hostFile := filepath.Join(tmp, "task_outputs", "a b.txt")
+	if err := os.MkdirAll(filepath.Dir(hostFile), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(hostFile, []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	payload := map[string]any{"command": `cat "/task_outputs/a b.txt"`, "include_meta": true}
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(ts.URL+"/v1/execute", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+
+	var out struct {
+		Output   string `json:"output"`
+		ExitCode int    `json:"exit_code"`
+		Meta     *struct {
+			Paths []struct {
+				Path   string `json:"path"`
+				Access string `json:"access"`
+			} `json:"paths"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.ExitCode != 0 {
+		t.Fatalf("unexpected exit code %d output=%q", out.ExitCode, out.Output)
+	}
+	if !strings.Contains(out.Output, "hello") {
+		t.Fatalf("unexpected output %q", out.Output)
+	}
+	if out.Meta == nil || len(out.Meta.Paths) == 0 {
+		t.Fatalf("expected meta.paths, got %+v", out.Meta)
+	}
+	found := false
+	for _, p := range out.Meta.Paths {
+		if p.Path == "/task_outputs/a b.txt" {
+			found = true
+			if p.Access != "ro" {
+				t.Fatalf("expected read-only access under read-only policy, got %+v", p)
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected quoted path in meta.paths, got %+v", out.Meta.Paths)
+	}
+}
+
+func TestExtractAbsPathsParsesShellStyleTokens(t *testing.T) {
+	paths := extractAbsPaths(
+		`cat "/task_outputs/a b.txt" && ls -l /sys/bin;/bin/date >/task_outputs/out.txt /`,
+		func(p string) (string, error) { return p, nil },
+	)
+	sort.Strings(paths)
+	expected := []string{"/bin/date", "/sys/bin", "/task_outputs/a b.txt", "/task_outputs/out.txt"}
+	if len(paths) != len(expected) {
+		t.Fatalf("unexpected paths len=%d paths=%v", len(paths), paths)
+	}
+	for i := range expected {
+		if paths[i] != expected[i] {
+			t.Fatalf("unexpected paths[%d]=%q expected=%q all=%v", i, paths[i], expected[i], paths)
+		}
 	}
 }

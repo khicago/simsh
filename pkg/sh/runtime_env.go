@@ -46,6 +46,8 @@ func DescribeMarkdown() string {
 		"- command mounts: `/sys/bin` (builtin), `/bin` (injected external)",
 		"- parent directories of mount points are exposed as synthetic virtual directories (e.g. `/sys`)",
 		"- mount-backed virtual paths are immutable (no write/edit/remove/mkdir/cp/mv on those paths)",
+		"- default aliases: `ll` -> `ls -l`, `fm` -> `frontmatter`",
+		"- optional rc bootstrap supports read-only `export` + `alias` statements",
 		"- builtin commands: `" + strings.Join(names, "`, `") + "`",
 		"- profile gates: `core-strict`, `bash-plus`, `zsh-lite`",
 		"",

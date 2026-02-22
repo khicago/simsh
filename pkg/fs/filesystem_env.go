@@ -21,6 +21,9 @@ type EnvironmentOptions struct {
 	HostRoot          string
 	Profile           contract.CompatibilityProfile
 	Policy            contract.ExecutionPolicy
+	CommandAliases    map[string][]string
+	EnvVars           map[string]string
+	RCFiles           []string
 	PathEnv           []string
 	EnableTestCorpus  bool
 	ExternalCallbacks ExternalCallbacks
@@ -84,6 +87,9 @@ func NewRuntimeOps(opts EnvironmentOptions) (contract.Ops, error) {
 	ops.ListExternalCommands = opts.ExternalCallbacks.ListExternalCommands
 	ops.RunExternalCommand = opts.ExternalCallbacks.RunExternalCommand
 	ops.ReadExternalManual = opts.ExternalCallbacks.ReadExternalManual
+	ops.CommandAliases = contract.NormalizeCommandAliases(opts.CommandAliases)
+	ops.EnvVars = contract.NormalizeEnvVars(opts.EnvVars)
+	ops.RCFiles = contract.NormalizeRCFiles(opts.RCFiles)
 	ops.FormatLSLongRow = opts.FormatLSLongRow
 	ops.AuditSink = opts.AuditSink
 

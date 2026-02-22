@@ -3,7 +3,7 @@ package main
 import "testing"
 
 func TestParseCLIOptionsServePort(t *testing.T) {
-	opts, err := parseCLIOptions([]string{"serve", "-P", "19090", "-profile", "bash-plus", "-policy", "full", "-mount", "test"})
+	opts, err := parseCLIOptions([]string{"serve", "-P", "19090", "-profile", "bash-plus", "-policy", "full", "-mount", "test", "-rc", "/etc/simshrc"})
 	if err != nil {
 		t.Fatalf("parse serve options failed: %v", err)
 	}
@@ -21,6 +21,9 @@ func TestParseCLIOptionsServePort(t *testing.T) {
 	}
 	if len(opts.mounts) != 1 || opts.mounts[0] != "test" {
 		t.Fatalf("mounts = %v, want [test]", opts.mounts)
+	}
+	if len(opts.rcFiles) != 1 || opts.rcFiles[0] != "/etc/simshrc" {
+		t.Fatalf("rcFiles = %v, want [/etc/simshrc]", opts.rcFiles)
 	}
 }
 

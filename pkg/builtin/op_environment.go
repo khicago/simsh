@@ -53,6 +53,8 @@ func runEnv(runtime engine.CommandRuntime, args []string) (string, int) {
 }
 
 func buildEnvVars(ops contract.Ops) map[string]string {
+	vars := contract.NormalizeEnvVars(ops.EnvVars)
+
 	parts := make([]string, 0, 2+len(ops.PathEnv))
 	parts = append(parts, contract.VirtualSystemBinDir)
 	parts = append(parts, contract.VirtualExternalBinDir)
@@ -66,7 +68,10 @@ func buildEnvVars(ops contract.Ops) map[string]string {
 		}
 		parts = append(parts, p)
 	}
-	return map[string]string{"PATH": strings.Join(parts, ":")}
+	if strings.TrimSpace(vars["PATH"]) == "" {
+		vars["PATH"] = strings.Join(parts, ":")
+	}
+	return vars
 }
 
 func containsString(list []string, target string) bool {
