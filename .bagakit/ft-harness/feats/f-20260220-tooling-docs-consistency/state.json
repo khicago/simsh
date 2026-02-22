@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "feat_id": "f-20260220-tooling-docs-consistency",
+  "title": "工具与文档一致性优化",
+  "slug": "tooling-docs-consistency",
+  "goal": "按1/2/3顺序完成提交拆分策略、man/manual/README与工具补齐优化，并通过全量校验",
+  "status": "done",
+  "base_ref": "main",
+  "branch": "feat/f-20260220-tooling-docs-consistency",
+  "worktree_name": "wt-f-20260220-tooling-docs-consistency",
+  "worktree_path": ".worktrees/wt-f-20260220-tooling-docs-consistency",
+  "created_at": "2026-02-20T16:01:12Z",
+  "updated_at": "2026-02-20T16:22:06Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-02-20T16:21:55Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260220-tooling-docs-consistency/artifacts/gate-20260220T162155Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-02-20T16:01:12Z",
+      "action": "feat_created",
+      "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-02-20T16:17:38Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-02-20T16:21:55Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-02-20T16:22:06Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    }
+  ]
+}

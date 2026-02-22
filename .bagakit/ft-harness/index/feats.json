@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-02-20T11:53:01Z",
+  "updated_at": "2026-02-20T16:22:06Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -18,6 +18,14 @@
       "branch": "feat/f-20260218-path-access-metadata",
       "worktree_name": "wt-f-20260218-path-access-metadata",
       "updated_at": "2026-02-18T12:33:01Z"
+    },
+    {
+      "feat_id": "f-20260220-tooling-docs-consistency",
+      "title": "工具与文档一致性优化",
+      "status": "done",
+      "branch": "feat/f-20260220-tooling-docs-consistency",
+      "worktree_name": "wt-f-20260220-tooling-docs-consistency",
+      "updated_at": "2026-02-20T16:22:06Z"
     }
   ]
 }

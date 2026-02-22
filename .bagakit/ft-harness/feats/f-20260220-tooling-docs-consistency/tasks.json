@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260220-tooling-docs-consistency",
+  "updated_at": "2026-02-20T16:22:06Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement first scoped change for this feat",
+      "status": "done",
+      "summary": "Replace this placeholder with actual task detail.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-20T16:21:55Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-02-20T16:17:38Z",
+      "finished_at": "2026-02-20T16:22:06Z",
+      "updated_at": "2026-02-20T16:22:06Z",
+      "notes": []
+    }
+  ]
+}
