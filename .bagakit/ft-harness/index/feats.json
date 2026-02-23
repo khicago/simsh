@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-02-20T16:22:06Z",
+  "updated_at": "2026-02-22T17:54:30Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -22,10 +22,18 @@
     {
       "feat_id": "f-20260220-tooling-docs-consistency",
       "title": "工具与文档一致性优化",
-      "status": "done",
+      "status": "archived",
       "branch": "feat/f-20260220-tooling-docs-consistency",
       "worktree_name": "wt-f-20260220-tooling-docs-consistency",
-      "updated_at": "2026-02-20T16:22:06Z"
+      "updated_at": "2026-02-22T16:20:33Z"
+    },
+    {
+      "feat_id": "f-20260222-memory-skills-extension-framework",
+      "title": "memory skills extension framework",
+      "status": "archived",
+      "branch": "feat/f-20260222-memory-skills-extension-framework",
+      "worktree_name": "wt-f-20260222-memory-skills-extension-framework",
+      "updated_at": "2026-02-22T17:54:30Z"
     }
   ]
 }

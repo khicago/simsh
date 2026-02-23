@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "feat_id": "f-20260220-tooling-docs-consistency",
-  "updated_at": "2026-02-20T16:22:06Z",
+  "feat_id": "f-20260222-memory-skills-extension-framework",
+  "updated_at": "2026-02-22T17:54:30Z",
   "tasks": [
     {
       "id": "T-001",
@@ -9,7 +9,7 @@
       "status": "done",
       "summary": "Replace this placeholder with actual task detail.",
       "gate_result": "pass",
-      "last_gate_at": "2026-02-20T16:21:55Z",
+      "last_gate_at": "2026-02-22T17:51:12Z",
       "last_gate_commands": [
         {
           "command": "go test ./...",
@@ -18,9 +18,9 @@
         }
       ],
       "last_commit_hash": null,
-      "started_at": "2026-02-20T16:17:38Z",
-      "finished_at": "2026-02-20T16:22:06Z",
-      "updated_at": "2026-02-20T16:22:06Z",
+      "started_at": "2026-02-22T17:50:51Z",
+      "finished_at": "2026-02-22T17:51:50Z",
+      "updated_at": "2026-02-22T17:51:50Z",
       "notes": []
     }
   ]

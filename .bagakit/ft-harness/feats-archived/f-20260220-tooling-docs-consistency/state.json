@@ -4,13 +4,13 @@
   "title": "工具与文档一致性优化",
   "slug": "tooling-docs-consistency",
   "goal": "按1/2/3顺序完成提交拆分策略、man/manual/README与工具补齐优化，并通过全量校验",
-  "status": "done",
+  "status": "archived",
   "base_ref": "main",
   "branch": "feat/f-20260220-tooling-docs-consistency",
   "worktree_name": "wt-f-20260220-tooling-docs-consistency",
   "worktree_path": ".worktrees/wt-f-20260220-tooling-docs-consistency",
   "created_at": "2026-02-20T16:01:12Z",
-  "updated_at": "2026-02-20T16:22:06Z",
+  "updated_at": "2026-02-22T16:20:33Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
@@ -50,6 +50,21 @@
       "at": "2026-02-20T16:22:06Z",
       "action": "task_finished",
       "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-02-22T16:20:33Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
     }
-  ]
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-02-22T16:20:33Z",
+  "archived_cleanup": {
+    "base_ref": "main",
+    "branch_merged": true,
+    "worktree_removed": true,
+    "worktree_pruned": true,
+    "branch_deleted": true,
+    "note": "worktree removed+pruned; branch deleted only when merged into base"
+  }
 }

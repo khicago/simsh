@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "feat_id": "f-20260222-memory-skills-extension-framework",
+  "title": "memory skills extension framework",
+  "slug": "memory-skills-extension-framework",
+  "goal": "Define and document a core-safe extension model for memory/resource/skill systems via VirtualMount drivers and business-layer control plane.",
+  "status": "archived",
+  "base_ref": "main",
+  "branch": "feat/f-20260222-memory-skills-extension-framework",
+  "worktree_name": "wt-f-20260222-memory-skills-extension-framework",
+  "worktree_path": ".worktrees/wt-f-20260222-memory-skills-extension-framework",
+  "created_at": "2026-02-22T16:18:31Z",
+  "updated_at": "2026-02-22T17:54:30Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-02-22T17:51:12Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260222-memory-skills-extension-framework/artifacts/gate-20260222T175112Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-02-22T16:18:31Z",
+      "action": "feat_created",
+      "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-02-22T17:50:51Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-02-22T17:51:12Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-02-22T17:51:50Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-02-22T17:54:30Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-02-22T17:54:30Z",
+  "archived_cleanup": {
+    "base_ref": "main",
+    "branch_merged": true,
+    "worktree_removed": true,
+    "worktree_pruned": true,
+    "branch_deleted": true,
+    "note": "worktree removed+pruned; branch deleted only when merged into base"
+  }
+}
