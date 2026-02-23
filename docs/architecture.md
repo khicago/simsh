@@ -52,6 +52,7 @@ These names are intentionally explicit so an agent can infer write intent direct
   - `man <cmd>` returns concise summary + `Use-When` / `Avoid-When`
   - `man -v <cmd>` renders full manual with frontmatter stripped
 - Path access SSOT + `ls -l`/API formats: `docs/architecture-path-access-metadata.md`
+- Memory/skills business-layer extension plan: `docs/architecture-memory-skills-extension.md`
 
 ## Current Status
 - [x] Core package split (`sh/fs/cmd`).

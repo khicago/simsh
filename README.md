@@ -60,6 +60,7 @@ curl -sS http://127.0.0.1:18080/v1/execute \
 - command aliases: `ll` -> `ls -l`, `fm` -> `frontmatter`
 - runtime rc bootstrap: pass `--rc /abs/path/to/simshrc` (supports `export KEY=VALUE`, `alias name='cmd ...'`)
 - mounts: `/sys/bin` (system builtin), `/bin` (custom external), optional `/test`
+- extension pattern: keep core generic; implement memory/resource/skill systems as business-layer `VirtualMount` drivers (see `docs/architecture-memory-skills-extension.md`)
 - synthetic parent mount dirs are visible (e.g. `/sys` for `/sys/bin`)
 - mount-backed virtual paths are immutable for write/mkdir/rm/cp/mv flows
 - interactive runtime: full-screen TUI by default, fallback line REPL via `--repl`/`--no-tui`

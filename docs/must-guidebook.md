@@ -27,6 +27,7 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 - Project architecture:
   - `docs/architecture.md`
   - `docs/architecture-path-access-metadata.md`
+  - `docs/architecture-memory-skills-extension.md`
 - Release plan:
   - `docs/first_version_plan.md`
 

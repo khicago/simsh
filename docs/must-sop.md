@@ -11,6 +11,12 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## SOP Items
 
+### Memory/Skills Extension Architecture
+Source: `docs/architecture-memory-skills-extension.md`
+- Read this doc before adding memory/resource/skill mounts or context-framework features.
+- Keep core-runtime boundaries explicit: core exposes extension contracts, business layers own retrieval/index/evolution behavior.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Path Access Metadata and Listing/API Formats
 Source: `docs/architecture-path-access-metadata.md`
 - Read this doc before changing PathMeta access/capabilities, ls -l output formats, or /v1/execute metadata.

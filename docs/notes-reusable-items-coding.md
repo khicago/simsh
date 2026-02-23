@@ -32,6 +32,7 @@ Examples: error handling patterns, feature flag patterns, logging/metrics conven
 | Manual SSOT under `commands/*/manual.md` | MUST | Add/update command manuals; avoid dual-source drift between runtime embed files and command-local docs | `pkg/builtin/manuals.go`, `pkg/builtin/commands/*/manual.md` |
 | `man` progressive disclosure guard | SHOULD | Need concise default manual output with escalation path to full details | `pkg/builtin/op_help_manual.go` |
 | RC parser subset (`export` + `alias`) | SHOULD | Need deterministic startup customization from read-only mounted rc files while rejecting ambiguous shell constructs | `pkg/engine/orchestrator.go` |
+| VirtualMount driver + mount-router composition | SHOULD | Need to project business context trees (memory/resources/skills) without coupling core to backend | `pkg/contract/mount_contract.go`, `pkg/engine/virtualfs_bridge.go` |
 
 ## Deprecations
 - `pkg/builtin/manuals/*.md` -> `pkg/builtin/commands/*/manual.md` (remove duplicated manual sources and drift risk)
