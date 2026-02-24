@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260224-plan-sync-agentfs-write-limit",
+  "updated_at": "2026-02-24T09:01:09Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "同步计划文档并接通agentfs写限额联动",
+      "status": "done",
+      "summary": "更新first_version_plan状态、在runtime装配层传递MaxWriteBytes到agentfs、补齐验证并通过全量测试。",
+      "gate_result": "pass",
+      "last_gate_at": "2026-02-24T07:52:12Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-02-24T07:47:51Z",
+      "finished_at": "2026-02-24T07:52:46Z",
+      "updated_at": "2026-02-24T07:52:46Z",
+      "notes": []
+    }
+  ]
+}

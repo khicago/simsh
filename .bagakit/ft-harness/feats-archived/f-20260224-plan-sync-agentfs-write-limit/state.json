@@ -1,0 +1,70 @@
+{
+  "version": 1,
+  "feat_id": "f-20260224-plan-sync-agentfs-write-limit",
+  "title": "文档状态校准与agentfs写限额联动",
+  "slug": "plan-sync-agentfs-write-limit",
+  "goal": "校准首版计划状态并把ExecutionPolicy.MaxWriteBytes联动到agentfs写入限制，补齐回归验证",
+  "status": "archived",
+  "base_ref": "main",
+  "branch": "feat/f-20260224-plan-sync-agentfs-write-limit",
+  "worktree_name": "wt-f-20260224-plan-sync-agentfs-write-limit",
+  "worktree_path": ".worktrees/wt-f-20260224-plan-sync-agentfs-write-limit",
+  "created_at": "2026-02-24T07:45:35Z",
+  "updated_at": "2026-02-24T09:01:09Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-02-24T07:52:12Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260224-plan-sync-agentfs-write-limit/artifacts/gate-20260224T075212Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-02-24T07:45:35Z",
+      "action": "feat_created",
+      "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-02-24T07:47:51Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-02-24T07:52:12Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-02-24T07:52:46Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-02-24T09:01:09Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-02-24T09:01:09Z",
+  "archived_cleanup": {
+    "base_ref": "main",
+    "branch_merged": true,
+    "worktree_removed": true,
+    "worktree_pruned": true,
+    "branch_deleted": true,
+    "note": "worktree removed+pruned; branch deleted only when merged into base"
+  }
+}
