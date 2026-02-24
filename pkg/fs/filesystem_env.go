@@ -3,6 +3,7 @@ package fs
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -32,10 +33,24 @@ type EnvironmentOptions struct {
 	RelevanceEval     agentfs.RelevanceEvaluator
 }
 
-func NewAIFilesystem(hostRoot string, relevanceEval agentfs.RelevanceEvaluator) (contract.Filesystem, error) {
+func resolveWriteLimitedBytes(policy contract.ExecutionPolicy) int {
+	if policy.WriteMode != contract.WriteModeWriteLimited {
+		return 0
+	}
+	if policy.MaxWriteBytes <= 0 {
+		return 0
+	}
+	return policy.MaxWriteBytes
+}
+
+func NewAIFilesystem(hostRoot string, writeLimitedBytes int, relevanceEval agentfs.RelevanceEvaluator) (contract.Filesystem, error) {
 	base := strings.TrimSpace(hostRoot)
 	if base == "" {
-		return agentfs.NewDefaultFilesystem("")
+		wd, err := os.Getwd()
+		if err != nil {
+			return nil, err
+		}
+		base = wd
 	}
 	absRoot, err := filepath.Abs(base)
 	if err != nil {
@@ -62,14 +77,15 @@ func NewAIFilesystem(hostRoot string, relevanceEval agentfs.RelevanceEvaluator) 
 				Kind:        "knowledge_dir",
 			},
 		},
-		EnsureHostRoots: true,
-		PathEnv:         []string{agentfs.VirtualTaskOutputRoot, agentfs.VirtualTempWorkRoot, agentfs.VirtualKnowledgeRoot},
-		RelevanceEval:   relevanceEval,
+		EnsureHostRoots:   true,
+		PathEnv:           []string{agentfs.VirtualTaskOutputRoot, agentfs.VirtualTempWorkRoot, agentfs.VirtualKnowledgeRoot},
+		RelevanceEval:     relevanceEval,
+		WriteLimitedBytes: writeLimitedBytes,
 	})
 }
 
 func NewRuntimeOps(opts EnvironmentOptions) (contract.Ops, error) {
-	fsys, err := NewAIFilesystem(opts.HostRoot, opts.RelevanceEval)
+	fsys, err := NewAIFilesystem(opts.HostRoot, resolveWriteLimitedBytes(opts.Policy), opts.RelevanceEval)
 	if err != nil {
 		return contract.Ops{}, err
 	}
