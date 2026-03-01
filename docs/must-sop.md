@@ -77,8 +77,15 @@ Source: `docs/notes-reusable-items-coding.md`
 - When you remove or deprecate something, update this list and point to the replacement or migration.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Migration Plan: v0.1.0 to v0.2
+Source: `docs/notes-v0-1-0-to-v0-2-migration.md`
+- Read this doc before upgrading integrations from the v0.1.0 release baseline to the planned v0.2 contract set.
+- Update this doc when the v0.2 feat order, scope, or compatibility strategy changes.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Execute Preflight Performance References
 Source: `docs/refs/notes-execute-preflight-performance-refs.md`
 - Use this list before major runtime-performance refactors around per-exec setup overhead.
 - Update the actionable-takeaways section when adopting a new optimization strategy.
 - Regenerate docs/must-sop.md after SOP/frontmatter changes.
+

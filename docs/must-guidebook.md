@@ -36,6 +36,8 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 
 3) Current changes or proposals
 - Link to active proposals or change logs.
+- Version migration plan:
+  - `docs/notes-v0-1-0-to-v0-2-migration.md`
 
 4) Build/run entrypoints
 - Link to the primary entrypoints and scripts.
