@@ -689,10 +689,10 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 			ExitCode: code,
 			Message:  strings.TrimSpace(out),
 		})
-		return enforceOutputLimit(out, code, ops.Policy)
+		return enforceOutputLimit(ctx, out, code, ops.Policy)
 	}
 	out, code := e.runExternalCommand(ctx, rawCmd, args[1:], input, hasInput, ops)
-	return enforceOutputLimit(out, code, ops.Policy)
+	return enforceOutputLimit(ctx, out, code, ops.Policy)
 }
 
 func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) (string, int) {
@@ -742,8 +742,9 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 	return result.Stdout, result.ExitCode
 }
 
-func enforceOutputLimit(out string, code int, policy contract.ExecutionPolicy) (string, int) {
+func enforceOutputLimit(ctx context.Context, out string, code int, policy contract.ExecutionPolicy) (string, int) {
 	if policy.MaxOutputBytes > 0 && len(out) > policy.MaxOutputBytes {
+		markTraceOutputTruncated(ctx)
 		return fmt.Sprintf("execute: output exceeds limit (%d bytes)", policy.MaxOutputBytes), contract.ExitCodeGeneral
 	}
 	return out, code

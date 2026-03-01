@@ -21,7 +21,9 @@ type ExecutionResult struct {
 // ExecutionTrace is the machine-consumable execution summary attached to results.
 type ExecutionTrace struct {
 	CommandLine      string               `json:"command_line,omitempty"`
+	Command          string               `json:"command,omitempty"`
 	Argv             []string             `json:"argv,omitempty"`
+	Pipeline         []ExecutionTraceStep `json:"pipeline,omitempty"`
 	EffectiveProfile CompatibilityProfile `json:"effective_profile,omitempty"`
 	EffectivePolicy  ExecutionPolicy      `json:"effective_policy"`
 	TimedOut         bool                 `json:"timed_out,omitempty"`
@@ -37,6 +39,11 @@ type ExecutionTrace struct {
 	BytesRead        int                  `json:"bytes_read,omitempty"`
 	BytesWritten     int                  `json:"bytes_written,omitempty"`
 	OutputTruncated  bool                 `json:"output_truncated,omitempty"`
+}
+
+type ExecutionTraceStep struct {
+	Command string   `json:"command"`
+	Argv    []string `json:"argv,omitempty"`
 }
 
 func (r ExecutionResult) FlattenOutput() string {

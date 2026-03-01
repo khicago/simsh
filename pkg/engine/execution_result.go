@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"sync/atomic"
 	"time"
 
@@ -20,12 +19,11 @@ func nextExecutionID() string {
 
 func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prepared PreparedOps) contract.ExecutionResult {
 	startedAt := time.Now().UTC()
+	collector := newExecutionTraceCollector(cmdline, prepared.Ops())
 	result := contract.ExecutionResult{
 		ExecutionID: nextExecutionID(),
 		StartedAt:   startedAt,
-		Trace: contract.ExecutionTrace{
-			CommandLine: strings.TrimSpace(cmdline),
-		},
+		Trace:       collector.Snapshot(),
 	}
 	if e == nil {
 		result.ExitCode = contract.ExitCodeGeneral
@@ -54,17 +52,18 @@ func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prep
 	}
 	defer cancel()
 
-	result.Trace.EffectiveProfile = normalized.Profile
-	result.Trace.EffectivePolicy = normalized.Policy.Clone()
+	execCtx = collector.WithContext(execCtx)
+	tracedOps := collector.WrapOps(normalized)
 
-	stdout, code := e.runScript(execCtx, cmdline, normalized)
+	stdout, code := e.runScript(execCtx, cmdline, tracedOps)
 	result.ExitCode = code
 	result.Stdout = stdout
-	if err := execCtx.Err(); err != nil {
-		result.Trace.TimedOut = errors.Is(err, context.DeadlineExceeded)
-		result.Trace.Canceled = errors.Is(err, context.Canceled)
-	}
 	result.FinishedAt = time.Now().UTC()
 	result.DurationMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
+	result.Trace = collector.Snapshot()
+	if err := execCtx.Err(); err != nil {
+		result.Trace.TimedOut = result.Trace.TimedOut || errors.Is(err, context.DeadlineExceeded)
+		result.Trace.Canceled = result.Trace.Canceled || errors.Is(err, context.Canceled)
+	}
 	return result
 }

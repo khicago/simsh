@@ -515,6 +515,48 @@ func TestExecuteHandlerRejectsSessionPolicyEscalation(t *testing.T) {
 	}
 }
 
+func TestExecuteHandlerReturnsTracePaths(t *testing.T) {
+	tmp := t.TempDir()
+	hostFile := filepath.Join(tmp, "task_outputs", "trace.txt")
+	if err := os.MkdirAll(filepath.Dir(hostFile), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(hostFile, []byte("trace\n"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{"command": "cat /task_outputs/trace.txt"})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+
+	var out struct {
+		Trace struct {
+			Command        string   `json:"command"`
+			RequestedPaths []string `json:"requested_paths"`
+			ReadPaths      []string `json:"read_paths"`
+		} `json:"trace"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.Trace.Command != "cat" {
+		t.Fatalf("unexpected command trace: %+v", out.Trace)
+	}
+	if !containsString(out.Trace.RequestedPaths, "/task_outputs/trace.txt") {
+		t.Fatalf("expected requested path in trace: %+v", out.Trace)
+	}
+	if !containsString(out.Trace.ReadPaths, "/task_outputs/trace.txt") {
+		t.Fatalf("expected read path in trace: %+v", out.Trace)
+	}
+}
+
 func postJSON(t *testing.T, url string, payload map[string]any) *http.Response {
 	t.Helper()
 	body, err := json.Marshal(payload)
@@ -526,4 +568,13 @@ func postJSON(t *testing.T, url string, payload map[string]any) *http.Response {
 		t.Fatalf("post failed: %v", err)
 	}
 	return resp
+}
+
+func containsString(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
+	}
+	return false
 }

@@ -97,6 +97,7 @@ func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, o
 		hasInput = true
 
 		if ops.Policy.MaxOutputBytes > 0 && len(current) > ops.Policy.MaxOutputBytes {
+			markTraceOutputTruncated(ctx)
 			return fmt.Sprintf("execute: pipeline intermediate result exceeds limit (%d bytes)", ops.Policy.MaxOutputBytes), contract.ExitCodeGeneral
 		}
 	}
@@ -143,10 +144,13 @@ func applyOutputRedirections(ctx context.Context, commandName string, redirs []c
 		return output, "", 0
 	}
 
+	markTraceRequestedPath(ctx, redirs[lastOutputRedir].target)
 	if !ops.Policy.AllowWrite() {
+		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
 		return "", "redirection: write is not allowed by policy", contract.ExitCodeUnsupported
 	}
 	if ops.Policy.WriteMode == contract.WriteModeWriteLimited && ops.Policy.MaxWriteBytes > 0 && len(output) > ops.Policy.MaxWriteBytes {
+		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
 		return "", fmt.Sprintf("redirection: write exceeds limit (%d bytes)", ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral
 	}
 

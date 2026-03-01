@@ -106,6 +106,9 @@ func TestRuntimeExecuteResultStructuredFields(t *testing.T) {
 	if result.Trace.CommandLine != "echo hello" {
 		t.Fatalf("unexpected trace command_line: %+v", result.Trace)
 	}
+	if result.Trace.Command != "echo" || len(result.Trace.Pipeline) != 1 {
+		t.Fatalf("unexpected trace shape: %+v", result.Trace)
+	}
 	if result.Trace.EffectiveProfile != contract.ProfileCoreStrict {
 		t.Fatalf("unexpected effective profile: %+v", result.Trace)
 	}
