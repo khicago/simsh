@@ -16,12 +16,13 @@ import (
 )
 
 type ConsoleOptions struct {
-	Profile  string
-	Policy   string
-	HostRoot string
-	Mounts   []string
-	Input    io.Reader
-	Output   io.Writer
+	Profile   string
+	Policy    string
+	HostRoot  string
+	SessionID string
+	Mounts    []string
+	Input     io.Reader
+	Output    io.Writer
 }
 
 type executeResultMsg struct {
@@ -31,11 +32,12 @@ type executeResultMsg struct {
 
 type consoleModel struct {
 	ctx context.Context
-	env *Environment
+	env Executor
 
 	profile string
 	policy  string
 	hostDir string
+	session string
 	mounts  string
 
 	input   textinput.Model
@@ -51,7 +53,7 @@ type consoleModel struct {
 	transcript   []string
 }
 
-func RunConsoleTUI(ctx context.Context, env *Environment, opts ConsoleOptions) error {
+func RunConsoleTUI(ctx context.Context, env Executor, opts ConsoleOptions) error {
 	model := newConsoleModel(ctx, env, opts)
 	programOptions := []tea.ProgramOption{tea.WithAltScreen()}
 	if opts.Input != nil {
@@ -65,7 +67,7 @@ func RunConsoleTUI(ctx context.Context, env *Environment, opts ConsoleOptions) e
 	return err
 }
 
-func newConsoleModel(ctx context.Context, env *Environment, opts ConsoleOptions) consoleModel {
+func newConsoleModel(ctx context.Context, env Executor, opts ConsoleOptions) consoleModel {
 	in := textinput.New()
 	in.Placeholder = "Enter command and press Enter"
 	in.Focus()
@@ -95,6 +97,7 @@ func newConsoleModel(ctx context.Context, env *Environment, opts ConsoleOptions)
 		profile: strings.TrimSpace(opts.Profile),
 		policy:  strings.TrimSpace(opts.Policy),
 		hostDir: root,
+		session: strings.TrimSpace(opts.SessionID),
 		mounts:  mounts,
 		input:   in,
 		output:  view,
@@ -190,7 +193,7 @@ func (m consoleModel) View() string {
 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
 
 	title := titleStyle.Width(topWidth).Render("simsh command runtime")
-	meta := metaStyle.Render("root=" + m.hostDir)
+	meta := metaStyle.Render(fmt.Sprintf("root=%s session=%s", m.hostDir, fallbackConsoleLabel(m.session, "ephemeral")))
 	statusBar := statusStyle.Width(topWidth).Render(statusLine)
 	outputPane := outputStyle.Render(m.output.View())
 	inputPane := inputStyle.Render(m.input.View())
@@ -199,11 +202,19 @@ func (m consoleModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, meta, statusBar, outputPane, inputPane, help)
 }
 
-func runCommand(ctx context.Context, env *Environment, commandLine string) tea.Cmd {
+func runCommand(ctx context.Context, env Executor, commandLine string) tea.Cmd {
 	return func() tea.Msg {
 		out, code := env.Execute(ctx, commandLine)
 		return executeResultMsg{Output: out, ExitCode: code}
 	}
+}
+
+func fallbackConsoleLabel(value string, fallback string) string {
+	label := strings.TrimSpace(value)
+	if label == "" {
+		return fallback
+	}
+	return label
 }
 
 func (m *consoleModel) resize(width, height int) {

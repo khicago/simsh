@@ -83,3 +83,15 @@ func (r *Stack) BuiltinDocs() []contract.BuiltinCommandDoc {
 	}
 	return r.engine.BuiltinCommandDocs()
 }
+
+func (r *Stack) SessionState(rcFiles []string) contract.SessionState {
+	if r == nil {
+		return contract.SessionState{RCFiles: contract.NormalizeRCFiles(rcFiles)}
+	}
+	ops := r.Ops()
+	return contract.SessionState{
+		CommandAliases: contract.NormalizeCommandAliases(ops.CommandAliases),
+		EnvVars:        contract.NormalizeEnvVars(ops.EnvVars),
+		RCFiles:        contract.NormalizeRCFiles(rcFiles),
+	}
+}

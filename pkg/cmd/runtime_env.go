@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"strings"
 
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
@@ -10,6 +11,9 @@ import (
 
 type EnvironmentOptions = runtimeengine.Options
 type Environment = runtimeengine.Stack
+type Executor interface {
+	Execute(ctx context.Context, commandLine string) (string, int)
+}
 
 func NewEnvironment(opts EnvironmentOptions) (*Environment, error) {
 	return runtimeengine.New(opts)

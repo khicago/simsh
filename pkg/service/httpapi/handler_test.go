@@ -344,3 +344,167 @@ func TestExtractAbsPathsParsesShellStyleTokens(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionLifecycleHandler(t *testing.T) {
+	tmp := t.TempDir()
+	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")
+	if err := os.MkdirAll(filepath.Dir(rcPath), 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(rcPath, []byte("export HTTP_SESSION=enabled\n"), 0o644); err != nil {
+		t.Fatalf("write rc file failed: %v", err)
+	}
+
+	h := NewHandler(Config{
+		DefaultHostRoot: tmp,
+		DefaultProfile:  "core-strict",
+		DefaultPolicy:   "read-only",
+		DefaultRCFiles:  []string{"/task_outputs/simshrc"},
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	createResp := postJSON(t, ts.URL+"/v1/sessions", map[string]any{})
+	defer createResp.Body.Close()
+	if createResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(createResp.Body)
+		t.Fatalf("unexpected create status=%d body=%s", createResp.StatusCode, string(raw))
+	}
+	var created struct {
+		Session struct {
+			SessionID string `json:"session_id"`
+			State     struct {
+				RCFiles []string `json:"rc_files"`
+			} `json:"state"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create failed: %v", err)
+	}
+	if created.Session.SessionID == "" {
+		t.Fatalf("expected session_id in create response")
+	}
+	if len(created.Session.State.RCFiles) != 1 || created.Session.State.RCFiles[0] != "/task_outputs/simshrc" {
+		t.Fatalf("unexpected create rc files: %v", created.Session.State.RCFiles)
+	}
+
+	executeResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
+		"session_id": created.Session.SessionID,
+		"command":    "env HTTP_SESSION",
+	})
+	defer executeResp.Body.Close()
+	if executeResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(executeResp.Body)
+		t.Fatalf("unexpected execute status=%d body=%s", executeResp.StatusCode, string(raw))
+	}
+	var executed struct {
+		Output    string `json:"output"`
+		ExitCode  int    `json:"exit_code"`
+		SessionID string `json:"session_id"`
+	}
+	if err := json.NewDecoder(executeResp.Body).Decode(&executed); err != nil {
+		t.Fatalf("decode execute failed: %v", err)
+	}
+	if executed.SessionID != created.Session.SessionID {
+		t.Fatalf("unexpected execute session_id=%q want=%q", executed.SessionID, created.Session.SessionID)
+	}
+	if executed.ExitCode != 0 || strings.TrimSpace(executed.Output) != "HTTP_SESSION=enabled" {
+		t.Fatalf("unexpected execute output: code=%d out=%q", executed.ExitCode, executed.Output)
+	}
+
+	checkpointResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/checkpoint", map[string]any{})
+	defer checkpointResp.Body.Close()
+	if checkpointResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(checkpointResp.Body)
+		t.Fatalf("unexpected checkpoint status=%d body=%s", checkpointResp.StatusCode, string(raw))
+	}
+
+	closeResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/close", map[string]any{})
+	defer closeResp.Body.Close()
+	if closeResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(closeResp.Body)
+		t.Fatalf("unexpected close status=%d body=%s", closeResp.StatusCode, string(raw))
+	}
+
+	closedExecuteResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
+		"session_id": created.Session.SessionID,
+		"command":    "env HTTP_SESSION",
+	})
+	defer closedExecuteResp.Body.Close()
+	if closedExecuteResp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(closedExecuteResp.Body)
+		t.Fatalf("unexpected closed execute status=%d body=%s", closedExecuteResp.StatusCode, string(raw))
+	}
+
+	if err := os.Remove(rcPath); err != nil {
+		t.Fatalf("remove rc failed: %v", err)
+	}
+	resumeResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/resume", map[string]any{})
+	defer resumeResp.Body.Close()
+	if resumeResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resumeResp.Body)
+		t.Fatalf("unexpected resume status=%d body=%s", resumeResp.StatusCode, string(raw))
+	}
+
+	resumeExecuteResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
+		"session_id": created.Session.SessionID,
+		"command":    "env HTTP_SESSION",
+	})
+	defer resumeExecuteResp.Body.Close()
+	if resumeExecuteResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resumeExecuteResp.Body)
+		t.Fatalf("unexpected resumed execute status=%d body=%s", resumeExecuteResp.StatusCode, string(raw))
+	}
+	var resumed struct {
+		Output   string `json:"output"`
+		ExitCode int    `json:"exit_code"`
+	}
+	if err := json.NewDecoder(resumeExecuteResp.Body).Decode(&resumed); err != nil {
+		t.Fatalf("decode resumed execute failed: %v", err)
+	}
+	if resumed.ExitCode != 0 || strings.TrimSpace(resumed.Output) != "HTTP_SESSION=enabled" {
+		t.Fatalf("unexpected resumed output: code=%d out=%q", resumed.ExitCode, resumed.Output)
+	}
+}
+
+func TestExecuteHandlerRejectsSessionPolicyEscalation(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	createResp := postJSON(t, ts.URL+"/v1/sessions", map[string]any{})
+	defer createResp.Body.Close()
+	var created struct {
+		Session struct {
+			SessionID string `json:"session_id"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create failed: %v", err)
+	}
+
+	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
+		"session_id": created.Session.SessionID,
+		"command":    "echo hi",
+		"policy":     "full",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+}
+
+func postJSON(t *testing.T, url string, payload map[string]any) *http.Response {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal payload failed: %v", err)
+	}
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("post failed: %v", err)
+	}
+	return resp
+}

@@ -1,10 +1,13 @@
 package contract
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 )
+
+var ErrPolicyCeilingExceeded = errors.New("requested policy exceeds session ceiling")
 
 type WriteMode string
 
@@ -34,6 +37,10 @@ func DefaultPolicy() ExecutionPolicy {
 	}
 }
 
+func (p ExecutionPolicy) Clone() ExecutionPolicy {
+	return p
+}
+
 func PolicyPreset(name string) (ExecutionPolicy, error) {
 	policy := DefaultPolicy()
 	switch strings.TrimSpace(name) {
@@ -57,6 +64,75 @@ func (p ExecutionPolicy) AllowWrite() bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func (p ExecutionPolicy) WithInheritedUnset(limit ExecutionPolicy) ExecutionPolicy {
+	out := p
+	if out.WriteMode == "" {
+		out.WriteMode = limit.WriteMode
+	}
+	if out.MaxWriteBytes == 0 {
+		out.MaxWriteBytes = limit.MaxWriteBytes
+	}
+	if out.MaxPipelineDepth == 0 {
+		out.MaxPipelineDepth = limit.MaxPipelineDepth
+	}
+	if out.MaxOutputBytes == 0 {
+		out.MaxOutputBytes = limit.MaxOutputBytes
+	}
+	if out.Timeout == 0 {
+		out.Timeout = limit.Timeout
+	}
+	return out
+}
+
+func PolicyWithinCeiling(requested ExecutionPolicy, ceiling ExecutionPolicy) error {
+	if writeModeRank(requested.WriteMode) > writeModeRank(ceiling.WriteMode) {
+		return fmt.Errorf("%w: requested write mode %q exceeds session ceiling %q", ErrPolicyCeilingExceeded, requested.WriteMode, ceiling.WriteMode)
+	}
+	if ceiling.WriteMode == WriteModeWriteLimited && requested.WriteMode == WriteModeWriteLimited &&
+		ceiling.MaxWriteBytes > 0 && requested.MaxWriteBytes > ceiling.MaxWriteBytes {
+		return fmt.Errorf("%w: requested max_write_bytes %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxWriteBytes, ceiling.MaxWriteBytes)
+	}
+	if ceiling.MaxPipelineDepth > 0 && requested.MaxPipelineDepth > ceiling.MaxPipelineDepth {
+		return fmt.Errorf("%w: requested max_pipeline_depth %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxPipelineDepth, ceiling.MaxPipelineDepth)
+	}
+	if ceiling.MaxOutputBytes > 0 && requested.MaxOutputBytes > ceiling.MaxOutputBytes {
+		return fmt.Errorf("%w: requested max_output_bytes %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxOutputBytes, ceiling.MaxOutputBytes)
+	}
+	if ceiling.Timeout > 0 && requested.Timeout > ceiling.Timeout {
+		return fmt.Errorf("%w: requested timeout %s exceeds session ceiling %s", ErrPolicyCeilingExceeded, requested.Timeout, ceiling.Timeout)
+	}
+	return nil
+}
+
+func EffectivePolicyWithinCeiling(requested ExecutionPolicy, ceiling ExecutionPolicy) (ExecutionPolicy, error) {
+	if ceiling.WriteMode == "" {
+		ceiling = DefaultPolicy()
+	}
+	effective := requested.WithInheritedUnset(ceiling)
+	if effective.WriteMode == "" {
+		effective.WriteMode = ceiling.WriteMode
+	}
+	if err := PolicyWithinCeiling(effective, ceiling); err != nil {
+		return ExecutionPolicy{}, err
+	}
+	return effective, nil
+}
+
+func writeModeRank(mode WriteMode) int {
+	switch mode {
+	case WriteModeDisabled:
+		return 0
+	case WriteModeReadOnly:
+		return 1
+	case WriteModeWriteLimited:
+		return 2
+	case WriteModeFull:
+		return 3
+	default:
+		return 1
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -22,11 +23,19 @@ type Config struct {
 
 type executeRequest struct {
 	Command     string `json:"command"`
+	SessionID   string `json:"session_id,omitempty"`
 	HostRoot    string `json:"host_root,omitempty"`
 	RootDir     string `json:"root_dir,omitempty"`
 	Profile     string `json:"profile,omitempty"`
 	Policy      string `json:"policy,omitempty"`
 	IncludeMeta bool   `json:"include_meta,omitempty"`
+}
+
+type sessionRequest struct {
+	HostRoot string `json:"host_root,omitempty"`
+	RootDir  string `json:"root_dir,omitempty"`
+	Profile  string `json:"profile,omitempty"`
+	Policy   string `json:"policy,omitempty"`
 }
 
 type pathMeta struct {
@@ -43,9 +52,14 @@ type executeMeta struct {
 }
 
 type executeResponse struct {
-	Output   string       `json:"output"`
-	ExitCode int          `json:"exit_code"`
-	Meta     *executeMeta `json:"meta,omitempty"`
+	Output    string       `json:"output"`
+	ExitCode  int          `json:"exit_code"`
+	SessionID string       `json:"session_id,omitempty"`
+	Meta      *executeMeta `json:"meta,omitempty"`
+}
+
+type sessionResponse struct {
+	Session contract.Session `json:"session"`
 }
 
 func NewHandler(cfg Config) http.Handler {
@@ -57,8 +71,73 @@ func NewHandler(cfg Config) http.Handler {
 	if defaultPolicy == "" {
 		defaultPolicy = string(contract.WriteModeReadOnly)
 	}
+	sessionManager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		defer r.Body.Close()
+
+		var req sessionRequest
+		if err := decodeOptionalJSON(r, &req); err != nil {
+			http.Error(w, "invalid json body", http.StatusBadRequest)
+			return
+		}
+
+		opts, err := buildRuntimeOptions(cfg, defaultProfile, defaultPolicy, req.HostRoot, req.RootDir, req.Profile, req.Policy)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		session, err := sessionManager.Create(r.Context(), opts)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+				status = http.StatusRequestTimeout
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		writeJSON(w, sessionResponse{Session: session})
+	})
+	mux.HandleFunc("/v1/sessions/{session_id}/{action}", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			w.Header().Set("Allow", http.MethodPost)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		action := strings.TrimSpace(r.PathValue("action"))
+		if sessionID == "" || action == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		var (
+			session contract.Session
+			err     error
+		)
+		switch action {
+		case "checkpoint":
+			session, err = sessionManager.Checkpoint(sessionID)
+		case "resume":
+			session, err = sessionManager.Resume(r.Context(), sessionID)
+		case "close":
+			session, err = sessionManager.Close(sessionID)
+		default:
+			http.NotFound(w, r)
+			return
+		}
+		if err != nil {
+			http.Error(w, err.Error(), statusForSessionError(err))
+			return
+		}
+		writeJSON(w, sessionResponse{Session: session})
+	})
 	mux.HandleFunc("/v1/execute", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
@@ -78,42 +157,39 @@ func NewHandler(cfg Config) http.Handler {
 			writeJSON(w, executeResponse{Output: "execute: command is required", ExitCode: contract.ExitCodeUsage})
 			return
 		}
+		if sessionID := strings.TrimSpace(req.SessionID); sessionID != "" {
+			if strings.TrimSpace(req.HostRoot) != "" || strings.TrimSpace(req.RootDir) != "" || strings.TrimSpace(req.Profile) != "" {
+				http.Error(w, "session-bound execute does not accept host_root/root_dir/profile overrides", http.StatusBadRequest)
+				return
+			}
+			requestedPolicy, err := parseRequestedPolicy(req.Policy)
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			executed, err := sessionManager.Execute(r.Context(), sessionID, command, requestedPolicy)
+			if err != nil {
+				http.Error(w, err.Error(), statusForSessionError(err))
+				return
+			}
+			resp := executeResponse{
+				Output:    executed.Output,
+				ExitCode:  executed.ExitCode,
+				SessionID: executed.Session.SessionID,
+			}
+			if req.IncludeMeta {
+				resp.Meta = buildExecuteMeta(r.Context(), executed.Runtime, command)
+			}
+			writeJSON(w, resp)
+			return
+		}
 
-		hostRoot := strings.TrimSpace(req.HostRoot)
-		if hostRoot == "" {
-			hostRoot = strings.TrimSpace(req.RootDir)
-		}
-		if hostRoot == "" {
-			hostRoot = cfg.DefaultHostRoot
-		}
-
-		profileName := strings.TrimSpace(req.Profile)
-		if profileName == "" {
-			profileName = defaultProfile
-		}
-		profile, err := contract.ParseProfile(profileName)
+		opts, err := buildRuntimeOptions(cfg, defaultProfile, defaultPolicy, req.HostRoot, req.RootDir, req.Profile, req.Policy)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		policyName := strings.TrimSpace(req.Policy)
-		if policyName == "" {
-			policyName = defaultPolicy
-		}
-		policy, err := contract.PolicyPreset(policyName)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		env, err := runtimeengine.New(runtimeengine.Options{
-			HostRoot:         hostRoot,
-			Profile:          profile,
-			Policy:           policy,
-			RCFiles:          append([]string(nil), cfg.DefaultRCFiles...),
-			EnableTestCorpus: cfg.EnableTestMount,
-		})
+		env, err := runtimeengine.New(opts)
 		if err != nil {
 			status := http.StatusInternalServerError
 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
@@ -133,9 +209,85 @@ func NewHandler(cfg Config) http.Handler {
 	return mux
 }
 
-func writeJSON(w http.ResponseWriter, payload executeResponse) {
+func writeJSON(w http.ResponseWriter, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func decodeOptionalJSON(r *http.Request, target any) error {
+	if r.Body == nil {
+		return nil
+	}
+	var raw json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		return err
+	}
+	if len(raw) == 0 || string(raw) == "null" {
+		return nil
+	}
+	return json.Unmarshal(raw, target)
+}
+
+func buildRuntimeOptions(cfg Config, defaultProfile string, defaultPolicy string, hostRootRaw string, rootDirRaw string, profileRaw string, policyRaw string) (runtimeengine.Options, error) {
+	hostRoot := strings.TrimSpace(hostRootRaw)
+	if hostRoot == "" {
+		hostRoot = strings.TrimSpace(rootDirRaw)
+	}
+	if hostRoot == "" {
+		hostRoot = cfg.DefaultHostRoot
+	}
+
+	profileName := strings.TrimSpace(profileRaw)
+	if profileName == "" {
+		profileName = defaultProfile
+	}
+	profile, err := contract.ParseProfile(profileName)
+	if err != nil {
+		return runtimeengine.Options{}, err
+	}
+
+	policyName := strings.TrimSpace(policyRaw)
+	if policyName == "" {
+		policyName = defaultPolicy
+	}
+	policy, err := contract.PolicyPreset(policyName)
+	if err != nil {
+		return runtimeengine.Options{}, err
+	}
+
+	return runtimeengine.Options{
+		HostRoot:         hostRoot,
+		Profile:          profile,
+		Policy:           policy,
+		RCFiles:          append([]string(nil), cfg.DefaultRCFiles...),
+		EnableTestCorpus: cfg.EnableTestMount,
+	}, nil
+}
+
+func parseRequestedPolicy(raw string) (contract.ExecutionPolicy, error) {
+	name := strings.TrimSpace(raw)
+	if name == "" {
+		return contract.ExecutionPolicy{}, nil
+	}
+	return contract.PolicyPreset(name)
+}
+
+func statusForSessionError(err error) int {
+	switch {
+	case errors.Is(err, runtimeengine.ErrSessionNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, runtimeengine.ErrSessionClosed):
+		return http.StatusConflict
+	case errors.Is(err, contract.ErrPolicyCeilingExceeded):
+		return http.StatusBadRequest
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		return http.StatusRequestTimeout
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func buildExecuteMeta(ctx context.Context, env *runtimeengine.Stack, command string) *executeMeta {

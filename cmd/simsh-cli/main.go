@@ -198,27 +198,28 @@ func runCLI(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io.Wri
 }
 
 func runRunMode(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	policy, _ := contract.PolicyPreset(opts.policy)
-	profile, _ := contract.ParseProfile(opts.profile)
 	rootDir := resolveRootDir(opts.rootDir)
+	runtimeOpts := runtimeOptionsFromCLI(opts, rootDir)
 
-	env, err := runtimeengine.New(runtimeengine.Options{
-		HostRoot:         rootDir,
-		Profile:          profile,
-		Policy:           policy,
-		RCFiles:          opts.rcFiles,
-		EnableTestCorpus: contains(opts.mounts, "test"),
-	})
+	if opts.command == "" {
+		manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
+		session, err := manager.Create(ctx, runtimeOpts)
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return contract.ExitCodeGeneral
+		}
+		defer func() { _, _ = manager.Close(session.SessionID) }()
+		executor := &sessionExecutor{manager: manager, sessionID: session.SessionID}
+		if opts.lineREPL || opts.disableTUI || !isTerminal(stdin, stdout) {
+			return runREPL(ctx, opts, rootDir, executor, session.SessionID, stdin, stdout, stderr)
+		}
+		return runTUI(ctx, opts, rootDir, executor, session.SessionID, stdin, stdout, stderr)
+	}
+
+	env, err := runtimeengine.New(runtimeOpts)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return contract.ExitCodeGeneral
-	}
-
-	if opts.command == "" {
-		if opts.lineREPL || opts.disableTUI || !isTerminal(stdin, stdout) {
-			return runREPL(ctx, opts, rootDir, env, stdin, stdout, stderr)
-		}
-		return runTUI(ctx, opts, rootDir, env, stdin, stdout, stderr)
 	}
 
 	out, code := env.Execute(ctx, opts.command)
@@ -258,14 +259,15 @@ func runServe(opts cliOptions, stdout io.Writer, stderr io.Writer) int {
 	return 0
 }
 
-func runTUI(ctx context.Context, opts cliOptions, rootDir string, env *runtimecmd.Environment, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+func runTUI(ctx context.Context, opts cliOptions, rootDir string, env runtimecmd.Executor, sessionID string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
 	err := runtimecmd.RunConsoleTUI(ctx, env, runtimecmd.ConsoleOptions{
-		Profile:  opts.profile,
-		Policy:   opts.policy,
-		HostRoot: rootDir,
-		Mounts:   opts.mounts,
-		Input:    stdin,
-		Output:   stdout,
+		Profile:   opts.profile,
+		Policy:    opts.policy,
+		HostRoot:  rootDir,
+		SessionID: sessionID,
+		Mounts:    opts.mounts,
+		Input:     stdin,
+		Output:    stdout,
 	})
 	if err != nil {
 		fmt.Fprintln(stderr, err)
@@ -274,8 +276,8 @@ func runTUI(ctx context.Context, opts cliOptions, rootDir string, env *runtimecm
 	return 0
 }
 
-func runREPL(ctx context.Context, opts cliOptions, rootDir string, env *runtimecmd.Environment, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
-	_, _ = fmt.Fprintf(stdout, "simsh line-repl profile=%s policy=%s host_root=%s\n", opts.profile, opts.policy, rootDir)
+func runREPL(ctx context.Context, opts cliOptions, rootDir string, env runtimecmd.Executor, sessionID string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+	_, _ = fmt.Fprintf(stdout, "simsh line-repl profile=%s policy=%s host_root=%s session=%s\n", opts.profile, opts.policy, rootDir, sessionID)
 	if len(opts.mounts) > 0 {
 		_, _ = fmt.Fprintf(stdout, "mounts=%s\n", strings.Join(opts.mounts, ","))
 	}
@@ -309,6 +311,34 @@ func runREPL(ctx context.Context, opts cliOptions, rootDir string, env *runtimec
 			fmt.Fprintf(stderr, "[exit %d]\n", code)
 		}
 	}
+}
+
+func runtimeOptionsFromCLI(opts cliOptions, rootDir string) runtimeengine.Options {
+	policy, _ := contract.PolicyPreset(opts.policy)
+	profile, _ := contract.ParseProfile(opts.profile)
+	return runtimeengine.Options{
+		HostRoot:         rootDir,
+		Profile:          profile,
+		Policy:           policy,
+		RCFiles:          opts.rcFiles,
+		EnableTestCorpus: contains(opts.mounts, "test"),
+	}
+}
+
+type sessionExecutor struct {
+	manager   *runtimeengine.SessionManager
+	sessionID string
+}
+
+func (s *sessionExecutor) Execute(ctx context.Context, commandLine string) (string, int) {
+	if s == nil || s.manager == nil {
+		return "execute: session runtime is not initialized", contract.ExitCodeGeneral
+	}
+	executed, err := s.manager.Execute(ctx, s.sessionID, commandLine, contract.ExecutionPolicy{})
+	if err != nil {
+		return "execute: " + err.Error(), contract.ExitCodeGeneral
+	}
+	return executed.Output, executed.ExitCode
 }
 
 func resolveRootDir(rootDir string) string {
