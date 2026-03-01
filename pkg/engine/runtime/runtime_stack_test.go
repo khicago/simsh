@@ -57,3 +57,25 @@ func TestRuntimeRespectsPolicy(t *testing.T) {
 		t.Fatalf("exit code = %d, want %d", code, contract.ExitCodeUnsupported)
 	}
 }
+
+func TestRuntimeOpsUsesPreparedPathMetadata(t *testing.T) {
+	runtime, err := New(Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+	})
+	if err != nil {
+		t.Fatalf("new runtime failed: %v", err)
+	}
+
+	meta, err := runtime.Ops().DescribePath(context.Background(), "/sys")
+	if err != nil {
+		t.Fatalf("describe /sys failed: %v", err)
+	}
+	if !meta.Exists || !meta.IsDir {
+		t.Fatalf("expected /sys to be a virtual dir, got %+v", meta)
+	}
+	if meta.Access != contract.PathAccessReadOnly {
+		t.Fatalf("expected /sys access=ro, got %q", meta.Access)
+	}
+}

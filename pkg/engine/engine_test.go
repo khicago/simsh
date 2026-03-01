@@ -712,6 +712,114 @@ func writeLimitedOps(fs contract.Filesystem, maxBytes int) contract.Ops {
 	return ops
 }
 
+func TestExecutePreparedMatchesExecute(t *testing.T) {
+	eng := newTestEngine()
+	ops := readOnlyOps(newTestFS())
+	prepared, err := eng.PrepareOps(context.Background(), ops)
+	if err != nil {
+		t.Fatalf("prepare ops failed: %v", err)
+	}
+
+	for _, cmd := range []string{
+		"echo hello",
+		"ll /sys",
+		"man ls",
+		"grep hello /workspace/readme.md",
+	} {
+		wantOut, wantCode := eng.Execute(context.Background(), cmd, ops)
+		gotOut, gotCode := eng.ExecutePrepared(context.Background(), cmd, prepared)
+		if gotCode != wantCode {
+			t.Fatalf("command %q: code=%d want=%d", cmd, gotCode, wantCode)
+		}
+		if gotOut != wantOut {
+			t.Fatalf("command %q: output mismatch\ngot:  %q\nwant: %q", cmd, gotOut, wantOut)
+		}
+	}
+}
+
+func TestExecutePreparedAllocReduction(t *testing.T) {
+	eng := newTestEngine()
+	ops := readOnlyOps(newTestFS())
+	// Force non-cacheable Execute path so this test continues to measure
+	// PrepareOps overhead against ExecutePrepared.
+	ops.CommandAliases = map[string][]string{"noop": {"echo"}}
+	prepared, err := eng.PrepareOps(context.Background(), ops)
+	if err != nil {
+		t.Fatalf("prepare ops failed: %v", err)
+	}
+
+	command := "echo hello"
+	baseAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.Execute(context.Background(), command, ops)
+		if code != 0 || out != "hello" {
+			t.Fatalf("execute failed: code=%d out=%q", code, out)
+		}
+	})
+	preparedAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.ExecutePrepared(context.Background(), command, prepared)
+		if code != 0 || out != "hello" {
+			t.Fatalf("execute prepared failed: code=%d out=%q", code, out)
+		}
+	})
+
+	if preparedAllocs >= baseAllocs {
+		t.Fatalf("expected prepared execution to allocate less: prepared=%.2f base=%.2f", preparedAllocs, baseAllocs)
+	}
+}
+
+func TestExecuteCachesPreparedOpsForStableOps(t *testing.T) {
+	eng := newTestEngine()
+	ops := readOnlyOps(newTestFS())
+
+	// Prime Execute-level cache.
+	_, _ = eng.Execute(context.Background(), "echo hello", ops)
+
+	warmAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.Execute(context.Background(), "echo hello", ops)
+		if code != 0 || out != "hello" {
+			t.Fatalf("warm execute failed: code=%d out=%q", code, out)
+		}
+	})
+	prepared, err := eng.PrepareOps(context.Background(), ops)
+	if err != nil {
+		t.Fatalf("prepare ops failed: %v", err)
+	}
+	preparedAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.ExecutePrepared(context.Background(), "echo hello", prepared)
+		if code != 0 || out != "hello" {
+			t.Fatalf("prepared execute failed: code=%d out=%q", code, out)
+		}
+	})
+
+	if warmAllocs > preparedAllocs+1 {
+		t.Fatalf("expected warm execute to be close to prepared path: warm=%.2f prepared=%.2f", warmAllocs, preparedAllocs)
+	}
+}
+
+func TestExecuteCacheIsolationAcrossOpsInstances(t *testing.T) {
+	eng := newTestEngine()
+	fsA := newTestFS()
+	fsB := newTestFS()
+	fsB.mustWrite("/workspace/readme.md", "second fs\n")
+	opsA := readOnlyOps(fsA)
+	opsB := readOnlyOps(fsB)
+
+	outA, codeA := eng.Execute(context.Background(), "cat /workspace/readme.md", opsA)
+	if codeA != 0 {
+		t.Fatalf("execute with opsA failed: code=%d out=%q", codeA, outA)
+	}
+	outB, codeB := eng.Execute(context.Background(), "cat /workspace/readme.md", opsB)
+	if codeB != 0 {
+		t.Fatalf("execute with opsB failed: code=%d out=%q", codeB, outB)
+	}
+	if outA == outB {
+		t.Fatalf("expected cache isolation across ops instances, both outputs=%q", outA)
+	}
+	if strings.TrimSpace(outB) != "second fs" {
+		t.Fatalf("unexpected output from opsB: %q", outB)
+	}
+}
+
 // ==================== Security Tests ====================
 
 func TestSecurityTeeWritePolicy(t *testing.T) {

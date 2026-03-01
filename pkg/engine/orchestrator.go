@@ -7,7 +7,9 @@ import (
 	"path"
 	"sort"
 	"strings"
+	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/khicago/simsh/pkg/contract"
 	"github.com/khicago/simsh/pkg/mount"
@@ -16,6 +18,46 @@ import (
 // Engine executes shell-like scripts using a command registry and injected ops.
 type Engine struct {
 	registry *Registry
+
+	cacheMu     sync.RWMutex
+	cacheValid  bool
+	cacheKey    preparedCacheKey
+	cacheResult PreparedOps
+}
+
+// PreparedOps is a compiled execution callback set that can be safely reused
+// across many Execute calls to avoid repeated normalize/wrap/bootstrap work.
+type PreparedOps struct {
+	normalized contract.Ops
+}
+
+type preparedCacheKey struct {
+	rootDir string
+	profile contract.CompatibilityProfile
+	policy  contract.ExecutionPolicy
+
+	requireAbsolutePathID uintptr
+	listChildrenID        uintptr
+	isDirPathID           uintptr
+	describePathID        uintptr
+	formatLSLongRowID     uintptr
+	readRawContentID      uintptr
+	resolveSearchPathsID  uintptr
+	collectFilesUnderID   uintptr
+	writeFileID           uintptr
+	appendFileID          uintptr
+	editFileID            uintptr
+	makeDirID             uintptr
+	removeFileID          uintptr
+	removeDirID           uintptr
+	checkPathOpID         uintptr
+
+	listExternalCommandsID uintptr
+	runExternalCommandID   uintptr
+	readExternalManualID   uintptr
+	auditSinkID            uintptr
+
+	pathEnvHash uint64
 }
 
 type contextKey string
@@ -41,16 +83,54 @@ func (e *Engine) BuiltinCommandDocs() []contract.BuiltinCommandDoc {
 	return e.registry.BuiltinCommandDocs()
 }
 
-func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
+// PrepareOps validates and compiles ops into an execution-ready form.
+func (e *Engine) PrepareOps(ctx context.Context, ops contract.Ops) (PreparedOps, error) {
 	normalized, err := e.normalizeOps(ctx, ops)
+	if err != nil {
+		return PreparedOps{}, err
+	}
+	return PreparedOps{normalized: normalized}, nil
+}
+
+// Ops returns the normalized callback set.
+func (p PreparedOps) Ops() contract.Ops {
+	return p.normalized
+}
+
+func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
+	if key, ok := buildPreparedCacheKey(ops); ok {
+		if cached, found := e.loadPreparedFromCache(key); found {
+			return e.ExecutePrepared(ctx, cmdline, cached)
+		}
+		prepared, err := e.PrepareOps(ctx, ops)
+		if err != nil {
+			return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
+		}
+		e.storePreparedInCache(key, prepared)
+		return e.ExecutePrepared(ctx, cmdline, prepared)
+	}
+	prepared, err := e.PrepareOps(ctx, ops)
 	if err != nil {
 		return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
 	}
-	if normalized.Policy.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, normalized.Policy.Timeout)
-		defer cancel()
+	return e.ExecutePrepared(ctx, cmdline, prepared)
+}
+
+// ExecutePrepared runs a command with pre-normalized ops.
+func (e *Engine) ExecutePrepared(ctx context.Context, cmdline string, prepared PreparedOps) (string, int) {
+	normalized := prepared.Ops()
+	if normalized.RequireAbsolutePath == nil {
+		return "execute: prepared ops are required", contract.ExitCodeGeneral
 	}
+	cancel := func() {}
+	if normalized.Policy.Timeout > 0 {
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > normalized.Policy.Timeout {
+			var cancelFunc context.CancelFunc
+			ctx, cancelFunc = context.WithTimeout(ctx, normalized.Policy.Timeout)
+			cancel = cancelFunc
+		}
+	}
+	defer cancel()
 	return e.runScript(ctx, cmdline, normalized)
 }
 
@@ -59,6 +139,105 @@ func (e *Engine) ExecuteWithFilesystem(ctx context.Context, cmdline string, fs c
 		return "execute: filesystem is required", contract.ExitCodeGeneral
 	}
 	return e.Execute(ctx, cmdline, contract.OpsFromFilesystem(fs))
+}
+
+func (e *Engine) loadPreparedFromCache(key preparedCacheKey) (PreparedOps, bool) {
+	e.cacheMu.RLock()
+	defer e.cacheMu.RUnlock()
+	if !e.cacheValid || e.cacheKey != key {
+		return PreparedOps{}, false
+	}
+	return e.cacheResult, true
+}
+
+func (e *Engine) storePreparedInCache(key preparedCacheKey, prepared PreparedOps) {
+	e.cacheMu.Lock()
+	defer e.cacheMu.Unlock()
+	e.cacheKey = key
+	e.cacheResult = prepared
+	e.cacheValid = true
+}
+
+func buildPreparedCacheKey(ops contract.Ops) (preparedCacheKey, bool) {
+	// Cache is only safe for the stable no-bootstrap/no-overlay path.
+	if len(ops.CommandAliases) > 0 || len(ops.EnvVars) > 0 || len(ops.RCFiles) > 0 || len(ops.VirtualMounts) > 0 {
+		return preparedCacheKey{}, false
+	}
+
+	policy := ops.Policy
+	if policy.WriteMode == "" {
+		policy = contract.DefaultPolicy()
+	}
+	profile := ops.Profile
+	if profile == "" {
+		profile = contract.DefaultProfile()
+	}
+	if _, err := contract.ParseProfile(string(profile)); err != nil {
+		return preparedCacheKey{}, false
+	}
+
+	key := preparedCacheKey{
+		rootDir: strings.TrimSpace(ops.RootDir),
+		profile: profile,
+		policy:  policy,
+
+		requireAbsolutePathID: funcValueIdentity(ops.RequireAbsolutePath),
+		listChildrenID:        funcValueIdentity(ops.ListChildren),
+		isDirPathID:           funcValueIdentity(ops.IsDirPath),
+		describePathID:        funcValueIdentity(ops.DescribePath),
+		formatLSLongRowID:     funcValueIdentity(ops.FormatLSLongRow),
+		readRawContentID:      funcValueIdentity(ops.ReadRawContent),
+		resolveSearchPathsID:  funcValueIdentity(ops.ResolveSearchPaths),
+		collectFilesUnderID:   funcValueIdentity(ops.CollectFilesUnder),
+		writeFileID:           funcValueIdentity(ops.WriteFile),
+		appendFileID:          funcValueIdentity(ops.AppendFile),
+		editFileID:            funcValueIdentity(ops.EditFile),
+		makeDirID:             funcValueIdentity(ops.MakeDir),
+		removeFileID:          funcValueIdentity(ops.RemoveFile),
+		removeDirID:           funcValueIdentity(ops.RemoveDir),
+		checkPathOpID:         funcValueIdentity(ops.CheckPathOp),
+
+		listExternalCommandsID: funcValueIdentity(ops.ListExternalCommands),
+		runExternalCommandID:   funcValueIdentity(ops.RunExternalCommand),
+		readExternalManualID:   funcValueIdentity(ops.ReadExternalManual),
+		auditSinkID:            interfaceIdentity(ops.AuditSink),
+		pathEnvHash:            stableStringSliceHash(ops.PathEnv),
+	}
+	if key.rootDir == "" {
+		key.rootDir = "/"
+	}
+	if key.requireAbsolutePathID == 0 || key.listChildrenID == 0 || key.isDirPathID == 0 || key.readRawContentID == 0 || key.resolveSearchPathsID == 0 || key.collectFilesUnderID == 0 {
+		return preparedCacheKey{}, false
+	}
+	return key, true
+}
+
+func stableStringSliceHash(values []string) uint64 {
+	var h uint64 = 1469598103934665603
+	for _, value := range values {
+		for idx := 0; idx < len(value); idx++ {
+			h ^= uint64(value[idx])
+			h *= 1099511628211
+		}
+		h ^= 0
+		h *= 1099511628211
+	}
+	return h
+}
+
+func funcValueIdentity(fn any) uintptr {
+	return interfaceIdentity(fn)
+}
+
+func interfaceIdentity(v any) uintptr {
+	if v == nil {
+		return 0
+	}
+	type eface struct {
+		typ  unsafe.Pointer
+		data unsafe.Pointer
+	}
+	return uintptr((*eface)(unsafe.Pointer(&v)).data)
 }
 
 func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.Ops, error) {
@@ -393,9 +572,14 @@ func expandCommandAlias(args []string, aliases map[string][]string) ([]string, e
 			return nil, fmt.Errorf("alias loop detected at %q", name)
 		}
 		seen[name] = struct{}{}
-		tokens := contract.NormalizeCommandAliases(map[string][]string{name: expansion})[name]
+		tokens := expansion
 		if len(tokens) == 0 {
 			return nil, fmt.Errorf("alias %q has empty expansion", name)
+		}
+		for _, token := range tokens {
+			if strings.TrimSpace(token) == "" {
+				return nil, fmt.Errorf("alias %q has empty expansion", name)
+			}
 		}
 		next := make([]string, 0, len(tokens)+len(current)-1)
 		next = append(next, tokens...)

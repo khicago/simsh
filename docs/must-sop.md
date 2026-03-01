@@ -4,7 +4,7 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## Update Requirements
 - When a document with SOP frontmatter changes, regenerate this file and commit the result:
-  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="${BAGAKIT_LIVING_DOCS_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-living-docs}"`
+  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="<path-to-bagakit-living-docs-skill>"`
   - `sh "$BAGAKIT_LIVING_DOCS_SKILL_DIR/scripts/living-docs-generate-sop.sh" .`
 - Add new SOP items by updating the `sop` list in the source document frontmatter.
 - Keep SOP items small and actionable; use the source document for details.
@@ -59,3 +59,8 @@ Source: `docs/notes-reusable-items-coding.md`
 - When you remove or deprecate something, update this list and point to the replacement or migration.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Execute Preflight Performance References
+Source: `docs/refs/notes-execute-preflight-performance-refs.md`
+- Use this list before major runtime-performance refactors around per-exec setup overhead.
+- Update the actionable-takeaways section when adopting a new optimization strategy.
+- Regenerate docs/must-sop.md after SOP/frontmatter changes.
