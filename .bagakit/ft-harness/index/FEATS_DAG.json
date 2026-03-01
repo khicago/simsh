@@ -1,0 +1,116 @@
+{
+  "version": 1,
+  "generated_by": "bagakit-feat-task-harness",
+  "generated_at": "2026-03-01T16:55:11Z",
+  "execution_mode": "serial",
+  "max_parallel": 2,
+  "parallel_recommendation": {
+    "recommended": false,
+    "reason": "dependency chain is mostly linear; serial mode is sufficient",
+    "natural_max_layer_width": 1
+  },
+  "feats": [
+    {
+      "feat_id": "f-20260301-adapter-lifecycle-memory-protocol",
+      "title": "Adapter lifecycle and memory protocol",
+      "status": "proposal",
+      "depends_on": [
+        "f-20260301-execution-trace-side-effect-tracking",
+        "f-20260301-session-lifecycle-policy-ceiling"
+      ],
+      "dependents": [
+        "f-20260301-reference-adapter-e2e-validation"
+      ],
+      "layer": 3,
+      "is_completed": false
+    },
+    {
+      "feat_id": "f-20260301-execution-trace-side-effect-tracking",
+      "title": "Execution trace side effect tracking",
+      "status": "proposal",
+      "depends_on": [
+        "f-20260301-structured-execution-result-contract"
+      ],
+      "dependents": [
+        "f-20260301-adapter-lifecycle-memory-protocol"
+      ],
+      "layer": 2,
+      "is_completed": false
+    },
+    {
+      "feat_id": "f-20260301-reference-adapter-e2e-validation",
+      "title": "Reference adapter end-to-end validation",
+      "status": "proposal",
+      "depends_on": [
+        "f-20260301-adapter-lifecycle-memory-protocol"
+      ],
+      "dependents": [],
+      "layer": 4,
+      "is_completed": false
+    },
+    {
+      "feat_id": "f-20260301-session-lifecycle-policy-ceiling",
+      "title": "Session lifecycle and policy ceiling",
+      "status": "proposal",
+      "depends_on": [],
+      "dependents": [
+        "f-20260301-adapter-lifecycle-memory-protocol",
+        "f-20260301-structured-execution-result-contract"
+      ],
+      "layer": 0,
+      "is_completed": false
+    },
+    {
+      "feat_id": "f-20260301-structured-execution-result-contract",
+      "title": "Structured execution result contract",
+      "status": "proposal",
+      "depends_on": [
+        "f-20260301-session-lifecycle-policy-ceiling"
+      ],
+      "dependents": [
+        "f-20260301-execution-trace-side-effect-tracking"
+      ],
+      "layer": 1,
+      "is_completed": false
+    }
+  ],
+  "layers": [
+    {
+      "layer": 0,
+      "feat_ids": [
+        "f-20260301-session-lifecycle-policy-ceiling"
+      ],
+      "is_completed": false
+    },
+    {
+      "layer": 1,
+      "feat_ids": [
+        "f-20260301-structured-execution-result-contract"
+      ],
+      "is_completed": false
+    },
+    {
+      "layer": 2,
+      "feat_ids": [
+        "f-20260301-execution-trace-side-effect-tracking"
+      ],
+      "is_completed": false
+    },
+    {
+      "layer": 3,
+      "feat_ids": [
+        "f-20260301-adapter-lifecycle-memory-protocol"
+      ],
+      "is_completed": false
+    },
+    {
+      "layer": 4,
+      "feat_ids": [
+        "f-20260301-reference-adapter-e2e-validation"
+      ],
+      "is_completed": false
+    }
+  ],
+  "first_unfinished_layer": 0,
+  "notes": []
+}

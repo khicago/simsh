@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260301-execution-trace-side-effect-tracking",
+  "updated_at": "2026-03-01T16:55:11Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement ExecutionTrace side-effect collection",
+      "status": "todo",
+      "summary": "Collect requested/read/write/deny path effects plus timing and resource summaries for builtins and external commands.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "2026-03-01T00:00:00Z",
+      "notes": []
+    }
+  ]
+}

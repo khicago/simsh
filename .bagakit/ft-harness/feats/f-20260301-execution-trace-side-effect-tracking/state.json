@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "feat_id": "f-20260301-execution-trace-side-effect-tracking",
+  "title": "Execution trace side effect tracking",
+  "slug": "execution-trace-side-effect-tracking",
+  "goal": "Track path-level side effects, denials, timing, and resource summaries for builtins and external commands as ExecutionTrace output.",
+  "status": "proposal",
+  "base_ref": "main",
+  "branch": "codex/f-20260301-execution-trace-side-effect-tracking",
+  "worktree_name": "wt-f-20260301-execution-trace-side-effect-tracking",
+  "worktree_path": ".worktrees/wt-f-20260301-execution-trace-side-effect-tracking",
+  "created_at": "2026-03-01T00:00:00Z",
+  "updated_at": "2026-03-01T16:55:11Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_checked_at": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "at": "2026-03-01T00:00:00Z",
+      "action": "feat_created",
+      "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-03-01T16:55:11Z",
+      "action": "dag_dependencies_updated",
+      "detail": "depends_on=f-20260301-structured-execution-result-contract"
+    }
+  ],
+  "depends_on": [
+    "f-20260301-structured-execution-result-contract"
+  ]
+}

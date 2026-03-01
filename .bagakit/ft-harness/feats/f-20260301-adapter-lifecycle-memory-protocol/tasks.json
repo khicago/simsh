@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260301-adapter-lifecycle-memory-protocol",
+  "updated_at": "2026-03-01T16:55:11Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement adapter lifecycle and optional memory hooks",
+      "status": "todo",
+      "summary": "Add adapter session hooks and an optional memory lifecycle protocol that can back adapter-projected `/memory` views.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "2026-03-01T00:00:00Z",
+      "notes": []
+    }
+  ]
+}

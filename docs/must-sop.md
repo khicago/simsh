@@ -23,6 +23,18 @@ Source: `docs/architecture-path-access-metadata.md`
 - Update this doc when schema/flags/output formats change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Platform Adapter Contract
+Source: `docs/architecture-platform-adapter-contract.md`
+- Read this doc before defining adapter lifecycles, RPC-to-file projections, or memory lifecycle protocols.
+- Keep adapter contracts explicit at the platform boundary; do not push product semantics into core by default.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Session and Execution Trace Model
+Source: `docs/architecture-session-trace-model.md`
+- Read this doc before adding session state, structured execution results, or policy override semantics.
+- Keep session and trace contracts generic; product semantics belong in adapters.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Doc Co-Authoring Workflow (Guidelines)
 Source: `docs/guidelines-doc-coauthoring.md`
 - Use this workflow when drafting substantial docs (proposals, specs, decision docs, RFCs).
@@ -51,6 +63,12 @@ Source: `docs/notes-continuous-learning.md`
 Source: `docs/notes-directives-examples.md`
 - Read this doc when you want to introduce or change response directives (`directives:` in doc frontmatter).
 - Keep directive usage practical: only add directives that reduce mistakes or improve debuggability.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Project Charter
+Source: `docs/notes-project-charter.md`
+- Read this doc before major architecture or product-boundary changes.
+- Update this doc when project goals, scope, or non-goals change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Reusable Items - Coding (Catalog)

@@ -63,20 +63,6 @@ Keep write/update flows explicit and auditable via dedicated commands/APIs (not 
 - Handle missing memory/resource files gracefully (`not found` should be a normal result path, not a hard failure).
 - Apply limits from day one (scan count, loaded entries, prompt injection size, debounce/watch intervals).
 
-## OpenClaw-Inspired Practices (reference)
-
-The following practices are good references for business-layer design (do not copy them into core):
-
-- skills source precedence + per-skill gating and config overlays:
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/docs/tools/skills.md`
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/docs/tools/skills-config.md`
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/src/config/types.skills.ts`
-- memory as Markdown source-of-truth + plugin-slot backend switching:
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/docs/concepts/memory.md`
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/src/config/types.plugins.ts`
-- event-driven evolution hooks (session-memory flush, bootstrap augmentation, command audit):
-  - `/Users/bytedance/proj/priv/bagaking/openclaw/docs/automation/hooks.md`
-
 ## Rollout Plan
 
 1. Stage A: define mount namespaces + minimal read-only drivers.

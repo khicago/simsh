@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260301-session-lifecycle-policy-ceiling",
+  "updated_at": "2026-03-01T00:00:00Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement session lifecycle contract and policy ceiling",
+      "status": "todo",
+      "summary": "Add generic session lifecycle primitives, checkpoint-resume semantics, and session-scoped policy ceiling behavior without breaking one-shot execution.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "2026-03-01T00:00:00Z",
+      "notes": []
+    }
+  ]
+}

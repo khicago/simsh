@@ -22,10 +22,13 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 
 2) Project intent and constraints
 - Link to the most authoritative spec or README.
-- Consider adding a suggested charter doc (e.g. `docs/notes-project-charter.md`) if the project lacks a stable intent/scope reference.
+- Project charter:
+  - `docs/notes-project-charter.md`
 - If this repo already has many docs and you're adopting Bagakit: consider adding/reading `docs/notes-adopting-living-docs.md` (adoption playbook).
 - Project architecture:
   - `docs/architecture.md`
+  - `docs/architecture-session-trace-model.md`
+  - `docs/architecture-platform-adapter-contract.md`
   - `docs/architecture-path-access-metadata.md`
   - `docs/architecture-memory-skills-extension.md`
 - Release plan:
