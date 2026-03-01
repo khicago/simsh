@@ -122,11 +122,11 @@ func NewHandler(cfg Config) http.Handler {
 		)
 		switch action {
 		case "checkpoint":
-			session, err = sessionManager.Checkpoint(sessionID)
+			session, err = sessionManager.Checkpoint(r.Context(), sessionID)
 		case "resume":
 			session, err = sessionManager.Resume(r.Context(), sessionID)
 		case "close":
-			session, err = sessionManager.Close(sessionID)
+			session, err = sessionManager.Close(r.Context(), sessionID)
 		default:
 			http.NotFound(w, r)
 			return

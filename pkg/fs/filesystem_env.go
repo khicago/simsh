@@ -25,6 +25,7 @@ type EnvironmentOptions struct {
 	CommandAliases    map[string][]string
 	EnvVars           map[string]string
 	RCFiles           []string
+	VirtualMounts     []contract.VirtualMount
 	PathEnv           []string
 	EnableTestCorpus  bool
 	ExternalCallbacks ExternalCallbacks
@@ -106,6 +107,7 @@ func NewRuntimeOps(opts EnvironmentOptions) (contract.Ops, error) {
 	ops.CommandAliases = contract.NormalizeCommandAliases(opts.CommandAliases)
 	ops.EnvVars = contract.NormalizeEnvVars(opts.EnvVars)
 	ops.RCFiles = contract.NormalizeRCFiles(opts.RCFiles)
+	ops.VirtualMounts = append(ops.VirtualMounts, opts.VirtualMounts...)
 	ops.FormatLSLongRow = opts.FormatLSLongRow
 	ops.AuditSink = opts.AuditSink
 

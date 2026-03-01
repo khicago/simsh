@@ -36,11 +36,12 @@ type SessionManager struct {
 }
 
 type managedSession struct {
-	snapshot   contract.Session
-	checkpoint contract.Session
-	base       Options
-	runtime    *Stack
-	active     bool
+	snapshot      contract.Session
+	checkpoint    contract.Session
+	base          Options
+	runtime       *Stack
+	active        bool
+	adapterMounts []contract.VirtualMount
 }
 
 var sessionCounter uint64
@@ -81,12 +82,23 @@ func (m *SessionManager) Create(ctx context.Context, opts Options) (contract.Ses
 		PolicyCeiling: runtime.Ops().Policy.Clone(),
 		State:         runtime.SessionState(opts.RCFiles),
 	}
+	session, adapterMounts, err := applySessionAdapters(ctx, session, opts.Adapters, adapterPhaseCreate, contract.ExecutionResult{})
+	if err != nil {
+		return contract.Session{}, err
+	}
+	if len(adapterMounts) > 0 {
+		runtime, err = New(runtimeOptionsFromSession(cloneOptions(opts), session, session.PolicyCeiling, adapterMounts))
+		if err != nil {
+			return contract.Session{}, err
+		}
+	}
 	record := &managedSession{
-		snapshot:   session.Clone(),
-		checkpoint: session.Clone(),
-		base:       cloneOptions(opts),
-		runtime:    runtime,
-		active:     true,
+		snapshot:      session.Clone(),
+		checkpoint:    session.Clone(),
+		base:          cloneOptions(opts),
+		runtime:       runtime,
+		active:        true,
+		adapterMounts: cloneMounts(adapterMounts),
 	}
 	record.base.Profile = session.Profile
 	record.base.Policy = session.PolicyCeiling.Clone()
@@ -148,16 +160,29 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	if !ok {
 		return SessionExecution{}, ErrSessionNotFound
 	}
-	current.snapshot.UpdatedAt = m.now()
-	current.snapshot.State = mergeSessionState(current.snapshot.State, current.runtime)
+	nextSession := current.snapshot.Clone()
+	nextSession.UpdatedAt = m.now()
+	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
+	if len(current.base.Adapters) > 0 {
+		var adapterErr error
+		nextSession, current.adapterMounts, adapterErr = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseObserve, result)
+		if adapterErr != nil {
+			return SessionExecution{}, adapterErr
+		}
+		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
+		if err != nil {
+			return SessionExecution{}, err
+		}
+	}
+	current.snapshot = nextSession.Clone()
 	return SessionExecution{
 		Session: current.snapshot.Clone(),
 		Runtime: runtime,
-		Result:  result,
+		Result:  result.WithSessionID(current.snapshot.SessionID),
 	}, nil
 }
 
-func (m *SessionManager) Checkpoint(sessionID string) (contract.Session, error) {
+func (m *SessionManager) Checkpoint(ctx context.Context, sessionID string) (contract.Session, error) {
 	record, err := m.lookup(strings.TrimSpace(sessionID))
 	if err != nil {
 		return contract.Session{}, err
@@ -166,8 +191,16 @@ func (m *SessionManager) Checkpoint(sessionID string) (contract.Session, error) 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	current := m.sessions[record.snapshot.SessionID]
-	current.snapshot.UpdatedAt = m.now()
-	current.snapshot.State = mergeSessionState(current.snapshot.State, current.runtime)
+	nextSession := current.snapshot.Clone()
+	nextSession.UpdatedAt = m.now()
+	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
+	if len(current.base.Adapters) > 0 {
+		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
+		if err != nil {
+			return contract.Session{}, err
+		}
+	}
+	current.snapshot = nextSession.Clone()
 	current.checkpoint = current.snapshot.Clone()
 	return current.checkpoint.Clone(), nil
 }
@@ -180,7 +213,12 @@ func (m *SessionManager) Resume(ctx context.Context, sessionID string) (contract
 	if record.active && record.runtime != nil {
 		return record.snapshot.Clone(), nil
 	}
-	runtime, err := New(runtimeOptionsForSession(record, record.checkpoint.PolicyCeiling))
+	resumed := record.checkpoint.Clone()
+	resumed, adapterMounts, err := applySessionAdapters(ctx, resumed, record.base.Adapters, adapterPhaseResume, contract.ExecutionResult{})
+	if err != nil {
+		return contract.Session{}, err
+	}
+	runtime, err := New(runtimeOptionsFromSession(record.base, resumed, resumed.PolicyCeiling, adapterMounts))
 	if err != nil {
 		return contract.Session{}, err
 	}
@@ -190,12 +228,13 @@ func (m *SessionManager) Resume(ctx context.Context, sessionID string) (contract
 	current := m.sessions[record.snapshot.SessionID]
 	current.runtime = runtime
 	current.active = true
-	current.snapshot = current.checkpoint.Clone()
+	current.snapshot = resumed.Clone()
+	current.adapterMounts = cloneMounts(adapterMounts)
 	current.snapshot.UpdatedAt = m.now()
 	return current.snapshot.Clone(), nil
 }
 
-func (m *SessionManager) Close(sessionID string) (contract.Session, error) {
+func (m *SessionManager) Close(ctx context.Context, sessionID string) (contract.Session, error) {
 	record, err := m.lookup(strings.TrimSpace(sessionID))
 	if err != nil {
 		return contract.Session{}, err
@@ -204,8 +243,16 @@ func (m *SessionManager) Close(sessionID string) (contract.Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	current := m.sessions[record.snapshot.SessionID]
-	current.snapshot.UpdatedAt = m.now()
-	current.snapshot.State = mergeSessionState(current.snapshot.State, current.runtime)
+	nextSession := current.snapshot.Clone()
+	nextSession.UpdatedAt = m.now()
+	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
+	if len(current.base.Adapters) > 0 {
+		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
+		if err != nil {
+			return contract.Session{}, err
+		}
+	}
+	current.snapshot = nextSession.Clone()
 	current.checkpoint = current.snapshot.Clone()
 	current.runtime = nil
 	current.active = false
@@ -229,16 +276,22 @@ func (m *SessionManager) lookup(sessionID string) (*managedSession, error) {
 	clone.snapshot = record.snapshot.Clone()
 	clone.checkpoint = record.checkpoint.Clone()
 	clone.base = cloneOptions(record.base)
+	clone.adapterMounts = cloneMounts(record.adapterMounts)
 	return &clone, nil
 }
 
 func runtimeOptionsForSession(record *managedSession, policy contract.ExecutionPolicy) Options {
-	opts := cloneOptions(record.base)
-	opts.Profile = record.checkpoint.Profile
+	return runtimeOptionsFromSession(record.base, record.snapshot, policy, record.adapterMounts)
+}
+
+func runtimeOptionsFromSession(base Options, session contract.Session, policy contract.ExecutionPolicy, adapterMounts []contract.VirtualMount) Options {
+	opts := cloneOptions(base)
+	opts.Profile = session.Profile
 	opts.Policy = policy.Clone()
-	opts.CommandAliases = record.checkpoint.State.Clone().CommandAliases
-	opts.EnvVars = record.checkpoint.State.Clone().EnvVars
+	opts.CommandAliases = session.State.Clone().CommandAliases
+	opts.EnvVars = session.State.Clone().EnvVars
 	opts.RCFiles = nil
+	opts.VirtualMounts = append(opts.VirtualMounts, adapterMounts...)
 	return opts
 }
 
@@ -260,12 +313,21 @@ func cloneOptions(opts Options) Options {
 		CommandAliases:    contract.NormalizeCommandAliases(opts.CommandAliases),
 		EnvVars:           contract.NormalizeEnvVars(opts.EnvVars),
 		RCFiles:           contract.NormalizeRCFiles(opts.RCFiles),
+		VirtualMounts:     cloneMounts(opts.VirtualMounts),
+		Adapters:          append([]contract.SessionAdapter(nil), opts.Adapters...),
 		EnableTestCorpus:  opts.EnableTestCorpus,
 		PathEnv:           append([]string(nil), opts.PathEnv...),
 		ExternalCallbacks: opts.ExternalCallbacks,
 		FormatLSLongRow:   opts.FormatLSLongRow,
 		AuditSink:         opts.AuditSink,
 	}
+}
+
+func cloneMounts(mounts []contract.VirtualMount) []contract.VirtualMount {
+	if len(mounts) == 0 {
+		return nil
+	}
+	return append([]contract.VirtualMount(nil), mounts...)
 }
 
 func samePolicy(left contract.ExecutionPolicy, right contract.ExecutionPolicy) bool {

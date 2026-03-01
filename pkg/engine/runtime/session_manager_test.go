@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/khicago/simsh/pkg/contract"
+	"github.com/khicago/simsh/pkg/mount"
 )
 
 func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
@@ -73,7 +75,7 @@ func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
 		t.Fatalf("updated_at = %s, want %s", executed.Session.UpdatedAt, nowValues[1])
 	}
 
-	checkpoint, err := manager.Checkpoint(session.SessionID)
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
 	if err != nil {
 		t.Fatalf("checkpoint failed: %v", err)
 	}
@@ -84,7 +86,7 @@ func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
 		t.Fatalf("unexpected checkpoint rc files: %v", checkpoint.State.RCFiles)
 	}
 
-	closed, err := manager.Close(session.SessionID)
+	closed, err := manager.Close(context.Background(), session.SessionID)
 	if err != nil {
 		t.Fatalf("close failed: %v", err)
 	}
@@ -125,4 +127,181 @@ func TestSessionManagerRejectsPolicyEscalation(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "exceeds session ceiling") {
 		t.Fatalf("expected policy ceiling error, got %v", err)
 	}
+}
+
+func TestSessionManagerAdapterLifecycleMemoryProjection(t *testing.T) {
+	adapter := &testMemoryAdapter{}
+	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_memory" }})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "echo hello", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("observe execute failed: %v", err)
+	}
+	memoryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("cat /memory/log.md failed: %v", err)
+	}
+	if strings.TrimSpace(memoryView.Result.Stdout) != "hello" {
+		t.Fatalf("unexpected memory log output: %+v", memoryView.Result)
+	}
+
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("checkpoint failed: %v", err)
+	}
+	if len(checkpoint.State.Opaque[adapter.AdapterID()]) == 0 {
+		t.Fatalf("expected adapter opaque state at checkpoint: %+v", checkpoint.State)
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+	resumedMemory, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("cat /memory/log.md after resume failed: %v", err)
+	}
+	if strings.TrimSpace(resumedMemory.Result.Stdout) != "hello" {
+		t.Fatalf("unexpected resumed memory output: %+v", resumedMemory.Result)
+	}
+	if adapter.createCalls != 1 || adapter.observeCalls == 0 || adapter.checkpointCalls == 0 || adapter.resumeCalls == 0 || adapter.closeCalls == 0 {
+		t.Fatalf("unexpected lifecycle call counts: %+v", adapter)
+	}
+}
+
+func TestSessionManagerAdapterObserveFailureDoesNotPartiallyMaterialize(t *testing.T) {
+	adapter := &testMemoryAdapter{failObserve: true}
+	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_memory_fail" }})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "echo hello", contract.ExecutionPolicy{}); err == nil || !strings.Contains(err.Error(), "observe failed") {
+		t.Fatalf("expected observe failure, got %v", err)
+	}
+
+	adapter.failObserve = false
+	memoryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("cat /memory/log.md failed: %v", err)
+	}
+	if strings.TrimSpace(memoryView.Result.Stdout) != "" {
+		t.Fatalf("expected empty memory log after failed observe, got %+v", memoryView.Result)
+	}
+}
+
+type testMemoryAdapter struct {
+	failObserve     bool
+	createCalls     int
+	resumeCalls     int
+	observeCalls    int
+	checkpointCalls int
+	closeCalls      int
+}
+
+type testMemoryState struct {
+	Entries   []string `json:"entries"`
+	Freshness string   `json:"freshness"`
+}
+
+func (a *testMemoryAdapter) AdapterID() string { return "memory_test" }
+
+func (a *testMemoryAdapter) CreateSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
+	_ = ctx
+	a.createCalls++
+	return a.buildProjection(a.stateFromSession(session, "created"))
+}
+
+func (a *testMemoryAdapter) ResumeSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
+	_ = ctx
+	a.resumeCalls++
+	return a.buildProjection(a.stateFromSession(session, "resumed"))
+}
+
+func (a *testMemoryAdapter) ObserveExecution(ctx context.Context, session contract.Session, result contract.ExecutionResult) (contract.AdapterProjection, error) {
+	_ = ctx
+	a.observeCalls++
+	if a.failObserve {
+		return contract.AdapterProjection{}, errors.New("observe failed")
+	}
+	state := a.stateFromSession(session, "observed")
+	if !referencesMemory(result.Trace) {
+		trimmed := strings.TrimSpace(result.Stdout)
+		if trimmed != "" {
+			state.Entries = append(state.Entries, trimmed)
+		}
+	}
+	return a.buildProjection(state)
+}
+
+func (a *testMemoryAdapter) CheckpointSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
+	_ = ctx
+	a.checkpointCalls++
+	return a.buildProjection(a.stateFromSession(session, "checkpointed"))
+}
+
+func (a *testMemoryAdapter) CloseSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
+	_ = ctx
+	a.closeCalls++
+	return a.buildProjection(a.stateFromSession(session, "closed"))
+}
+
+func (a *testMemoryAdapter) stateFromSession(session contract.Session, freshness string) testMemoryState {
+	state := testMemoryState{Freshness: freshness}
+	if raw := session.State.Opaque[a.AdapterID()]; len(raw) > 0 {
+		_ = json.Unmarshal(raw, &state)
+		state.Freshness = freshness
+	}
+	return state
+}
+
+func (a *testMemoryAdapter) buildProjection(state testMemoryState) (contract.AdapterProjection, error) {
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return contract.AdapterProjection{}, err
+	}
+	files := map[string]string{
+		"/memory/log.md":      strings.Join(state.Entries, "\n"),
+		"/memory/status.json": string(raw),
+	}
+	memoryMount, err := mount.NewStaticMount("/memory", "memory", files)
+	if err != nil {
+		return contract.AdapterProjection{}, err
+	}
+	return contract.AdapterProjection{
+		OpaqueState: raw,
+		Memory: contract.MemoryProjection{
+			Mount:     memoryMount,
+			Freshness: state.Freshness,
+		},
+	}, nil
+}
+
+func referencesMemory(trace contract.ExecutionTrace) bool {
+	for _, pathValue := range trace.RequestedPaths {
+		if strings.HasPrefix(pathValue, "/memory") {
+			return true
+		}
+	}
+	for _, pathValue := range trace.ReadPaths {
+		if strings.HasPrefix(pathValue, "/memory") {
+			return true
+		}
+	}
+	return false
 }

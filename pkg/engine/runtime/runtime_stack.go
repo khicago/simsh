@@ -18,6 +18,8 @@ type Options struct {
 	CommandAliases    map[string][]string
 	EnvVars           map[string]string
 	RCFiles           []string
+	VirtualMounts     []contract.VirtualMount
+	Adapters          []contract.SessionAdapter
 	EnableTestCorpus  bool
 	PathEnv           []string
 	ExternalCallbacks fs.ExternalCallbacks
@@ -45,6 +47,7 @@ func New(opts Options) (*Stack, error) {
 		CommandAliases:    opts.CommandAliases,
 		EnvVars:           opts.EnvVars,
 		RCFiles:           opts.RCFiles,
+		VirtualMounts:     append([]contract.VirtualMount(nil), opts.VirtualMounts...),
 		PathEnv:           opts.PathEnv,
 		EnableTestCorpus:  opts.EnableTestCorpus,
 		ExternalCallbacks: opts.ExternalCallbacks,

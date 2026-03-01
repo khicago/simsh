@@ -208,7 +208,7 @@ func runRunMode(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io
 			fmt.Fprintln(stderr, err)
 			return contract.ExitCodeGeneral
 		}
-		defer func() { _, _ = manager.Close(session.SessionID) }()
+		defer func() { _, _ = manager.Close(ctx, session.SessionID) }()
 		executor := &sessionExecutor{manager: manager, sessionID: session.SessionID}
 		if opts.lineREPL || opts.disableTUI || !isTerminal(stdin, stdout) {
 			return runREPL(ctx, opts, rootDir, executor, session.SessionID, stdin, stdout, stderr)
