@@ -79,3 +79,34 @@ func TestRuntimeOpsUsesPreparedPathMetadata(t *testing.T) {
 		t.Fatalf("expected /sys access=ro, got %q", meta.Access)
 	}
 }
+
+func TestRuntimeExecuteResultStructuredFields(t *testing.T) {
+	runtime, err := New(Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+	})
+	if err != nil {
+		t.Fatalf("new runtime failed: %v", err)
+	}
+
+	result := runtime.ExecuteResult(context.Background(), "echo hello")
+	if result.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", result)
+	}
+	if result.ExitCode != 0 {
+		t.Fatalf("exit_code = %d, want 0", result.ExitCode)
+	}
+	if result.Stdout != "hello" || result.Stderr != "" {
+		t.Fatalf("unexpected stdout/stderr: %+v", result)
+	}
+	if result.StartedAt.IsZero() || result.FinishedAt.IsZero() {
+		t.Fatalf("expected timestamps, got %+v", result)
+	}
+	if result.Trace.CommandLine != "echo hello" {
+		t.Fatalf("unexpected trace command_line: %+v", result.Trace)
+	}
+	if result.Trace.EffectiveProfile != contract.ProfileCoreStrict {
+		t.Fatalf("unexpected effective profile: %+v", result.Trace)
+	}
+}

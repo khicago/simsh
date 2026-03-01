@@ -17,8 +17,8 @@ type ExecuteRequest struct {
 }
 
 type ExecuteResponse struct {
-	Output   string `json:"output"`
-	ExitCode int    `json:"exit_code"`
+	contract.ExecutionResult
+	Output string `json:"output,omitempty"`
 }
 
 type OpsFactory func(ctx context.Context, req ExecuteRequest) (contract.Ops, error)
@@ -37,12 +37,13 @@ func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (Exec
 	}
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
-		return ExecuteResponse{Output: "execute: command is required", ExitCode: contract.ExitCodeUsage}, nil
+		result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
+		return ExecuteResponse{ExecutionResult: result, Output: result.FlattenOutput()}, nil
 	}
 	ops, err := s.OpsFactory(ctx, req)
 	if err != nil {
 		return ExecuteResponse{}, err
 	}
-	out, code := s.Engine.Execute(ctx, command, ops)
-	return ExecuteResponse{Output: out, ExitCode: code}, nil
+	result := s.Engine.ExecuteResult(ctx, command, ops)
+	return ExecuteResponse{ExecutionResult: result, Output: result.FlattenOutput()}, nil
 }

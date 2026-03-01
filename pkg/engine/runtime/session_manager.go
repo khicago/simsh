@@ -23,11 +23,9 @@ type SessionManagerOptions struct {
 }
 
 type SessionExecution struct {
-	Session         contract.Session
-	Runtime         *Stack
-	Output          string
-	ExitCode        int
-	EffectivePolicy contract.ExecutionPolicy
+	Session contract.Session
+	Runtime *Stack
+	Result  contract.ExecutionResult
 }
 
 type SessionManager struct {
@@ -114,8 +112,10 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	commandLine = strings.TrimSpace(commandLine)
 	if commandLine == "" {
 		return SessionExecution{
-			Output:   "execute: command is required",
-			ExitCode: contract.ExitCodeUsage,
+			Result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeUsage,
+				Stdout:   "execute: command is required",
+			},
 		}, nil
 	}
 
@@ -140,7 +140,7 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 		}
 	}
 
-	out, code := runtime.Execute(ctx, commandLine)
+	result := runtime.ExecuteResult(ctx, commandLine).WithSessionID(record.snapshot.SessionID)
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -151,11 +151,9 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	current.snapshot.UpdatedAt = m.now()
 	current.snapshot.State = mergeSessionState(current.snapshot.State, current.runtime)
 	return SessionExecution{
-		Session:         current.snapshot.Clone(),
-		Runtime:         runtime,
-		Output:          out,
-		ExitCode:        code,
-		EffectivePolicy: effectivePolicy.Clone(),
+		Session: current.snapshot.Clone(),
+		Runtime: runtime,
+		Result:  result,
 	}, nil
 }
 

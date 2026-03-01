@@ -52,10 +52,9 @@ type executeMeta struct {
 }
 
 type executeResponse struct {
-	Output    string       `json:"output"`
-	ExitCode  int          `json:"exit_code"`
-	SessionID string       `json:"session_id,omitempty"`
-	Meta      *executeMeta `json:"meta,omitempty"`
+	contract.ExecutionResult
+	Output string       `json:"output,omitempty"`
+	Meta   *executeMeta `json:"meta,omitempty"`
 }
 
 type sessionResponse struct {
@@ -154,7 +153,8 @@ func NewHandler(cfg Config) http.Handler {
 
 		command := strings.TrimSpace(req.Command)
 		if command == "" {
-			writeJSON(w, executeResponse{Output: "execute: command is required", ExitCode: contract.ExitCodeUsage})
+			result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
+			writeJSON(w, executeResponse{ExecutionResult: result, Output: result.FlattenOutput()})
 			return
 		}
 		if sessionID := strings.TrimSpace(req.SessionID); sessionID != "" {
@@ -173,9 +173,8 @@ func NewHandler(cfg Config) http.Handler {
 				return
 			}
 			resp := executeResponse{
-				Output:    executed.Output,
-				ExitCode:  executed.ExitCode,
-				SessionID: executed.Session.SessionID,
+				ExecutionResult: executed.Result,
+				Output:          executed.Result.FlattenOutput(),
 			}
 			if req.IncludeMeta {
 				resp.Meta = buildExecuteMeta(r.Context(), executed.Runtime, command)
@@ -199,8 +198,8 @@ func NewHandler(cfg Config) http.Handler {
 			return
 		}
 
-		out, code := env.Execute(r.Context(), command)
-		resp := executeResponse{Output: out, ExitCode: code}
+		result := env.ExecuteResult(r.Context(), command)
+		resp := executeResponse{ExecutionResult: result, Output: result.FlattenOutput()}
 		if req.IncludeMeta {
 			resp.Meta = buildExecuteMeta(r.Context(), env, command)
 		}

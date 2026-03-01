@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"time"
 
 	"github.com/khicago/simsh/pkg/builtin"
 	"github.com/khicago/simsh/pkg/contract"
@@ -61,10 +62,22 @@ func New(opts Options) (*Stack, error) {
 }
 
 func (r *Stack) Execute(ctx context.Context, commandLine string) (string, int) {
+	result := r.ExecuteResult(ctx, commandLine)
+	return result.FlattenOutput(), result.ExitCode
+}
+
+func (r *Stack) ExecuteResult(ctx context.Context, commandLine string) contract.ExecutionResult {
 	if r == nil || r.engine == nil {
-		return "execute: runtime is not initialized", contract.ExitCodeGeneral
+		now := time.Now().UTC()
+		return contract.ExecutionResult{
+			ExecutionID: "",
+			ExitCode:    contract.ExitCodeGeneral,
+			Stdout:      "execute: runtime is not initialized",
+			StartedAt:   now,
+			FinishedAt:  now,
+		}
 	}
-	return r.engine.ExecutePrepared(ctx, commandLine, r.prepared)
+	return r.engine.ExecutePreparedResult(ctx, commandLine, r.prepared)
 }
 
 func (r *Stack) Ops() contract.Ops {

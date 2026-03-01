@@ -338,7 +338,7 @@ func (s *sessionExecutor) Execute(ctx context.Context, commandLine string) (stri
 	if err != nil {
 		return "execute: " + err.Error(), contract.ExitCodeGeneral
 	}
-	return executed.Output, executed.ExitCode
+	return executed.Result.FlattenOutput(), executed.Result.ExitCode
 }
 
 func resolveRootDir(rootDir string) string {

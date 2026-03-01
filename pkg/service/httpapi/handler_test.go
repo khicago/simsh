@@ -31,14 +31,23 @@ func TestExecuteHandler(t *testing.T) {
 		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
 	}
 	var out struct {
-		Output   string `json:"output"`
-		ExitCode int    `json:"exit_code"`
+		ExecutionID string `json:"execution_id"`
+		Output      string `json:"output"`
+		Stdout      string `json:"stdout"`
+		Stderr      string `json:"stderr"`
+		ExitCode    int    `json:"exit_code"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		t.Fatalf("decode failed: %v", err)
 	}
+	if out.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", out)
+	}
 	if out.ExitCode != 0 {
 		t.Fatalf("unexpected exit code %d output=%q", out.ExitCode, out.Output)
+	}
+	if out.Stdout != out.Output || out.Stderr != "" {
+		t.Fatalf("unexpected structured stdout/stderr: %+v", out)
 	}
 	if !strings.Contains(out.Output, "PATH=/sys/bin:/bin") {
 		t.Fatalf("unexpected output %q", out.Output)
@@ -398,9 +407,11 @@ func TestSessionLifecycleHandler(t *testing.T) {
 		t.Fatalf("unexpected execute status=%d body=%s", executeResp.StatusCode, string(raw))
 	}
 	var executed struct {
-		Output    string `json:"output"`
-		ExitCode  int    `json:"exit_code"`
-		SessionID string `json:"session_id"`
+		ExecutionID string `json:"execution_id"`
+		Output      string `json:"output"`
+		Stdout      string `json:"stdout"`
+		ExitCode    int    `json:"exit_code"`
+		SessionID   string `json:"session_id"`
 	}
 	if err := json.NewDecoder(executeResp.Body).Decode(&executed); err != nil {
 		t.Fatalf("decode execute failed: %v", err)
@@ -408,8 +419,11 @@ func TestSessionLifecycleHandler(t *testing.T) {
 	if executed.SessionID != created.Session.SessionID {
 		t.Fatalf("unexpected execute session_id=%q want=%q", executed.SessionID, created.Session.SessionID)
 	}
-	if executed.ExitCode != 0 || strings.TrimSpace(executed.Output) != "HTTP_SESSION=enabled" {
-		t.Fatalf("unexpected execute output: code=%d out=%q", executed.ExitCode, executed.Output)
+	if executed.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", executed)
+	}
+	if executed.ExitCode != 0 || strings.TrimSpace(executed.Stdout) != "HTTP_SESSION=enabled" {
+		t.Fatalf("unexpected execute output: %+v", executed)
 	}
 
 	checkpointResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/checkpoint", map[string]any{})
@@ -456,14 +470,19 @@ func TestSessionLifecycleHandler(t *testing.T) {
 		t.Fatalf("unexpected resumed execute status=%d body=%s", resumeExecuteResp.StatusCode, string(raw))
 	}
 	var resumed struct {
-		Output   string `json:"output"`
-		ExitCode int    `json:"exit_code"`
+		ExecutionID string `json:"execution_id"`
+		Output      string `json:"output"`
+		Stdout      string `json:"stdout"`
+		ExitCode    int    `json:"exit_code"`
 	}
 	if err := json.NewDecoder(resumeExecuteResp.Body).Decode(&resumed); err != nil {
 		t.Fatalf("decode resumed execute failed: %v", err)
 	}
-	if resumed.ExitCode != 0 || strings.TrimSpace(resumed.Output) != "HTTP_SESSION=enabled" {
-		t.Fatalf("unexpected resumed output: code=%d out=%q", resumed.ExitCode, resumed.Output)
+	if resumed.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", resumed)
+	}
+	if resumed.ExitCode != 0 || strings.TrimSpace(resumed.Stdout) != "HTTP_SESSION=enabled" {
+		t.Fatalf("unexpected resumed output: %+v", resumed)
 	}
 }
 

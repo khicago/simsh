@@ -98,40 +98,45 @@ func (p PreparedOps) Ops() contract.Ops {
 }
 
 func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
-	if key, ok := buildPreparedCacheKey(ops); ok {
-		if cached, found := e.loadPreparedFromCache(key); found {
-			return e.ExecutePrepared(ctx, cmdline, cached)
-		}
-		prepared, err := e.PrepareOps(ctx, ops)
-		if err != nil {
-			return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
-		}
-		e.storePreparedInCache(key, prepared)
-		return e.ExecutePrepared(ctx, cmdline, prepared)
-	}
-	prepared, err := e.PrepareOps(ctx, ops)
-	if err != nil {
-		return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
-	}
-	return e.ExecutePrepared(ctx, cmdline, prepared)
+	result := e.ExecuteResult(ctx, cmdline, ops)
+	return result.FlattenOutput(), result.ExitCode
 }
 
 // ExecutePrepared runs a command with pre-normalized ops.
 func (e *Engine) ExecutePrepared(ctx context.Context, cmdline string, prepared PreparedOps) (string, int) {
-	normalized := prepared.Ops()
-	if normalized.RequireAbsolutePath == nil {
-		return "execute: prepared ops are required", contract.ExitCodeGeneral
+	result := e.ExecutePreparedResult(ctx, cmdline, prepared)
+	return result.FlattenOutput(), result.ExitCode
+}
+
+func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract.Ops) contract.ExecutionResult {
+	if key, ok := buildPreparedCacheKey(ops); ok {
+		if cached, found := e.loadPreparedFromCache(key); found {
+			return e.ExecutePreparedResult(ctx, cmdline, cached)
+		}
+		prepared, err := e.PrepareOps(ctx, ops)
+		if err != nil {
+			return contract.ExecutionResult{
+				ExecutionID: nextExecutionID(),
+				ExitCode:    contract.ExitCodeGeneral,
+				Stdout:      fmt.Sprintf("execute: %v", err),
+				StartedAt:   time.Now().UTC(),
+				FinishedAt:  time.Now().UTC(),
+			}
+		}
+		e.storePreparedInCache(key, prepared)
+		return e.ExecutePreparedResult(ctx, cmdline, prepared)
 	}
-	cancel := func() {}
-	if normalized.Policy.Timeout > 0 {
-		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > normalized.Policy.Timeout {
-			var cancelFunc context.CancelFunc
-			ctx, cancelFunc = context.WithTimeout(ctx, normalized.Policy.Timeout)
-			cancel = cancelFunc
+	prepared, err := e.PrepareOps(ctx, ops)
+	if err != nil {
+		return contract.ExecutionResult{
+			ExecutionID: nextExecutionID(),
+			ExitCode:    contract.ExitCodeGeneral,
+			Stdout:      fmt.Sprintf("execute: %v", err),
+			StartedAt:   time.Now().UTC(),
+			FinishedAt:  time.Now().UTC(),
 		}
 	}
-	defer cancel()
-	return e.runScript(ctx, cmdline, normalized)
+	return e.ExecutePreparedResult(ctx, cmdline, prepared)
 }
 
 func (e *Engine) ExecuteWithFilesystem(ctx context.Context, cmdline string, fs contract.Filesystem) (string, int) {

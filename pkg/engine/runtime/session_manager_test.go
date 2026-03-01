@@ -60,8 +60,14 @@ func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute failed: %v", err)
 	}
-	if executed.ExitCode != 0 || strings.TrimSpace(executed.Output) != "SESSION_FLAG=enabled" {
-		t.Fatalf("unexpected execute result: code=%d out=%q", executed.ExitCode, executed.Output)
+	if executed.Result.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", executed.Result)
+	}
+	if executed.Result.SessionID != session.SessionID {
+		t.Fatalf("unexpected session_id in result: %+v", executed.Result)
+	}
+	if executed.Result.ExitCode != 0 || strings.TrimSpace(executed.Result.Stdout) != "SESSION_FLAG=enabled" {
+		t.Fatalf("unexpected execute result: %+v", executed.Result)
 	}
 	if executed.Session.UpdatedAt != nowValues[1] {
 		t.Fatalf("updated_at = %s, want %s", executed.Session.UpdatedAt, nowValues[1])
@@ -99,8 +105,8 @@ func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resume execute failed: %v", err)
 	}
-	if resumed.ExitCode != 0 || strings.TrimSpace(resumed.Output) != "SESSION_FLAG=enabled" {
-		t.Fatalf("unexpected resumed output: code=%d out=%q", resumed.ExitCode, resumed.Output)
+	if resumed.Result.ExitCode != 0 || strings.TrimSpace(resumed.Result.Stdout) != "SESSION_FLAG=enabled" {
+		t.Fatalf("unexpected resumed output: %+v", resumed.Result)
 	}
 }
 
