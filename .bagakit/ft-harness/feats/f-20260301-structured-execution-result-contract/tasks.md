@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement structured ExecutionResult as core SSOT
+- [x] T-001 Implement structured ExecutionResult as core SSOT
 
 ## Status Legend
 - todo

@@ -1,2 +1,5 @@
 # Keep harness files in git by default.
 # Add local-only artifacts here if needed.
+ralph-msg.md
+ralph-msg.consumed.md
+archive/execution-table/

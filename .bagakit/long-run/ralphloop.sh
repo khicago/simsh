@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 set -euo pipefail
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-exec bash "${script_dir}/.gen/check_and_resume.sh" "$@"
+exec bash "${script_dir}/.gen/ralphloop.sh" "$@"

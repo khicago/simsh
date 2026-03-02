@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement ExecutionTrace side-effect collection
+- [x] T-001 Implement ExecutionTrace side-effect collection
 
 ## Status Legend
 - todo

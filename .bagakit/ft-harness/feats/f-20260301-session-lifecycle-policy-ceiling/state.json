@@ -4,31 +4,52 @@
   "title": "Session lifecycle and policy ceiling",
   "slug": "session-lifecycle-policy-ceiling",
   "goal": "Add first-class session lifecycle primitives and session-scoped policy ceiling semantics for cross-call runtime state.",
-  "status": "proposal",
+  "status": "done",
   "base_ref": "main",
   "branch": "codex/f-20260301-session-lifecycle-policy-ceiling",
   "worktree_name": "wt-f-20260301-session-lifecycle-policy-ceiling",
   "worktree_path": ".worktrees/wt-f-20260301-session-lifecycle-policy-ceiling",
   "created_at": "2026-03-01T00:00:00Z",
-  "updated_at": "2026-03-01T00:00:00Z",
+  "updated_at": "2026-03-01T18:16:11Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
-    "round_count": 0
+    "round_count": 1
   },
   "gate": {
-    "last_result": null,
-    "last_task_id": null,
-    "last_checked_at": null,
-    "last_check_commands": [],
-    "last_log_path": null
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-01T18:15:21Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260301-session-lifecycle-policy-ceiling/artifacts/gate-20260301T181521Z.log"
   },
   "history": [
     {
       "at": "2026-03-01T00:00:00Z",
       "action": "feat_created",
       "detail": "base_ref=main"
+    },
+    {
+      "at": "2026-03-01T17:59:51Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-01T18:15:21Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-03-01T18:16:11Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
     }
   ]
 }

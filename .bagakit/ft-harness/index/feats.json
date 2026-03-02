@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-01T16:55:11Z",
+  "updated_at": "2026-03-01T19:00:26Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -46,42 +46,42 @@
     {
       "feat_id": "f-20260301-adapter-lifecycle-memory-protocol",
       "title": "Adapter lifecycle and memory protocol",
-      "status": "proposal",
+      "status": "done",
       "branch": "codex/f-20260301-adapter-lifecycle-memory-protocol",
       "worktree_name": "wt-f-20260301-adapter-lifecycle-memory-protocol",
-      "updated_at": "2026-03-01T16:55:11Z"
+      "updated_at": "2026-03-01T18:39:05Z"
     },
     {
       "feat_id": "f-20260301-execution-trace-side-effect-tracking",
       "title": "Execution trace side effect tracking",
-      "status": "proposal",
+      "status": "done",
       "branch": "codex/f-20260301-execution-trace-side-effect-tracking",
       "worktree_name": "wt-f-20260301-execution-trace-side-effect-tracking",
-      "updated_at": "2026-03-01T16:55:11Z"
+      "updated_at": "2026-03-01T18:31:25Z"
     },
     {
       "feat_id": "f-20260301-reference-adapter-e2e-validation",
       "title": "Reference adapter end-to-end validation",
-      "status": "proposal",
+      "status": "done",
       "branch": "codex/f-20260301-reference-adapter-e2e-validation",
       "worktree_name": "wt-f-20260301-reference-adapter-e2e-validation",
-      "updated_at": "2026-03-01T16:55:11Z"
+      "updated_at": "2026-03-01T19:00:26Z"
     },
     {
       "feat_id": "f-20260301-session-lifecycle-policy-ceiling",
       "title": "Session lifecycle and policy ceiling",
-      "status": "proposal",
+      "status": "done",
       "branch": "codex/f-20260301-session-lifecycle-policy-ceiling",
       "worktree_name": "wt-f-20260301-session-lifecycle-policy-ceiling",
-      "updated_at": "2026-03-01T00:00:00Z"
+      "updated_at": "2026-03-01T18:16:11Z"
     },
     {
       "feat_id": "f-20260301-structured-execution-result-contract",
       "title": "Structured execution result contract",
-      "status": "proposal",
+      "status": "done",
       "branch": "codex/f-20260301-structured-execution-result-contract",
       "worktree_name": "wt-f-20260301-structured-execution-result-contract",
-      "updated_at": "2026-03-01T16:55:11Z"
+      "updated_at": "2026-03-01T18:22:11Z"
     }
   ]
 }

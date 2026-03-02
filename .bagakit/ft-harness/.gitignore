@@ -1,3 +1,5 @@
 artifacts/*.log
 artifacts/ref-read-report.json
 artifacts/ref-read-report.md
+*.msg
+*.log

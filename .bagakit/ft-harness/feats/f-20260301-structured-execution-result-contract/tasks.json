@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260301-structured-execution-result-contract",
-  "updated_at": "2026-03-01T16:55:11Z",
+  "updated_at": "2026-03-01T18:22:11Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Implement structured ExecutionResult as core SSOT",
-      "status": "todo",
+      "status": "done",
       "summary": "Introduce ExecutionResult across engine/runtime/API layers and keep CLI output compatibility as a rendering concern.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-01T18:21:41Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
-      "finished_at": null,
-      "updated_at": "2026-03-01T00:00:00Z",
+      "started_at": "2026-03-01T18:17:09Z",
+      "finished_at": "2026-03-01T18:22:11Z",
+      "updated_at": "2026-03-01T18:22:11Z",
       "notes": []
     }
   ]

@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "generated_at": "2026-03-01T17:57:35Z",
+  "stack": {
+    "primary": "go",
+    "signals": [
+      "go.mod"
+    ]
+  },
+  "launcher": {
+    "route": "Makefile:ralphloop",
+    "command": "make ralphloop"
+  },
+  "agent": {
+    "hint": "bash",
+    "command": ""
+  },
+  "analysis_paths": [
+    "pkg",
+    "cmd",
+    "docs",
+    ".bagakit"
+  ],
+  "quality_commands": [
+    "make test",
+    "make lint",
+    "make check",
+    "go test ./..."
+  ]
+}

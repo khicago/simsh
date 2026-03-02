@@ -1,14 +1,16 @@
 {
   "version": "1",
   "selection": {
-    "strategy": "highest_priority_first"
+    "strategy": "status_confidence_evidence_priority"
   },
   "detection": {
     "status": "ready",
-    "last_reviewed_at": "2026-02-17T14:25:00Z",
-    "reviewed_by": "bagaking",
-    "upstream_systems": ["bagakit-ft"],
-    "notes": "已安装并初始化 bagakit 技能，包含 f-20260217-vfs-mount-ancestors 功能。"
+    "last_reviewed_at": "2026-03-11T00:00:00Z",
+    "reviewed_by": "codex",
+    "upstream_systems": [
+      "bagakit-ft"
+    ],
+    "notes": "Detected active bagakit-ft backlog under .bagakit/ft-harness; use feat/task state as execution SSOT for the March 1 proposal chain."
   },
   "adapters": [
     {
@@ -52,7 +54,7 @@
       }
     },
     {
-      "name": "manual-custom-default",
+      "name": "manual-default",
       "kind": "manual",
       "enabled": false,
       "root": ".",
@@ -63,6 +65,17 @@
       "rows": []
     }
   ],
+  "maintenance": {
+    "archive": {
+      "enabled": true,
+      "manual_done_keep": 120,
+      "manual_done_max_archive_per_run": 60,
+      "statuses": [
+        "done"
+      ],
+      "archive_dir": ".bagakit/long-run/archive/execution-table"
+    }
+  },
   "guidance": {
     "global": {
       "analyze_when": [

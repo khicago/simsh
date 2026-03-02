@@ -4,25 +4,31 @@
   "title": "Structured execution result contract",
   "slug": "structured-execution-result-contract",
   "goal": "Introduce structured ExecutionResult contracts across engine, runtime, and HTTP surfaces while preserving CLI compatibility.",
-  "status": "proposal",
+  "status": "done",
   "base_ref": "main",
   "branch": "codex/f-20260301-structured-execution-result-contract",
   "worktree_name": "wt-f-20260301-structured-execution-result-contract",
   "worktree_path": ".worktrees/wt-f-20260301-structured-execution-result-contract",
   "created_at": "2026-03-01T00:00:00Z",
-  "updated_at": "2026-03-01T16:55:11Z",
+  "updated_at": "2026-03-01T18:22:11Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
-    "round_count": 0
+    "round_count": 1
   },
   "gate": {
-    "last_result": null,
-    "last_task_id": null,
-    "last_checked_at": null,
-    "last_check_commands": [],
-    "last_log_path": null
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-01T18:21:41Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260301-structured-execution-result-contract/artifacts/gate-20260301T182141Z.log"
   },
   "history": [
     {
@@ -34,6 +40,21 @@
       "at": "2026-03-01T16:55:11Z",
       "action": "dag_dependencies_updated",
       "detail": "depends_on=f-20260301-session-lifecycle-policy-ceiling"
+    },
+    {
+      "at": "2026-03-01T18:17:09Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-01T18:21:41Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-03-01T18:22:11Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
     }
   ],
   "depends_on": [

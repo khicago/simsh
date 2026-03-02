@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement session lifecycle contract and policy ceiling
+- [x] T-001 Implement session lifecycle contract and policy ceiling
 
 ## Status Legend
 - todo

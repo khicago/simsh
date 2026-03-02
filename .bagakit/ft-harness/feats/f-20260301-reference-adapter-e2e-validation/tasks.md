@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement reference adapter and end-to-end validation
+- [x] T-001 Implement reference adapter and end-to-end validation
 
 ## Status Legend
 - todo

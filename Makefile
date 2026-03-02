@@ -63,3 +63,9 @@ codex-locale-resume:
 	@echo "CODEX_HOME=$(CODEX_HOME)"
 	@echo "Running codex with CODEX_HOME=$(CODEX_HOME)"
 	codex -m gpt-5.3-codex -c model_reasoning_effort="xhigh" -c model_reasoning_summary_format=experimental --search --dangerously-bypass-approvals-and-sandbox resume 
+
+# BAGAKIT:LONGRUN:LAUNCHER:START
+ralphloop:
+	bash .bagakit/long-run/ralphloop-runner.sh
+.PHONY: ralphloop
+# BAGAKIT:LONGRUN:LAUNCHER:END

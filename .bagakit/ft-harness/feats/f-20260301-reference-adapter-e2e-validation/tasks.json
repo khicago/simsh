@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260301-reference-adapter-e2e-validation",
-  "updated_at": "2026-03-01T16:55:11Z",
+  "updated_at": "2026-03-01T19:00:26Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Implement reference adapter and end-to-end validation",
-      "status": "todo",
+      "status": "done",
       "summary": "Build one adapter-backed reference workload and prove session, trace, projection, and memory contracts end to end.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-01T18:59:18Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
-      "finished_at": null,
-      "updated_at": "2026-03-01T00:00:00Z",
+      "started_at": "2026-03-01T18:39:14Z",
+      "finished_at": "2026-03-01T19:00:26Z",
+      "updated_at": "2026-03-01T19:00:26Z",
       "notes": []
     }
   ]

@@ -16,6 +16,10 @@ It is designed for higher-level agent platforms that need a predictable executio
 - AI-friendly virtual filesystem zones
 - path metadata via `ls -l` and opt-in API metadata
 - a documented extension boundary for adapter-driven mounts
+- structured execution result contracts
+- execution tracing with side-effect tracking
+- adapter lifecycle and memory protocol hooks
+- first-class session lifecycle management
 
 Project boundaries and non-goals live in [`docs/notes-project-charter.md`](docs/notes-project-charter.md).
 

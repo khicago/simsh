@@ -1,0 +1,27 @@
+{
+  "selection_strategy": "status_confidence_evidence_priority",
+  "resume_command": "bash .bagakit/long-run/check_and_resume.sh",
+  "next_row": {
+    "id": "bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
+    "title": "Session lifecycle and policy ceiling / Implement session lifecycle contract and policy ceiling",
+    "status": "todo",
+    "system": "bagakit-ft",
+    "source_ref": ".bagakit/ft-harness/feats/f-20260301-session-lifecycle-policy-ceiling/tasks.json",
+    "commands": [],
+    "confidence": 0.7,
+    "evidence": [
+      "feat_status=proposal",
+      "task_status=todo",
+      "selected_task=T-001"
+    ],
+    "evidence_count": 3
+  },
+  "next_feature": {
+    "id": "EXEC::bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
+    "title": "Session lifecycle and policy ceiling / Implement session lifecycle contract and policy ceiling",
+    "status": "todo",
+    "confidence": 0.7,
+    "evidence_count": 3
+  },
+  "footer_line": "- LongRun: Item=bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001; Status=todo; Confidence=0.70; Evidence=feat_status=proposal | task_status=todo | selected_task=T-001; Next=bash .bagakit/long-run/check_and_resume.sh"
+}
