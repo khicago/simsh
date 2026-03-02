@@ -18,6 +18,12 @@ type Engine struct {
 	registry *Registry
 }
 
+// PreparedOps is a compiled execution callback set that can be safely reused
+// across many Execute calls to avoid repeated normalize/wrap/bootstrap work.
+type PreparedOps struct {
+	normalized contract.Ops
+}
+
 type contextKey string
 
 const (
@@ -41,16 +47,43 @@ func (e *Engine) BuiltinCommandDocs() []contract.BuiltinCommandDoc {
 	return e.registry.BuiltinCommandDocs()
 }
 
-func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
+// PrepareOps validates and compiles ops into an execution-ready form.
+func (e *Engine) PrepareOps(ctx context.Context, ops contract.Ops) (PreparedOps, error) {
 	normalized, err := e.normalizeOps(ctx, ops)
+	if err != nil {
+		return PreparedOps{}, err
+	}
+	return PreparedOps{normalized: normalized}, nil
+}
+
+// Ops returns the normalized callback set.
+func (p PreparedOps) Ops() contract.Ops {
+	return p.normalized
+}
+
+func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
+	prepared, err := e.PrepareOps(ctx, ops)
 	if err != nil {
 		return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
 	}
-	if normalized.Policy.Timeout > 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, normalized.Policy.Timeout)
-		defer cancel()
+	return e.ExecutePrepared(ctx, cmdline, prepared)
+}
+
+// ExecutePrepared runs a command with pre-normalized ops.
+func (e *Engine) ExecutePrepared(ctx context.Context, cmdline string, prepared PreparedOps) (string, int) {
+	normalized := prepared.Ops()
+	if normalized.RequireAbsolutePath == nil {
+		return "execute: prepared ops are required", contract.ExitCodeGeneral
 	}
+	cancel := func() {}
+	if normalized.Policy.Timeout > 0 {
+		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > normalized.Policy.Timeout {
+			var cancelFunc context.CancelFunc
+			ctx, cancelFunc = context.WithTimeout(ctx, normalized.Policy.Timeout)
+			cancel = cancelFunc
+		}
+	}
+	defer cancel()
 	return e.runScript(ctx, cmdline, normalized)
 }
 
@@ -393,9 +426,14 @@ func expandCommandAlias(args []string, aliases map[string][]string) ([]string, e
 			return nil, fmt.Errorf("alias loop detected at %q", name)
 		}
 		seen[name] = struct{}{}
-		tokens := contract.NormalizeCommandAliases(map[string][]string{name: expansion})[name]
+		tokens := expansion
 		if len(tokens) == 0 {
 			return nil, fmt.Errorf("alias %q has empty expansion", name)
+		}
+		for _, token := range tokens {
+			if strings.TrimSpace(token) == "" {
+				return nil, fmt.Errorf("alias %q has empty expansion", name)
+			}
 		}
 		next := make([]string, 0, len(tokens)+len(current)-1)
 		next = append(next, tokens...)

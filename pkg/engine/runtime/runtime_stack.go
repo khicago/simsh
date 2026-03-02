@@ -26,8 +26,9 @@ type Options struct {
 
 // Stack composes shell execution engine with filesystem callbacks.
 type Stack struct {
-	engine *engine.Engine
-	ops    contract.Ops
+	engine   *engine.Engine
+	ops      contract.Ops
+	prepared engine.PreparedOps
 }
 
 // New composes the runtime from builtin shell engine and fs adapters.
@@ -52,19 +53,26 @@ func New(opts Options) (*Stack, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Stack{engine: core, ops: ops}, nil
+	prepared, err := core.PrepareOps(context.Background(), ops)
+	if err != nil {
+		return nil, err
+	}
+	return &Stack{engine: core, ops: ops, prepared: prepared}, nil
 }
 
 func (r *Stack) Execute(ctx context.Context, commandLine string) (string, int) {
 	if r == nil || r.engine == nil {
 		return "execute: runtime is not initialized", contract.ExitCodeGeneral
 	}
-	return r.engine.Execute(ctx, commandLine, r.ops)
+	return r.engine.ExecutePrepared(ctx, commandLine, r.prepared)
 }
 
 func (r *Stack) Ops() contract.Ops {
 	if r == nil {
 		return contract.Ops{}
+	}
+	if prepared := r.prepared.Ops(); prepared.RequireAbsolutePath != nil {
+		return prepared
 	}
 	return r.ops
 }

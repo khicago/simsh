@@ -712,6 +712,58 @@ func writeLimitedOps(fs contract.Filesystem, maxBytes int) contract.Ops {
 	return ops
 }
 
+func TestExecutePreparedMatchesExecute(t *testing.T) {
+	eng := newTestEngine()
+	ops := readOnlyOps(newTestFS())
+	prepared, err := eng.PrepareOps(context.Background(), ops)
+	if err != nil {
+		t.Fatalf("prepare ops failed: %v", err)
+	}
+
+	for _, cmd := range []string{
+		"echo hello",
+		"ll /sys",
+		"man ls",
+		"grep hello /workspace/readme.md",
+	} {
+		wantOut, wantCode := eng.Execute(context.Background(), cmd, ops)
+		gotOut, gotCode := eng.ExecutePrepared(context.Background(), cmd, prepared)
+		if gotCode != wantCode {
+			t.Fatalf("command %q: code=%d want=%d", cmd, gotCode, wantCode)
+		}
+		if gotOut != wantOut {
+			t.Fatalf("command %q: output mismatch\ngot:  %q\nwant: %q", cmd, gotOut, wantOut)
+		}
+	}
+}
+
+func TestExecutePreparedAllocReduction(t *testing.T) {
+	eng := newTestEngine()
+	ops := readOnlyOps(newTestFS())
+	prepared, err := eng.PrepareOps(context.Background(), ops)
+	if err != nil {
+		t.Fatalf("prepare ops failed: %v", err)
+	}
+
+	command := "echo hello"
+	baseAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.Execute(context.Background(), command, ops)
+		if code != 0 || out != "hello" {
+			t.Fatalf("execute failed: code=%d out=%q", code, out)
+		}
+	})
+	preparedAllocs := testing.AllocsPerRun(1000, func() {
+		out, code := eng.ExecutePrepared(context.Background(), command, prepared)
+		if code != 0 || out != "hello" {
+			t.Fatalf("execute prepared failed: code=%d out=%q", code, out)
+		}
+	})
+
+	if preparedAllocs >= baseAllocs {
+		t.Fatalf("expected prepared execution to allocate less: prepared=%.2f base=%.2f", preparedAllocs, baseAllocs)
+	}
+}
+
 // ==================== Security Tests ====================
 
 func TestSecurityTeeWritePolicy(t *testing.T) {
