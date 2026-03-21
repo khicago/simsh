@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260321-default-filesystem-boundary-enforcement",
-  "updated_at": "2026-03-21T17:40:27Z",
+  "updated_at": "2026-03-21T18:43:22Z",
   "tasks": [
     {
       "id": "T-001",
@@ -21,6 +21,26 @@
       "started_at": "2026-03-21T17:27:41Z",
       "finished_at": "2026-03-21T17:40:27Z",
       "updated_at": "2026-03-21T17:40:27Z",
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Refresh feat evidence after boundary follow-up fixes",
+      "status": "done",
+      "summary": "Capture gate and completion evidence for the post-K-001 follow-up fix commit so feat metadata matches the final code state before archive.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-21T18:42:24Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-21T18:42:05Z",
+      "finished_at": "2026-03-21T18:43:22Z",
+      "updated_at": "2026-03-21T18:43:22Z",
       "notes": []
     }
   ]

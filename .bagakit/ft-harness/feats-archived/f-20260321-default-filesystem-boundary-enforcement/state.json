@@ -4,24 +4,24 @@
   "title": "Default filesystem boundary enforcement",
   "slug": "default-filesystem-boundary-enforcement",
   "goal": "Harden default runtime filesystem boundary enforcement so capability claims and actual write/remove behavior cannot diverge through path escape edge cases.",
-  "status": "done",
+  "status": "archived",
   "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:03Z",
-  "updated_at": "2026-03-21T17:40:27Z",
+  "updated_at": "2026-03-21T18:43:22Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
-    "round_count": 1
+    "round_count": 2
   },
   "gate": {
     "last_result": "pass",
-    "last_task_id": "T-001",
-    "last_checked_at": "2026-03-21T17:38:38Z",
+    "last_task_id": "T-002",
+    "last_checked_at": "2026-03-21T18:42:24Z",
     "last_check_commands": [
       {
         "command": "go test ./...",
@@ -29,7 +29,7 @@
         "status": "pass"
       }
     ],
-    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-default-filesystem-boundary-enforcement/artifacts/gate-20260321T173838Z.log"
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-default-filesystem-boundary-enforcement/artifacts/gate-20260321T184224Z.log"
   },
   "history": [
     {
@@ -56,6 +56,37 @@
       "at": "2026-03-21T17:40:27Z",
       "action": "task_finished",
       "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-03-21T18:42:05Z",
+      "action": "task_started",
+      "detail": "T-002"
+    },
+    {
+      "at": "2026-03-21T18:42:24Z",
+      "action": "task_gate",
+      "detail": "T-002 => pass"
+    },
+    {
+      "at": "2026-03-21T18:43:22Z",
+      "action": "task_finished",
+      "detail": "T-002 => done"
+    },
+    {
+      "at": "2026-03-21T18:43:22Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
     }
-  ]
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-03-21T18:43:22Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
 }
