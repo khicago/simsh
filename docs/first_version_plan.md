@@ -1,4 +1,18 @@
-# simsh v1 — 首版强化计划
+---
+title: First Version Plan (Historical Retrospective)
+required: false
+sop:
+  - Read this doc only when you need historical context about the first implementation wave and completed hardening/tooling work.
+  - Do not use this doc as the current kernel roadmap; use `docs/notes-kernel-optimization-plan.md` and `docs/notes-kernel-execution-backlog.md` instead.
+  - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+---
+
+# simsh v1 — 首版强化计划（历史回顾）
+
+> Historical note: this document records the first implementation wave and its completion state.
+> It is no longer the canonical current roadmap for kernel work.
+> Current strategic source of truth: `docs/notes-kernel-optimization-plan.md`
+> Current execution-layer source of truth: `docs/notes-kernel-execution-backlog.md`
 
 > 基于三角色（SDK 架构师 / Agent UX 分析师 / 安全工程师）深度分析的执行计划。
 > 聚焦 P0 + P1 项，确保基础库的安全性、工具完备性和嵌入者体验。

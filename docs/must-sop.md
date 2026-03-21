@@ -35,6 +35,12 @@ Source: `docs/architecture-session-trace-model.md`
 - Keep session and trace contracts generic; product semantics belong in adapters.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### First Version Plan (Historical Retrospective)
+Source: `docs/first_version_plan.md`
+- Read this doc only when you need historical context about the first implementation wave and completed hardening/tooling work.
+- Do not use this doc as the current kernel roadmap; use `docs/notes-kernel-optimization-plan.md` and `docs/notes-kernel-execution-backlog.md` instead.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Doc Co-Authoring Workflow (Guidelines)
 Source: `docs/guidelines-doc-coauthoring.md`
 - Use this workflow when drafting substantial docs (proposals, specs, decision docs, RFCs).
@@ -63,6 +69,18 @@ Source: `docs/notes-continuous-learning.md`
 Source: `docs/notes-directives-examples.md`
 - Read this doc when you want to introduce or change response directives (`directives:` in doc frontmatter).
 - Keep directive usage practical: only add directives that reduce mistakes or improve debuggability.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Kernel Execution Backlog
+Source: `docs/notes-kernel-execution-backlog.md`
+- Read this doc when choosing the next kernel execution item or converting review findings into implementation work.
+- Update this doc when kernel execution items are added, reprioritized, completed, or superseded.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Kernel Optimization Plan
+Source: `docs/notes-kernel-optimization-plan.md`
+- Read this doc when planning kernel optimization work or reviewing runtime tradeoffs.
+- Update this doc when kernel priorities, sequencing, or validation gates change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Project Charter

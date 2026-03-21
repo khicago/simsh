@@ -31,13 +31,17 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/architecture-platform-adapter-contract.md`
   - `docs/architecture-path-access-metadata.md`
   - `docs/architecture-memory-skills-extension.md`
-- Release plan:
+- Historical implementation retrospective:
   - `docs/first_version_plan.md`
 
 3) Current changes or proposals
 - Link to active proposals or change logs.
 - Version migration plan:
   - `docs/notes-v0-1-0-to-v0-2-migration.md`
+- Kernel optimization plan:
+  - `docs/notes-kernel-optimization-plan.md`
+- Kernel execution backlog:
+  - `docs/notes-kernel-execution-backlog.md`
 
 4) Build/run entrypoints
 - Link to the primary entrypoints and scripts.

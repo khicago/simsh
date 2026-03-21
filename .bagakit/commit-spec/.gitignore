@@ -1,0 +1,4 @@
+# bagakit-git-commit-spec local mode
+# Keep commit-spec session artifacts local by default.
+*
+!.gitignore
