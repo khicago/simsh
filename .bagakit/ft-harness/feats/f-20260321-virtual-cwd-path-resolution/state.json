@@ -4,32 +4,53 @@
   "title": "Virtual cwd and path resolution model",
   "slug": "virtual-cwd-path-resolution",
   "goal": "Define and implement an explicit session-local virtual cwd and unified path resolution model that supports relative paths without weakening mount and capability semantics.",
-  "status": "proposal",
-  "workspace_mode": "proposal_only",
+  "status": "in_progress",
+  "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:03Z",
-  "updated_at": "2026-03-21T17:13:03Z",
-  "current_task_id": null,
+  "updated_at": "2026-03-21T19:03:33Z",
+  "current_task_id": "T-001",
   "counters": {
     "gate_fail_streak": 0,
-    "no_progress_rounds": 0,
-    "round_count": 0
+    "no_progress_rounds": 1,
+    "round_count": 1
   },
   "gate": {
-    "last_result": null,
-    "last_task_id": null,
-    "last_checked_at": null,
-    "last_check_commands": [],
-    "last_log_path": null
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-21T19:03:33Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-virtual-cwd-path-resolution/artifacts/gate-20260321T190333Z.log"
   },
   "history": [
     {
       "at": "2026-03-21T17:13:03Z",
       "action": "feat_created",
       "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-03-21T18:46:29Z",
+      "action": "workspace_assigned",
+      "detail": "proposal_only -> current_tree; root_branch=main"
+    },
+    {
+      "at": "2026-03-21T18:46:49Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-21T19:03:33Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
     }
   ]
 }

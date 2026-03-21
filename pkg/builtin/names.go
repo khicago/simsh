@@ -22,6 +22,7 @@ const (
 	CommandRm    = "rm"
 	CommandRmdir = "rmdir"
 	CommandTouch = "touch"
+	CommandCd    = "cd"
 	CommandPwd   = "pwd"
 	CommandWhich = "which"
 	CommandType  = "type"

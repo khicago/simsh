@@ -601,6 +601,48 @@ func TestEngineCompositeMutationsPreflightUnsupportedPaths(t *testing.T) {
 	})
 }
 
+func TestEngineRelativePathsAndWorkingDir(t *testing.T) {
+	eng := newTestEngine()
+
+	t.Run("cd updates pwd and relative reads within one execution", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /workspace; pwd", ops)
+		if code != 0 || strings.TrimSpace(out) != "/workspace" {
+			t.Fatalf("cd/pwd failed: code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /workspace; cat readme.md", ops)
+		if code != 0 || !strings.Contains(out, "hello") {
+			t.Fatalf("relative cat failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("relative reads can reach mounted paths", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /workspace; ls ../sys", ops)
+		if code != 0 || !strings.Contains(out, "/sys/bin") {
+			t.Fatalf("relative ls on synthetic mount path failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("relative writes into mounted paths stay blocked", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /workspace; touch ../sys/bin/new.txt", ops)
+		if code == 0 {
+			t.Fatalf("expected relative touch into mounted path to fail: out=%q", out)
+		}
+		if _, ok := fs.files["/sys/bin/new.txt"]; ok {
+			t.Fatalf("relative touch should not create mounted file")
+		}
+	})
+}
+
 func TestEngineScriptOpsAndRedirectionPolicy(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()
@@ -1523,7 +1565,7 @@ func TestPipelineIntegration(t *testing.T) {
 // ==================== Embed Manual Tests ====================
 
 func TestEmbedManualLoading(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		manual := builtin.LoadEmbeddedManual(name)
 		if manual == "" {
 			t.Errorf("missing embedded manual for %q", name)
@@ -1535,7 +1577,7 @@ func TestEmbedManualLoading(t *testing.T) {
 }
 
 func TestExamplesForAllCommands(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		examples := builtin.ExamplesFor(name)
 		if len(examples) == 0 {
 			t.Errorf("missing examples for %q", name)

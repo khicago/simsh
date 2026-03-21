@@ -82,6 +82,10 @@ type Filesystem interface {
 // Ops is callback wiring used by the engine and adapters.
 type Ops struct {
 	RootDir             string
+	WorkingDir          string
+	GetWorkingDir       func() string
+	ChangeWorkingDir    func(ctx context.Context, raw string) (string, error)
+	ResolvePath         func(raw string) (string, error)
 	RequireAbsolutePath func(raw string) (string, error)
 	ListChildren        func(ctx context.Context, dir string) ([]string, error)
 	IsDirPath           func(ctx context.Context, path string) (bool, error)
@@ -119,6 +123,7 @@ func OpsFromFilesystem(fs Filesystem) Ops {
 		root = "/"
 	}
 	ops := Ops{
+		WorkingDir:          root,
 		RootDir:             root,
 		RequireAbsolutePath: fs.RequireAbsolutePath,
 		ListChildren:        fs.ListChildren,

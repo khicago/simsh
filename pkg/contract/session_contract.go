@@ -2,6 +2,7 @@ package contract
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type SessionState struct {
 	CommandAliases map[string][]string        `json:"command_aliases,omitempty"`
 	EnvVars        map[string]string          `json:"env_vars,omitempty"`
 	RCFiles        []string                   `json:"rc_files,omitempty"`
+	WorkingDir     string                     `json:"working_dir,omitempty"`
 	Opaque         map[string]json.RawMessage `json:"opaque,omitempty"`
 }
 
@@ -34,6 +36,7 @@ func (s SessionState) Clone() SessionState {
 		CommandAliases: NormalizeCommandAliases(s.CommandAliases),
 		EnvVars:        NormalizeEnvVars(s.EnvVars),
 		RCFiles:        NormalizeRCFiles(s.RCFiles),
+		WorkingDir:     strings.TrimSpace(s.WorkingDir),
 	}
 	if len(s.Opaque) > 0 {
 		out.Opaque = make(map[string]json.RawMessage, len(s.Opaque))

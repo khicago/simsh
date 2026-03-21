@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/khicago/simsh/pkg/builtin"
@@ -13,6 +14,7 @@ import (
 // Options defines how the runtime stack is composed.
 type Options struct {
 	HostRoot          string
+	WorkingDir        string
 	Profile           contract.CompatibilityProfile
 	Policy            contract.ExecutionPolicy
 	CommandAliases    map[string][]string
@@ -56,6 +58,9 @@ func New(opts Options) (*Stack, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(opts.WorkingDir) != "" {
+		ops.WorkingDir = strings.TrimSpace(opts.WorkingDir)
 	}
 	prepared, err := core.PrepareOps(context.Background(), ops)
 	if err != nil {
@@ -109,5 +114,21 @@ func (r *Stack) SessionState(rcFiles []string) contract.SessionState {
 		CommandAliases: contract.NormalizeCommandAliases(ops.CommandAliases),
 		EnvVars:        contract.NormalizeEnvVars(ops.EnvVars),
 		RCFiles:        contract.NormalizeRCFiles(rcFiles),
+		WorkingDir:     stackWorkingDir(ops),
 	}
+}
+
+func stackWorkingDir(ops contract.Ops) string {
+	if ops.GetWorkingDir != nil {
+		if cwd := strings.TrimSpace(ops.GetWorkingDir()); cwd != "" {
+			return cwd
+		}
+	}
+	if cwd := strings.TrimSpace(ops.WorkingDir); cwd != "" {
+		return cwd
+	}
+	if root := strings.TrimSpace(ops.RootDir); root != "" {
+		return root
+	}
+	return "/"
 }

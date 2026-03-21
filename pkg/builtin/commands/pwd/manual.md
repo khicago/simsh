@@ -12,11 +12,11 @@ category: navigation
 
 ## DESCRIPTION
 
-Print the current virtual working directory root used by the runtime.
+Print the current session-local virtual working directory used by the runtime.
 
 ## EXAMPLES
 
-Print the current root:
+Print the current working directory:
 
     pwd
 
@@ -24,7 +24,8 @@ Print the current root:
 
 - Does not accept any flags or positional arguments.
 - Output is always an absolute path.
+- `pwd` reflects the current `cd` state inside the runtime or session.
 
 ## SEE ALSO
 
-env, ls
+cd, env, ls

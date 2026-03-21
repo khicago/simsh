@@ -8,6 +8,7 @@ func RegisterDefaults(reg *engine.Registry) {
 	}
 	reg.MustRegister(specLS())
 	reg.MustRegister(specTree())
+	reg.MustRegister(specCd())
 	reg.MustRegister(specPwd())
 	reg.MustRegister(specEnv())
 	reg.MustRegister(specFrontmatter())

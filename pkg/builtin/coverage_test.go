@@ -107,6 +107,24 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "cd-pwd",
+			cmd:  "cd workspace; pwd",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != rt.abs("workspace") {
+					t.Fatalf("cd/pwd failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "cd-relative-cat",
+			cmd:  "cd workspace; cat readme.md",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "hello") {
+					t.Fatalf("cd/cat failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "tree",
 			cmd:  "tree " + rt.abs("workspace"),
 			want: func(t *testing.T, out string, code int) {
@@ -440,6 +458,7 @@ func TestBuiltinCommandErrorCoverage(t *testing.T) {
 	}{
 		{name: "ls-flag", cmd: "ls -z"},
 		{name: "tree-flag", cmd: "tree -z"},
+		{name: "cd-too-many-args", cmd: "cd a b"},
 		{name: "pwd-arg", cmd: "pwd extra"},
 		{name: "env-too-many-args", cmd: "env A B"},
 		{name: "frontmatter-missing-subcommand", cmd: "frontmatter"},

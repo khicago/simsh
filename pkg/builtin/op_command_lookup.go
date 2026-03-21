@@ -29,12 +29,43 @@ const (
 	commandKindAlias    = "alias"
 )
 
+func specCd() engine.CommandSpec {
+	return engine.CommandSpec{
+		Name:   CommandCd,
+		Manual: "cd [PATH]",
+		Tips: []string{
+			"Changes the session-local virtual working directory.",
+			"With no argument, cd returns to the virtual root.",
+		},
+		Examples:       ExamplesFor("cd"),
+		DetailedManual: LoadEmbeddedManual("cd"),
+		Run:            runCd,
+	}
+}
+
+func runCd(runtime engine.CommandRuntime, args []string) (string, int) {
+	if runtime.Ops.ChangeWorkingDir == nil {
+		return "cd: not supported", contract.ExitCodeUnsupported
+	}
+	if len(args) > 1 {
+		return "cd: expected zero or one argument", contract.ExitCodeUsage
+	}
+	target := ""
+	if len(args) == 1 {
+		target = args[0]
+	}
+	if _, err := runtime.Ops.ChangeWorkingDir(runtime.Ctx, target); err != nil {
+		return fmt.Sprintf("cd: %v", err), contract.ExitCodeGeneral
+	}
+	return "", 0
+}
+
 func specPwd() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandPwd,
 		Manual: "pwd",
 		Tips: []string{
-			"Prints the current virtual working directory root.",
+			"Prints the current session-local virtual working directory.",
 		},
 		Examples:       ExamplesFor("pwd"),
 		DetailedManual: LoadEmbeddedManual("pwd"),
@@ -46,7 +77,7 @@ func runPwd(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(args) > 0 {
 		return "pwd: expected no arguments", contract.ExitCodeUsage
 	}
-	return normalizeAbsolutePath(runtime.Ops.RootDir), 0
+	return normalizeAbsolutePath(currentWorkingDir(runtime.Ops)), 0
 }
 
 func specWhich() engine.CommandSpec {

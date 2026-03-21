@@ -18,7 +18,7 @@ type treeOptions struct {
 func specTree() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTree,
-		Manual: "tree [-a] [-L N] [ABS_PATH...]",
+		Manual: "tree [-a] [-L N] [PATH...]",
 		Tips: []string{
 			"Use -L to limit output depth for large directories.",
 			"Use -a to include hidden entries.",
@@ -30,7 +30,7 @@ func specTree() engine.CommandSpec {
 }
 
 func runTree(runtime engine.CommandRuntime, args []string) (string, int) {
-	opts, errMsg := parseTreeArgs(args, runtime.Ops.RequireAbsolutePath, runtime.Ops.RootDir)
+	opts, errMsg := parseTreeArgs(args, runtime.Ops.RequireAbsolutePath, currentWorkingDir(runtime.Ops))
 	if errMsg != "" {
 		return errMsg, contract.ExitCodeUsage
 	}

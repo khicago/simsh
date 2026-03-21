@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-21T18:43:22Z",
+  "updated_at": "2026-03-21T19:03:33Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -113,11 +113,11 @@
     {
       "feat_id": "f-20260321-virtual-cwd-path-resolution",
       "title": "Virtual cwd and path resolution model",
-      "status": "proposal",
-      "workspace_mode": "proposal_only",
+      "status": "in_progress",
+      "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-21T17:13:03Z"
+      "updated_at": "2026-03-21T19:03:33Z"
     }
   ]
 }

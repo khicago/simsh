@@ -19,7 +19,7 @@ type findArgs struct {
 func specFind() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandFind,
-		Manual: "find [ABS_DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]",
+		Manual: "find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]",
 		Tips: []string{
 			"Use -o to combine multiple -name patterns.",
 			"-exec ... + batches matched paths in one invocation.",
@@ -31,7 +31,7 @@ func specFind() engine.CommandSpec {
 }
 
 func runFind(runtime engine.CommandRuntime, args []string) (string, int) {
-	opts, errMsg := parseFindArgs(args, runtime.Ops.RequireAbsolutePath, runtime.Ops.RootDir)
+	opts, errMsg := parseFindArgs(args, runtime.Ops.RequireAbsolutePath, currentWorkingDir(runtime.Ops))
 	if errMsg != "" {
 		return errMsg, contract.ExitCodeUsage
 	}

@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260321-virtual-cwd-path-resolution",
-  "updated_at": "2026-03-21T17:13:03Z",
+  "updated_at": "2026-03-21T19:03:33Z",
   "tasks": [
     {
       "id": "T-001",
-      "title": "Implement first scoped change for this feat",
-      "status": "todo",
-      "summary": "Replace this placeholder with actual task detail.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "title": "Implement virtual cwd and shared path resolution",
+      "status": "in_progress",
+      "summary": "Add a session-local virtual cwd, a shared resolver over ops/path callbacks, and a cd builtin so relative paths work without weakening mount and capability boundaries.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-21T19:03:33Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-21T18:46:49Z",
       "finished_at": null,
-      "updated_at": "2026-03-21T17:13:03Z",
+      "updated_at": "2026-03-21T19:03:33Z",
       "notes": []
     }
   ]

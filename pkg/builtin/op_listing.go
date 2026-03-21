@@ -13,7 +13,7 @@ import (
 func specLS() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandLS,
-		Manual: "ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]",
+		Manual: "ls [-a] [-R] [-l] [--fmt text|md|json] [PATH...]",
 		Tips: []string{
 			"Use -l to include semantic metadata.",
 			"Use --fmt md|json only with -l and a single non-recursive target.",
@@ -94,7 +94,7 @@ func runLS(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "ls: --fmt md|json does not support -R", contract.ExitCodeUsage
 	}
 	if len(targets) == 0 {
-		targets = append(targets, runtime.Ops.RootDir)
+		targets = append(targets, currentWorkingDir(runtime.Ops))
 	}
 	if longFormatStyle != lsLongFormatText && len(targets) > 1 {
 		return "ls: --fmt md|json supports one target only", contract.ExitCodeUsage

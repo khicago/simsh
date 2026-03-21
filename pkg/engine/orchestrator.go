@@ -29,12 +29,14 @@ type Engine struct {
 // across many Execute calls to avoid repeated normalize/wrap/bootstrap work.
 type PreparedOps struct {
 	normalized contract.Ops
+	resetState func()
 }
 
 type preparedCacheKey struct {
-	rootDir string
-	profile contract.CompatibilityProfile
-	policy  contract.ExecutionPolicy
+	rootDir    string
+	workingDir string
+	profile    contract.CompatibilityProfile
+	policy     contract.ExecutionPolicy
 
 	requireAbsolutePathID uintptr
 	listChildrenID        uintptr
@@ -85,16 +87,22 @@ func (e *Engine) BuiltinCommandDocs() []contract.BuiltinCommandDoc {
 
 // PrepareOps validates and compiles ops into an execution-ready form.
 func (e *Engine) PrepareOps(ctx context.Context, ops contract.Ops) (PreparedOps, error) {
-	normalized, err := e.normalizeOps(ctx, ops)
+	normalized, resetState, err := e.normalizeOps(ctx, ops)
 	if err != nil {
 		return PreparedOps{}, err
 	}
-	return PreparedOps{normalized: normalized}, nil
+	return PreparedOps{normalized: normalized, resetState: resetState}, nil
 }
 
 // Ops returns the normalized callback set.
 func (p PreparedOps) Ops() contract.Ops {
 	return p.normalized
+}
+
+func (p PreparedOps) ResetMutableState() {
+	if p.resetState != nil {
+		p.resetState()
+	}
 }
 
 func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
@@ -111,6 +119,7 @@ func (e *Engine) ExecutePrepared(ctx context.Context, cmdline string, prepared P
 func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract.Ops) contract.ExecutionResult {
 	if key, ok := buildPreparedCacheKey(ops); ok {
 		if cached, found := e.loadPreparedFromCache(key); found {
+			cached.ResetMutableState()
 			return e.ExecutePreparedResult(ctx, cmdline, cached)
 		}
 		prepared, err := e.PrepareOps(ctx, ops)
@@ -123,6 +132,7 @@ func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract
 				FinishedAt:  time.Now().UTC(),
 			}
 		}
+		prepared.ResetMutableState()
 		e.storePreparedInCache(key, prepared)
 		return e.ExecutePreparedResult(ctx, cmdline, prepared)
 	}
@@ -136,6 +146,7 @@ func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract
 			FinishedAt:  time.Now().UTC(),
 		}
 	}
+	prepared.ResetMutableState()
 	return e.ExecutePreparedResult(ctx, cmdline, prepared)
 }
 
@@ -168,7 +179,6 @@ func buildPreparedCacheKey(ops contract.Ops) (preparedCacheKey, bool) {
 	if len(ops.CommandAliases) > 0 || len(ops.EnvVars) > 0 || len(ops.RCFiles) > 0 || len(ops.VirtualMounts) > 0 {
 		return preparedCacheKey{}, false
 	}
-
 	policy := ops.Policy
 	if policy.WriteMode == "" {
 		policy = contract.DefaultPolicy()
@@ -182,9 +192,10 @@ func buildPreparedCacheKey(ops contract.Ops) (preparedCacheKey, bool) {
 	}
 
 	key := preparedCacheKey{
-		rootDir: strings.TrimSpace(ops.RootDir),
-		profile: profile,
-		policy:  policy,
+		rootDir:    strings.TrimSpace(ops.RootDir),
+		workingDir: strings.TrimSpace(ops.WorkingDir),
+		profile:    profile,
+		policy:     policy,
 
 		requireAbsolutePathID: funcValueIdentity(ops.RequireAbsolutePath),
 		listChildrenID:        funcValueIdentity(ops.ListChildren),
@@ -245,27 +256,30 @@ func interfaceIdentity(v any) uintptr {
 	return uintptr((*eface)(unsafe.Pointer(&v)).data)
 }
 
-func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.Ops, error) {
+func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.Ops, func(), error) {
 	if strings.TrimSpace(ops.RootDir) == "" {
 		ops.RootDir = "/"
 	}
+	if strings.TrimSpace(ops.WorkingDir) == "" {
+		ops.WorkingDir = ops.RootDir
+	}
 	if ops.RequireAbsolutePath == nil {
-		return ops, fmt.Errorf("require absolute path function is required")
+		return ops, nil, fmt.Errorf("require absolute path function is required")
 	}
 	if ops.ListChildren == nil {
-		return ops, fmt.Errorf("list children function is required")
+		return ops, nil, fmt.Errorf("list children function is required")
 	}
 	if ops.IsDirPath == nil {
-		return ops, fmt.Errorf("is-dir function is required")
+		return ops, nil, fmt.Errorf("is-dir function is required")
 	}
 	if ops.ReadRawContent == nil {
-		return ops, fmt.Errorf("read file function is required")
+		return ops, nil, fmt.Errorf("read file function is required")
 	}
 	if ops.ResolveSearchPaths == nil {
-		return ops, fmt.Errorf("resolve search paths function is required")
+		return ops, nil, fmt.Errorf("resolve search paths function is required")
 	}
 	if ops.CollectFilesUnder == nil {
-		return ops, fmt.Errorf("collect files function is required")
+		return ops, nil, fmt.Errorf("collect files function is required")
 	}
 	if ops.WriteFile == nil {
 		ops.WriteFile = func(context.Context, string, string) error { return contract.ErrUnsupported }
@@ -295,7 +309,7 @@ func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.O
 		ops.Profile = contract.DefaultProfile()
 	}
 	if _, err := contract.ParseProfile(string(ops.Profile)); err != nil {
-		return ops, err
+		return ops, nil, err
 	}
 	ops.CommandAliases = contract.MergeCommandAliases(contract.DefaultCommandAliases(), ops.CommandAliases)
 	ops.EnvVars = contract.NormalizeEnvVars(ops.EnvVars)
@@ -303,13 +317,17 @@ func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.O
 
 	withMounts, err := e.withMountRouter(ops)
 	if err != nil {
-		return ops, err
+		return ops, nil, err
 	}
-	withRuntimeBootstrap, err := e.withRuntimeBootstrap(ctx, withMounts)
+	withPathResolution, resetState, err := withPathResolution(ctx, withMounts)
 	if err != nil {
-		return ops, err
+		return ops, nil, err
 	}
-	return withPathAccessPolicy(withRuntimeBootstrap), nil
+	withRuntimeBootstrap, err := e.withRuntimeBootstrap(ctx, withPathResolution)
+	if err != nil {
+		return ops, nil, err
+	}
+	return withPathAccessPolicy(withRuntimeBootstrap), resetState, nil
 }
 
 func (e *Engine) withMountRouter(ops contract.Ops) (contract.Ops, error) {

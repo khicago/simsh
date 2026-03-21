@@ -71,6 +71,7 @@ var commandExamples = map[string][]string{
 	"rm":    {"rm /task_outputs/old.md", "rm /task_outputs/temp1.txt /task_outputs/temp2.txt"},
 	"rmdir": {"rmdir /task_outputs/empty_dir", "rmdir /task_outputs/cache/a /task_outputs/cache/b"},
 	"touch": {"touch /task_outputs/notes.md"},
+	"cd":    {"cd /task_outputs", "cd ../knowledge_base", "cd"},
 	"pwd":   {"pwd"},
 	"which": {"which ls", "which report_tool", "which ll"},
 	"type":  {"type ls", "type report_tool", "type ll"},

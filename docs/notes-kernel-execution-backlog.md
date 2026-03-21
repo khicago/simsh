@@ -80,7 +80,7 @@ Optional but recommended:
 
 ### K-002: Define virtual `cwd` and path resolution model
 - Feat: `f-20260321-virtual-cwd-path-resolution`
-- Status: todo
+- Status: done
 - Why now: After P0 boundary trust is hardened, agent ergonomics should improve through an explicit path resolution model. Absolute-path-only behavior is safe but too unnatural for long-running agent work and relative references.
 - Kernel invariant: path resolution must be explicit, session-scoped, and capability-safe; path reachability must remain separate from path mutability.
 - Files to touch:
@@ -96,6 +96,10 @@ Optional but recommended:
   - Relative paths resolve to normalized virtual absolute paths before capability checks.
   - `pwd` reflects virtual `cwd`, not only static root.
   - Mount-backed and synthetic paths remain capability-limited when reached through relative-path flows.
+- Notes:
+  - Added an engine-level path resolution layer that keeps `RootDir` as the filesystem root but tracks `WorkingDir` as mutable session state.
+  - Added `cd`, updated `pwd`/default directory commands to honor session-local `cwd`, and preserved mount/synthetic capability limits through relative-path flows.
+  - Validated with `go test ./pkg/builtin ./pkg/engine ./pkg/engine/runtime` and `go test ./...`.
 - Rollback note:
   - If relative-path semantics create ambiguity or regressions, keep the resolution layer behind an explicit feature boundary while preserving the documented model and tests.
 

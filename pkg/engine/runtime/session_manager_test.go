@@ -129,6 +129,55 @@ func TestSessionManagerRejectsPolicyEscalation(t *testing.T) {
 	}
 }
 
+func TestSessionManagerPersistsWorkingDirAcrossExecuteResume(t *testing.T) {
+	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_cwd" }})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxWriteBytes:    1 << 20,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if executed, err := manager.Execute(context.Background(), session.SessionID, "mkdir -p /task_outputs/project && cd /task_outputs/project", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("initial execute failed: %v", err)
+	} else if executed.Session.State.WorkingDir != "/task_outputs/project" {
+		t.Fatalf("unexpected working dir after cd: %+v", executed.Session.State)
+	}
+
+	executed, err := manager.Execute(context.Background(), session.SessionID, "pwd", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("pwd execute failed: %v", err)
+	}
+	if strings.TrimSpace(executed.Result.Stdout) != "/task_outputs/project" {
+		t.Fatalf("pwd output = %q, want /task_outputs/project", executed.Result.Stdout)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+	executed, err = manager.Execute(context.Background(), session.SessionID, "echo hello > note.txt; cat note.txt", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("relative execute after resume failed: %v", err)
+	}
+	if strings.TrimSpace(executed.Result.Stdout) != "hello" {
+		t.Fatalf("unexpected relative execute output: %+v", executed.Result)
+	}
+	if executed.Session.State.WorkingDir != "/task_outputs/project" {
+		t.Fatalf("unexpected working dir after resume execute: %+v", executed.Session.State)
+	}
+}
+
 func TestSessionManagerAdapterLifecycleMemoryProjection(t *testing.T) {
 	adapter := &testMemoryAdapter{}
 	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_memory" }})

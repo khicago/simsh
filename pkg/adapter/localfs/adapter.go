@@ -375,6 +375,7 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	ops := contract.Ops{
+		WorkingDir:           root,
 		RootDir:              root,
 		RequireAbsolutePath:  requireAbsolutePath,
 		ListChildren:         listChildren,

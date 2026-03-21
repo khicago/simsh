@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement first scoped change for this feat
+- [ ] T-001 Implement virtual cwd and shared path resolution
 
 ## Status Legend
 - todo

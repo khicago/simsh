@@ -162,13 +162,18 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	}
 	nextSession := current.snapshot.Clone()
 	nextSession.UpdatedAt = m.now()
-	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
+	nextSession.State = mergeSessionState(nextSession.State, runtime)
 	if len(current.base.Adapters) > 0 {
 		var adapterErr error
 		nextSession, current.adapterMounts, adapterErr = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseObserve, result)
 		if adapterErr != nil {
 			return SessionExecution{}, adapterErr
 		}
+		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
+		if err != nil {
+			return SessionExecution{}, err
+		}
+	} else if runtime != current.runtime {
 		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
 		if err != nil {
 			return SessionExecution{}, err
@@ -288,6 +293,7 @@ func runtimeOptionsFromSession(base Options, session contract.Session, policy co
 	opts := cloneOptions(base)
 	opts.Profile = session.Profile
 	opts.Policy = policy.Clone()
+	opts.WorkingDir = strings.TrimSpace(session.State.WorkingDir)
 	opts.CommandAliases = session.State.Clone().CommandAliases
 	opts.EnvVars = session.State.Clone().EnvVars
 	opts.RCFiles = nil
@@ -300,14 +306,17 @@ func mergeSessionState(previous contract.SessionState, runtime *Stack) contract.
 	if runtime == nil {
 		return state
 	}
-	state.CommandAliases = runtime.SessionState(state.RCFiles).CommandAliases
-	state.EnvVars = runtime.SessionState(state.RCFiles).EnvVars
+	runtimeState := runtime.SessionState(state.RCFiles)
+	state.CommandAliases = runtimeState.CommandAliases
+	state.EnvVars = runtimeState.EnvVars
+	state.WorkingDir = runtimeState.WorkingDir
 	return state
 }
 
 func cloneOptions(opts Options) Options {
 	return Options{
 		HostRoot:          strings.TrimSpace(opts.HostRoot),
+		WorkingDir:        strings.TrimSpace(opts.WorkingDir),
 		Profile:           opts.Profile,
 		Policy:            opts.Policy.Clone(),
 		CommandAliases:    contract.NormalizeCommandAliases(opts.CommandAliases),

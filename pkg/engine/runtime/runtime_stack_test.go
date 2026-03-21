@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/khicago/simsh/pkg/contract"
@@ -77,6 +78,39 @@ func TestRuntimeOpsUsesPreparedPathMetadata(t *testing.T) {
 	}
 	if meta.Access != contract.PathAccessReadOnly {
 		t.Fatalf("expected /sys access=ro, got %q", meta.Access)
+	}
+}
+
+func TestRuntimeWorkingDirPersistsAcrossExecuteCalls(t *testing.T) {
+	runtime, err := New(Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxWriteBytes:    1 << 20,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+	})
+	if err != nil {
+		t.Fatalf("new runtime failed: %v", err)
+	}
+
+	if out, code := runtime.Execute(context.Background(), "mkdir -p /task_outputs/project"); code != 0 {
+		t.Fatalf("mkdir failed: code=%d out=%q", code, out)
+	}
+	if out, code := runtime.Execute(context.Background(), "cd /task_outputs/project"); code != 0 {
+		t.Fatalf("cd failed: code=%d out=%q", code, out)
+	}
+	if out, code := runtime.Execute(context.Background(), "pwd"); code != 0 || strings.TrimSpace(out) != "/task_outputs/project" {
+		t.Fatalf("pwd after cd failed: code=%d out=%q", code, out)
+	}
+	if out, code := runtime.Execute(context.Background(), "echo hello > note.txt"); code != 0 {
+		t.Fatalf("relative write failed: code=%d out=%q", code, out)
+	}
+	if out, code := runtime.Execute(context.Background(), "cat note.txt"); code != 0 || strings.TrimSpace(out) != "hello" {
+		t.Fatalf("relative read failed: code=%d out=%q", code, out)
 	}
 }
 
