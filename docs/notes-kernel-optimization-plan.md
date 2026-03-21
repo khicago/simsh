@@ -21,6 +21,8 @@ Use it as the strategic source of truth for:
 
 It is intentionally not the execution backlog itself. Concrete work items, validation commands, and done gates belong in `docs/notes-kernel-execution-backlog.md`.
 
+The current execution route for backlog items is the feat/task harness under `.bagakit/ft-harness/feats/`.
+
 ## Goal
 Make `simsh` a lightweight execution kernel that agents can trust as a working environment without paying the complexity cost of a full VM, container stack, or POSIX shell.
 
@@ -239,3 +241,9 @@ External research and field notes collected for this plan:
 - `task_outputs/research/agent-runtime-papers-summary-2026-03-22.md`
 - `task_outputs/research/frontier-agent-team-blog-podcast-notes-2026-03-22.md`
 - `knowledge_base/papers/agent-runtime/`
+
+Current execution artifacts:
+- `.bagakit/ft-harness/feats/f-20260321-default-filesystem-boundary-enforcement/`
+- `.bagakit/ft-harness/feats/f-20260321-virtual-cwd-path-resolution/`
+- `.bagakit/ft-harness/feats/f-20260321-mutation-trace-fidelity/`
+- `.bagakit/ft-harness/feats/f-20260321-cancel-timeout-effectiveness/`

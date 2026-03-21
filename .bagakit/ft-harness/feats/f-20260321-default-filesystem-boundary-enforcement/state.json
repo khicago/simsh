@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "feat_id": "f-20260321-default-filesystem-boundary-enforcement",
+  "title": "Default filesystem boundary enforcement",
+  "slug": "default-filesystem-boundary-enforcement",
+  "goal": "Harden default runtime filesystem boundary enforcement so capability claims and actual write/remove behavior cannot diverge through path escape edge cases.",
+  "status": "proposal",
+  "workspace_mode": "proposal_only",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-03-21T17:13:03Z",
+  "updated_at": "2026-03-21T17:13:03Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_checked_at": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "at": "2026-03-21T17:13:03Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    }
+  ]
+}

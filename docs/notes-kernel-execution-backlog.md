@@ -23,6 +23,20 @@ Use it as the current SSOT for:
 
 This document should stay concrete and work-item oriented.
 
+## Legacy Ft-Harness Note
+
+The 2026-03-01 feat batch under `.bagakit/ft-harness/feats/` is currently treated as historical foundation work, not as the active execution backlog for the current kernel plan.
+
+Current status:
+- those feats are marked `done`;
+- they remain unarchived because they predate the current `workspace_mode` field and are not safely archivable through the current harness scripts;
+- they should not block creation or execution of the new kernel feats created from this backlog.
+
+Follow-up policy:
+- keep them as historical evidence for the v0.2 contract batch;
+- do not delete or hand-edit their runtime state casually;
+- handle schema/merge/archive cleanup in a separate harness-maintenance pass if needed.
+
 ## Item Template
 
 Each item should include:
@@ -42,6 +56,7 @@ Optional but recommended:
 ## Current Priorities
 
 ### K-001: Harden default filesystem boundary enforcement
+- Feat: `f-20260321-default-filesystem-boundary-enforcement`
 - Status: todo
 - Why now: P0 trust has to come first. Current review findings indicate that default runtime filesystem implementations still have path-escape edge cases, which makes every higher-level contract less trustworthy.
 - Kernel invariant: path capability claims must match actual boundary enforcement; default filesystems must not allow escape writes or removes.
@@ -60,6 +75,7 @@ Optional but recommended:
   - If stricter path checks break existing expected flows, revert only the new enforcement branch and keep the new regression tests for the failing edge case under a skipped or TODO-marked state until semantics are clarified.
 
 ### K-002: Define virtual `cwd` and path resolution model
+- Feat: `f-20260321-virtual-cwd-path-resolution`
 - Status: todo
 - Why now: After P0 boundary trust is hardened, agent ergonomics should improve through an explicit path resolution model. Absolute-path-only behavior is safe but too unnatural for long-running agent work and relative references.
 - Kernel invariant: path resolution must be explicit, session-scoped, and capability-safe; path reachability must remain separate from path mutability.
@@ -80,6 +96,7 @@ Optional but recommended:
   - If relative-path semantics create ambiguity or regressions, keep the resolution layer behind an explicit feature boundary while preserving the documented model and tests.
 
 ### K-003: Improve mutation trace fidelity
+- Feat: `f-20260321-mutation-trace-fidelity`
 - Status: todo
 - Why now: Once path semantics are trustworthy, the next highest leverage is making `ExecutionTrace` accurate enough for planners and reviewers to consume without heuristics.
 - Kernel invariant: traces must faithfully describe file mutations, denials, and resource summaries for core file operations.
@@ -96,6 +113,7 @@ Optional but recommended:
   - If precise accounting requires broader interface changes than expected, ship the smallest truthful improvement first and document any remaining approximation explicitly.
 
 ### K-004: Audit cancel/timeout effectiveness across execution and filesystem paths
+- Feat: `f-20260321-cancel-timeout-effectiveness`
 - Status: todo
 - Why now: Policy timeout exists in contracts today, but many filesystem paths still ignore `ctx`, which means timeout/cancel semantics may not yet be operationally meaningful.
 - Kernel invariant: runtime interruption controls must have real effect on long-running execution paths.
