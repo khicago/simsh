@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement virtual cwd and shared path resolution
+- [x] T-001 Implement virtual cwd and shared path resolution
 
 ## Status Legend
 - todo

@@ -1,12 +1,12 @@
 {
   "version": 1,
   "feat_id": "f-20260321-virtual-cwd-path-resolution",
-  "updated_at": "2026-03-21T19:03:33Z",
+  "updated_at": "2026-03-21T19:04:22Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Implement virtual cwd and shared path resolution",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Add a session-local virtual cwd, a shared resolver over ops/path callbacks, and a cd builtin so relative paths work without weakening mount and capability boundaries.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-21T19:03:33Z",
@@ -19,8 +19,8 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-21T18:46:49Z",
-      "finished_at": null,
-      "updated_at": "2026-03-21T19:03:33Z",
+      "finished_at": "2026-03-21T19:04:22Z",
+      "updated_at": "2026-03-21T19:04:22Z",
       "notes": []
     }
   ]
