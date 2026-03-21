@@ -128,6 +128,45 @@ func TestRemoveDirRejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestWriteFileRejectsNestedSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})
+	if err != nil {
+		t.Fatalf("new ops failed: %v", err)
+	}
+
+	target := filepath.ToSlash(filepath.Join(root, "link", "subdir", "pwned.txt"))
+	if err := ops.WriteFile(context.Background(), target, "owned"); err == nil {
+		t.Fatalf("expected nested write through symlink escape to fail")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "subdir", "pwned.txt")); !os.IsNotExist(err) {
+		t.Fatalf("outside path unexpectedly written: err=%v", err)
+	}
+}
+
+func TestCheckPathOpRejectsNestedSymlinkEscape(t *testing.T) {
+	root := t.TempDir()
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(root, "link")); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})
+	if err != nil {
+		t.Fatalf("new ops failed: %v", err)
+	}
+
+	target := filepath.ToSlash(filepath.Join(root, "link", "subdir", "pwned.txt"))
+	if err := ops.CheckPathOp(context.Background(), contract.PathOpWrite, target); err == nil {
+		t.Fatalf("expected nested write preflight through symlink escape to fail")
+	}
+}
+
 func TestRemoveDirRejectsRootDir(t *testing.T) {
 	root := t.TempDir()
 	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})

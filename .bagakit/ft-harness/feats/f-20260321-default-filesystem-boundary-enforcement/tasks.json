@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260321-default-filesystem-boundary-enforcement",
-  "updated_at": "2026-03-21T17:13:03Z",
+  "updated_at": "2026-03-21T17:38:38Z",
   "tasks": [
     {
       "id": "T-001",
-      "title": "Implement first scoped change for this feat",
-      "status": "todo",
-      "summary": "Replace this placeholder with actual task detail.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "title": "Harden default filesystem boundary enforcement",
+      "status": "in_progress",
+      "summary": "Add real-path escape guards to default filesystems, wire CheckPathOp into default ops, and preflight multi-path mutations before they write.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-21T17:38:38Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-21T17:27:41Z",
       "finished_at": null,
-      "updated_at": "2026-03-21T17:13:03Z",
+      "updated_at": "2026-03-21T17:38:38Z",
       "notes": []
     }
   ]

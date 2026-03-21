@@ -33,27 +33,16 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
 	}
-	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRead, src); err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return "mv: source path is not supported", contract.ExitCodeUnsupported
-		}
-		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
-	}
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
 	}
-	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRemove, src); err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return "mv: remove is not supported", contract.ExitCodeUnsupported
-		}
-		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
-	}
-	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpWrite, dest); err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return "mv: write is not supported", contract.ExitCodeUnsupported
-		}
-		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+	if out, code, ok := preflightPathChecks(runtime, "mv", []pathCheck{
+		{path: src, op: contract.PathOpRead, unsupportedMessage: "mv: source path is not supported"},
+		{path: src, op: contract.PathOpRemove, unsupportedMessage: "mv: remove is not supported"},
+		{path: dest, op: contract.PathOpWrite, unsupportedMessage: "mv: write is not supported"},
+	}); !ok {
+		return out, code
 	}
 	content, err := runtime.Ops.ReadRawContent(runtime.Ctx, src)
 	if err != nil {

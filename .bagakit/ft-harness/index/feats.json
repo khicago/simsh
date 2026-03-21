@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-21T17:13:04Z",
+  "updated_at": "2026-03-21T17:38:38Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -95,11 +95,11 @@
     {
       "feat_id": "f-20260321-default-filesystem-boundary-enforcement",
       "title": "Default filesystem boundary enforcement",
-      "status": "proposal",
-      "workspace_mode": "proposal_only",
+      "status": "in_progress",
+      "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-21T17:13:03Z"
+      "updated_at": "2026-03-21T17:38:38Z"
     },
     {
       "feat_id": "f-20260321-mutation-trace-fidelity",

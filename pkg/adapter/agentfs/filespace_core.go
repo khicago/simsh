@@ -2,6 +2,7 @@ package agentfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -10,6 +11,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/khicago/simsh/pkg/adapter/internal/pathguard"
 	"github.com/khicago/simsh/pkg/contract"
 )
 
@@ -150,8 +152,8 @@ func (f *aiFilesystem) RequireAbsolutePath(raw string) (string, error) {
 	if p == "/" {
 		return p, nil
 	}
-	if _, _, ok := f.resolveZone(p); !ok {
-		return "", fmt.Errorf("path is outside allowed roots: %s", p)
+	if _, _, err := f.resolvePath(p); err != nil {
+		return "", err
 	}
 	return p, nil
 }
@@ -172,11 +174,10 @@ func (f *aiFilesystem) ListChildren(ctx context.Context, dir string) ([]string, 
 		sort.Strings(roots)
 		return roots, nil
 	}
-	z, hostPath, ok := f.resolveZone(dir)
-	if !ok {
-		return nil, fmt.Errorf("%s: No such file or directory", dir)
+	_, hostPath, err := f.resolvePath(dir)
+	if err != nil {
+		return nil, err
 	}
-	_ = z
 	entries, err := os.ReadDir(hostPath)
 	if err != nil {
 		return nil, err
@@ -200,8 +201,8 @@ func (f *aiFilesystem) IsDirPath(ctx context.Context, pathValue string) (bool, e
 			return true, nil
 		}
 	}
-	_, hostPath, ok := f.resolveZone(pathValue)
-	if !ok {
+	_, hostPath, err := f.resolvePath(pathValue)
+	if err != nil {
 		return false, nil
 	}
 	info, err := os.Stat(hostPath)
@@ -216,9 +217,9 @@ func (f *aiFilesystem) IsDirPath(ctx context.Context, pathValue string) (bool, e
 
 func (f *aiFilesystem) ReadRawContent(ctx context.Context, pathValue string) (string, error) {
 	_ = ctx
-	_, hostPath, ok := f.resolveZone(pathValue)
-	if !ok {
-		return "", fmt.Errorf("%s: No such file or directory", pathValue)
+	_, hostPath, err := f.resolvePath(pathValue)
+	if err != nil {
+		return "", err
 	}
 	raw, err := os.ReadFile(hostPath)
 	if err != nil {
@@ -260,9 +261,9 @@ func (f *aiFilesystem) CollectFilesUnder(ctx context.Context, target string) ([]
 		sort.Strings(out)
 		return dedupe(out), nil
 	}
-	z, _, ok := f.resolveZone(target)
-	if !ok {
-		return nil, fmt.Errorf("%s: No such file or directory", target)
+	z, _, err := f.resolvePath(target)
+	if err != nil {
+		return nil, err
 	}
 	return f.collectZoneFiles(z, target)
 }
@@ -304,9 +305,9 @@ func (f *aiFilesystem) collectZoneFiles(z zone, target string) ([]string, error)
 
 func (f *aiFilesystem) WriteFile(ctx context.Context, filePath string, contentValue string) error {
 	_ = ctx
-	z, hostPath, ok := f.resolveZone(filePath)
-	if !ok {
-		return fmt.Errorf("%s: path is outside allowed roots", filePath)
+	z, hostPath, err := f.resolvePath(filePath)
+	if err != nil {
+		return err
 	}
 	if !z.writable {
 		return contract.ErrUnsupported
@@ -322,9 +323,9 @@ func (f *aiFilesystem) WriteFile(ctx context.Context, filePath string, contentVa
 
 func (f *aiFilesystem) AppendFile(ctx context.Context, filePath string, contentValue string) error {
 	_ = ctx
-	z, hostPath, ok := f.resolveZone(filePath)
-	if !ok {
-		return fmt.Errorf("%s: path is outside allowed roots", filePath)
+	z, hostPath, err := f.resolvePath(filePath)
+	if err != nil {
+		return err
 	}
 	if !z.writable {
 		return contract.ErrUnsupported
@@ -346,9 +347,9 @@ func (f *aiFilesystem) AppendFile(ctx context.Context, filePath string, contentV
 
 func (f *aiFilesystem) EditFile(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
 	_ = ctx
-	z, hostPath, ok := f.resolveZone(filePath)
-	if !ok {
-		return fmt.Errorf("%s: path is outside allowed roots", filePath)
+	z, hostPath, err := f.resolvePath(filePath)
+	if err != nil {
+		return err
 	}
 	if !z.writable {
 		return contract.ErrUnsupported
@@ -377,9 +378,9 @@ func (f *aiFilesystem) EditFile(ctx context.Context, filePath string, oldString 
 }
 
 func (f *aiFilesystem) MakeDir(ctx context.Context, dirPath string) error {
-	z, hostPath, ok := f.resolveZone(dirPath)
-	if !ok {
-		return fmt.Errorf("%s: path is outside allowed roots", dirPath)
+	z, hostPath, err := f.resolvePath(dirPath)
+	if err != nil {
+		return err
 	}
 	if !z.writable {
 		return contract.ErrUnsupported
@@ -388,9 +389,9 @@ func (f *aiFilesystem) MakeDir(ctx context.Context, dirPath string) error {
 }
 
 func (f *aiFilesystem) RemoveFile(ctx context.Context, filePath string) error {
-	z, hostPath, ok := f.resolveZone(filePath)
-	if !ok {
-		return fmt.Errorf("%s: path is outside allowed roots", filePath)
+	z, hostPath, err := f.resolvePath(filePath)
+	if err != nil {
+		return err
 	}
 	if !z.writable {
 		return contract.ErrUnsupported
@@ -403,6 +404,21 @@ func (f *aiFilesystem) RemoveFile(ctx context.Context, filePath string) error {
 		return fmt.Errorf("cannot remove directory: %s", filePath)
 	}
 	return os.Remove(hostPath)
+}
+
+func (f *aiFilesystem) CheckPathOp(ctx context.Context, op contract.PathOp, pathValue string) error {
+	_ = ctx
+	z, _, err := f.resolvePath(pathValue)
+	if err != nil {
+		return err
+	}
+	switch op {
+	case contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
+		if !z.writable {
+			return contract.ErrUnsupported
+		}
+	}
+	return nil
 }
 
 func (f *aiFilesystem) DescribePath(ctx context.Context, pathValue string) (contract.PathMeta, error) {
@@ -482,18 +498,31 @@ func (f *aiFilesystem) resolveZone(pathValue string) (zone, string, bool) {
 	return zone{}, "", false
 }
 
+func (f *aiFilesystem) resolvePath(pathValue string) (zone, string, error) {
+	pathValue = normalizeVirtualPath(pathValue)
+	for _, z := range f.zones {
+		if pathValue == z.virtualRoot || strings.HasPrefix(pathValue, z.virtualRoot+"/") {
+			hostPath, err := f.toHostPath(z, pathValue)
+			if err != nil {
+				return zone{}, "", err
+			}
+			return z, hostPath, nil
+		}
+	}
+	return zone{}, "", fmt.Errorf("path is outside allowed roots: %s", pathValue)
+}
+
 func (f *aiFilesystem) toHostPath(z zone, virtualPath string) (string, error) {
 	virtualPath = normalizeVirtualPath(virtualPath)
 	rel := strings.TrimPrefix(virtualPath, z.virtualRoot)
 	rel = strings.TrimPrefix(rel, "/")
 	joined := filepath.Join(z.hostRoot, filepath.FromSlash(rel))
 	cleaned := filepath.Clean(joined)
-	relCheck, err := filepath.Rel(z.hostRoot, cleaned)
-	if err != nil {
+	if err := pathguard.Check(z.hostRoot, cleaned); err != nil {
+		if errors.Is(err, pathguard.ErrEscape) {
+			return "", fmt.Errorf("path escape is not allowed: %s", virtualPath)
+		}
 		return "", err
-	}
-	if relCheck == ".." || strings.HasPrefix(relCheck, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path escape is not allowed")
 	}
 	return cleaned, nil
 }

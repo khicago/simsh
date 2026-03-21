@@ -33,21 +33,15 @@ func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
 	}
-	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRead, src); err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return "cp: source path is not supported", contract.ExitCodeUnsupported
-		}
-		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
-	}
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
 	}
-	if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpWrite, dest); err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
-			return "cp: write is not supported", contract.ExitCodeUnsupported
-		}
-		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
+	if out, code, ok := preflightPathChecks(runtime, "cp", []pathCheck{
+		{path: src, op: contract.PathOpRead, unsupportedMessage: "cp: source path is not supported"},
+		{path: dest, op: contract.PathOpWrite, unsupportedMessage: "cp: write is not supported"},
+	}); !ok {
+		return out, code
 	}
 	content, err := runtime.Ops.ReadRawContent(runtime.Ctx, src)
 	if err != nil {

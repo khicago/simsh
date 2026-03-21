@@ -46,13 +46,14 @@ func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
 		dirs = append(dirs, pathValue)
 	}
 
+	checks := make([]pathCheck, 0, len(dirs))
 	for _, dirPath := range dirs {
-		if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRemove, dirPath); err != nil {
-			if errors.Is(err, contract.ErrUnsupported) {
-				return "rmdir: not supported", contract.ExitCodeUnsupported
-			}
-			return fmt.Sprintf("rmdir: %v", err), contract.ExitCodeGeneral
-		}
+		checks = append(checks, pathCheck{path: dirPath, op: contract.PathOpRemove, unsupportedMessage: "rmdir: not supported"})
+	}
+	if out, code, ok := preflightPathChecks(runtime, "rmdir", checks); !ok {
+		return out, code
+	}
+	for _, dirPath := range dirs {
 		if err := runtime.Ops.RemoveDir(runtime.Ctx, dirPath); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "rmdir: not supported", contract.ExitCodeUnsupported

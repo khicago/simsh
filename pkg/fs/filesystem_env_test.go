@@ -2,6 +2,8 @@ package fs
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -47,5 +49,69 @@ func TestNewRuntimeOpsFullModeDoesNotApplyWriteLimit(t *testing.T) {
 
 	if err := ops.WriteFile(context.Background(), "/task_outputs/full.txt", "1234567890"); err != nil {
 		t.Fatalf("expected full mode write not to be limited: %v", err)
+	}
+}
+
+func TestNewRuntimeOpsRejectsSymlinkEscapeWrite(t *testing.T) {
+	hostRoot := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hostRoot, "task_outputs"), 0o755); err != nil {
+		t.Fatalf("create task_outputs dir failed: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(hostRoot, "task_outputs", "escape")); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	ops, err := NewRuntimeOps(EnvironmentOptions{
+		HostRoot: hostRoot,
+		Policy: contract.ExecutionPolicy{
+			WriteMode: contract.WriteModeFull,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntimeOps failed: %v", err)
+	}
+
+	target := "/task_outputs/escape/pwned.txt"
+	if err := ops.CheckPathOp(context.Background(), contract.PathOpWrite, target); err == nil {
+		t.Fatalf("expected symlink escape preflight to fail")
+	}
+	if err := ops.WriteFile(context.Background(), target, "owned"); err == nil {
+		t.Fatalf("expected symlink escape write to fail")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "pwned.txt")); !os.IsNotExist(err) {
+		t.Fatalf("outside path unexpectedly written: err=%v", err)
+	}
+}
+
+func TestNewRuntimeOpsRejectsNestedSymlinkEscapeWrite(t *testing.T) {
+	hostRoot := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hostRoot, "task_outputs"), 0o755); err != nil {
+		t.Fatalf("create task_outputs dir failed: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(hostRoot, "task_outputs", "escape")); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	ops, err := NewRuntimeOps(EnvironmentOptions{
+		HostRoot: hostRoot,
+		Policy: contract.ExecutionPolicy{
+			WriteMode: contract.WriteModeFull,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntimeOps failed: %v", err)
+	}
+
+	target := "/task_outputs/escape/subdir/pwned.txt"
+	if err := ops.CheckPathOp(context.Background(), contract.PathOpWrite, target); err == nil {
+		t.Fatalf("expected nested symlink escape preflight to fail")
+	}
+	if err := ops.WriteFile(context.Background(), target, "owned"); err == nil {
+		t.Fatalf("expected nested symlink escape write to fail")
+	}
+	if _, err := os.Stat(filepath.Join(outside, "subdir", "pwned.txt")); !os.IsNotExist(err) {
+		t.Fatalf("outside path unexpectedly written: err=%v", err)
 	}
 }

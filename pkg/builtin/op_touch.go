@@ -40,11 +40,22 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(paths) == 0 {
 		return "touch: missing operand", contract.ExitCodeUsage
 	}
+	missingPaths := make([]string, 0, len(paths))
 	for _, p := range paths {
 		_, err := runtime.Ops.ReadRawContent(runtime.Ctx, p)
 		if err == nil {
 			continue
 		}
+		missingPaths = append(missingPaths, p)
+	}
+	checks := make([]pathCheck, 0, len(missingPaths))
+	for _, p := range missingPaths {
+		checks = append(checks, pathCheck{path: p, op: contract.PathOpWrite, unsupportedMessage: "touch: write is not supported"})
+	}
+	if out, code, ok := preflightPathChecks(runtime, "touch", checks); !ok {
+		return out, code
+	}
+	for _, p := range missingPaths {
 		if writeErr := runtime.Ops.WriteFile(runtime.Ctx, p, ""); writeErr != nil {
 			if errors.Is(writeErr, contract.ErrUnsupported) {
 				return "touch: write is not supported", contract.ExitCodeUnsupported

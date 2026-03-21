@@ -529,6 +529,65 @@ func TestEngineMountParentIsImmutable(t *testing.T) {
 	}
 }
 
+func TestEngineCompositeMutationsPreflightUnsupportedPaths(t *testing.T) {
+	eng := newTestEngine()
+
+	t.Run("rm keeps earlier file when later operand is unsupported", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "rm /workspace/todo.txt /sys/bin/ls", ops)
+		if code == 0 {
+			t.Fatalf("expected rm to fail: out=%q", out)
+		}
+		if _, ok := fs.files["/workspace/todo.txt"]; !ok {
+			t.Fatalf("rm should not remove earlier file before unsupported operand")
+		}
+	})
+
+	t.Run("mkdir keeps earlier dir absent when later operand is unsupported", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "mkdir /workspace/newdir /sys/bin/newdir", ops)
+		if code == 0 {
+			t.Fatalf("expected mkdir to fail: out=%q", out)
+		}
+		if _, ok := fs.dirs["/workspace/newdir"]; ok {
+			t.Fatalf("mkdir should not create earlier dir before unsupported operand")
+		}
+	})
+
+	t.Run("touch keeps earlier file absent when later operand is unsupported", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "touch /workspace/new.txt /sys/bin/new.txt", ops)
+		if code == 0 {
+			t.Fatalf("expected touch to fail: out=%q", out)
+		}
+		if _, ok := fs.files["/workspace/new.txt"]; ok {
+			t.Fatalf("touch should not create earlier file before unsupported operand")
+		}
+	})
+
+	t.Run("mv keeps source when destination is unsupported", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "mv /workspace/todo.txt /sys/bin/moved.txt", ops)
+		if code == 0 {
+			t.Fatalf("expected mv to fail: out=%q", out)
+		}
+		if _, ok := fs.files["/workspace/todo.txt"]; !ok {
+			t.Fatalf("mv should keep source when destination preflight fails")
+		}
+		if _, ok := fs.files["/sys/bin/moved.txt"]; ok {
+			t.Fatalf("mv should not create destination when destination preflight fails")
+		}
+	})
+}
+
 func TestEngineScriptOpsAndRedirectionPolicy(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()

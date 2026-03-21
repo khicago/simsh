@@ -41,13 +41,14 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(paths) == 0 {
 		return "rm: missing operand", contract.ExitCodeUsage
 	}
+	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {
-		if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpRemove, p); err != nil {
-			if errors.Is(err, contract.ErrUnsupported) {
-				return "rm: not supported", contract.ExitCodeUnsupported
-			}
-			return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
-		}
+		checks = append(checks, pathCheck{path: p, op: contract.PathOpRemove, unsupportedMessage: "rm: not supported"})
+	}
+	if out, code, ok := preflightPathChecks(runtime, "rm", checks); !ok {
+		return out, code
+	}
+	for _, p := range paths {
 		if err := runtime.Ops.RemoveFile(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "rm: not supported", contract.ExitCodeUnsupported

@@ -2,6 +2,7 @@ package localfs
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/khicago/simsh/pkg/adapter/internal/pathguard"
 	"github.com/khicago/simsh/pkg/contract"
 )
 
@@ -86,6 +88,18 @@ func NewOps(opts Options) (contract.Ops, error) {
 			return "", err
 		}
 		return normalized, nil
+	}
+
+	checkPathOp := func(ctx context.Context, op contract.PathOp, pathValue string) error {
+		_ = ctx
+		switch op {
+		case contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
+			if !policy.AllowWrite() {
+				return contract.ErrUnsupported
+			}
+		}
+		_, err := resolveAndCheckPath(root, pathValue)
+		return err
 	}
 
 	toNativePath := func(pathValue string) string {
@@ -376,6 +390,7 @@ func NewOps(opts Options) (contract.Ops, error) {
 		MakeDir:              makeDir,
 		RemoveFile:           removeFile,
 		RemoveDir:            removeDir,
+		CheckPathOp:          checkPathOp,
 		ListExternalCommands: opts.ExternalCallbacks.ListExternalCommands,
 		RunExternalCommand:   opts.ExternalCallbacks.RunExternalCommand,
 		ReadExternalManual:   opts.ExternalCallbacks.ReadExternalManual,
@@ -393,22 +408,11 @@ func NewOps(opts Options) (contract.Ops, error) {
 
 func resolveAndCheckPath(root string, pathValue string) (string, error) {
 	native := filepath.FromSlash(pathValue)
-	resolved, err := filepath.EvalSymlinks(native)
-	if err != nil {
-		if os.IsNotExist(err) {
-			parent := filepath.Dir(native)
-			resolvedParent, parentErr := filepath.EvalSymlinks(parent)
-			if parentErr != nil {
-				return native, nil
-			}
-			resolved = filepath.Join(resolvedParent, filepath.Base(native))
-		} else {
-			return "", err
+	if err := pathguard.Check(filepath.FromSlash(root), native); err != nil {
+		if errors.Is(err, pathguard.ErrEscape) {
+			return "", fmt.Errorf("path escape is not allowed: %s", pathValue)
 		}
-	}
-	resolvedNorm := normalizeCLIPath(resolved)
-	if !pathWithinRoot(root, resolvedNorm) {
-		return "", fmt.Errorf("path resolves outside root after symlink resolution: %s", pathValue)
+		return "", err
 	}
 	return native, nil
 }

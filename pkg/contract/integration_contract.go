@@ -65,6 +65,10 @@ type PathEnvProvider interface {
 	PathEnv() []string
 }
 
+type PathOpChecker interface {
+	CheckPathOp(ctx context.Context, op PathOp, path string) error
+}
+
 // Filesystem is the stable integration contract for embedding simsh.
 type Filesystem interface {
 	PathRootProvider
@@ -154,6 +158,9 @@ func OpsFromFilesystem(fs Filesystem) Ops {
 	}
 	if pathEnv, ok := fs.(PathEnvProvider); ok {
 		ops.PathEnv = append(ops.PathEnv, pathEnv.PathEnv()...)
+	}
+	if checker, ok := fs.(PathOpChecker); ok {
+		ops.CheckPathOp = checker.CheckPathOp
 	}
 	return ops
 }

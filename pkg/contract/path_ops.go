@@ -4,7 +4,7 @@ package contract
 // preflight path access before performing multi-step mutations (e.g. mv).
 //
 // The underlying filesystem adapters still enforce their own rules; this hook
-// exists so virtual overlays (mount router) can provide consistent, early
+// exists so filesystems and virtual overlays can provide consistent, early
 // rejection and avoid partial side effects.
 type PathOp string
 

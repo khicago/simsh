@@ -44,13 +44,14 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(paths) == 0 {
 		return "mkdir: missing operand", contract.ExitCodeUsage
 	}
+	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {
-		if err := runtime.Ops.CheckPathOp(runtime.Ctx, contract.PathOpMkdir, p); err != nil {
-			if errors.Is(err, contract.ErrUnsupported) {
-				return "mkdir: not supported", contract.ExitCodeUnsupported
-			}
-			return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
-		}
+		checks = append(checks, pathCheck{path: p, op: contract.PathOpMkdir, unsupportedMessage: "mkdir: not supported"})
+	}
+	if out, code, ok := preflightPathChecks(runtime, "mkdir", checks); !ok {
+		return out, code
+	}
+	for _, p := range paths {
 		if err := runtime.Ops.MakeDir(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "mkdir: not supported", contract.ExitCodeUnsupported

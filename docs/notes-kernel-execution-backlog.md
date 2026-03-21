@@ -57,7 +57,7 @@ Optional but recommended:
 
 ### K-001: Harden default filesystem boundary enforcement
 - Feat: `f-20260321-default-filesystem-boundary-enforcement`
-- Status: todo
+- Status: done
 - Why now: P0 trust has to come first. Current review findings indicate that default runtime filesystem implementations still have path-escape edge cases, which makes every higher-level contract less trustworthy.
 - Kernel invariant: path capability claims must match actual boundary enforcement; default filesystems must not allow escape writes or removes.
 - Files to touch:
@@ -71,6 +71,10 @@ Optional but recommended:
   - Known symlink and nested-descendant escape flows are rejected in default filesystems.
   - Regression tests exist for both direct and nested-parent escape shapes.
   - No new failing engine/filesystem tests are introduced.
+- Notes:
+  - Default filesystems now use the same real-path guard for existing symlinks and missing descendants before mutation begins.
+  - `CheckPathOp` is wired through default filesystem implementations, and multi-path mutation builtins preflight all operands before mutating.
+  - Validated with `go test ./pkg/adapter/localfs ./pkg/fs ./pkg/engine` and `go test ./...`.
 - Rollback note:
   - If stricter path checks break existing expected flows, revert only the new enforcement branch and keep the new regression tests for the failing edge case under a skipped or TODO-marked state until semantics are clarified.
 
