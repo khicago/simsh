@@ -144,12 +144,14 @@ Migration actions:
 - Lowest migration pressure.
 - Keep relying on human-readable rendering.
 - Be ready for optional session-aware flows and for richer diagnostics behind the same high-level commands.
+- Treat CLI/TUI as compatibility-facing entry adapters; defer major UX or behavior reshaping until the kernel contracts stabilize.
 
 ### HTTP Clients
 
 - Highest near-term migration pressure.
 - Plan for a structured response contract instead of a text-first envelope.
 - Separate transport parsing from business logic now, before v0.2 lands.
+- Keep HTTP changes aligned to kernel policy/session/result contracts instead of letting request-shape convenience drive core semantics.
 
 ### Runtime Embedders
 

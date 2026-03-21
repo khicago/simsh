@@ -4,17 +4,28 @@
 Build a production-ready command runtime for agentic services with explicit safety controls and AI-friendly filesystem semantics.
 
 ## Core Package Model
+- `pkg/contract`: stable interfaces and shared types
 - `pkg/sh`: shell runtime (`parser + planner + executor + builtin dispatch`)
 - `pkg/fs`: filesystem runtime (virtual zones + metadata + safety boundaries)
 - `pkg/engine/runtime`: runtime composition (`sh + fs + policy/profile`)
-- `pkg/cmd`: runtime entry adapters (`TUI + CLI helpers`)
 
-## Supporting Layers
-- `pkg/contract`: stable interfaces and shared types.
+## Entry Adapters
+- `pkg/cmd`: runtime entry adapters (`TUI + CLI helpers`).
 - `pkg/service/httpapi`: HTTP execute endpoint.
 - `cmd/simsh-cli`: local runner (TUI + one-shot + `serve -P`).
 - `cmd/simshd`: server runner.
+
+## Supporting Layers
 - `cmd/simsh-doc`: root document generator.
+
+## Entry Adapter Prioritization
+- `CLI`/`TUI` and HTTP are important integration surfaces, but they are not the kernel SSOT for architecture decisions.
+- Near-term review and refactor work should prioritize the runtime core: `pkg/contract`, `pkg/sh`, `pkg/fs`, and `pkg/engine/runtime`.
+- Entry adapters should stay thin wrappers over the unified runtime stack and should not become the place where product semantics or trust-boundary rules are invented first.
+- Later optimization work for entry adapters should focus on:
+  - keeping CLI and HTTP behavior aligned with core `ExecutionResult` / `ExecutionTrace` contracts;
+  - reducing adapter-local policy/root override semantics that can drift away from the kernel model;
+  - improving boundary/integration regression coverage without letting adapter concerns dominate kernel design.
 
 ## Filesystem Semantics
 - `/task_outputs`: persistent outputs.
