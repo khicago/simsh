@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Harden default filesystem boundary enforcement
+- [x] T-001 Harden default filesystem boundary enforcement
 
 ## Status Legend
 - todo

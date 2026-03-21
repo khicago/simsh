@@ -1,12 +1,12 @@
 {
   "version": 1,
   "feat_id": "f-20260321-default-filesystem-boundary-enforcement",
-  "updated_at": "2026-03-21T17:38:38Z",
+  "updated_at": "2026-03-21T17:40:27Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Harden default filesystem boundary enforcement",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Add real-path escape guards to default filesystems, wire CheckPathOp into default ops, and preflight multi-path mutations before they write.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-21T17:38:38Z",
@@ -19,8 +19,8 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-21T17:27:41Z",
-      "finished_at": null,
-      "updated_at": "2026-03-21T17:38:38Z",
+      "finished_at": "2026-03-21T17:40:27Z",
+      "updated_at": "2026-03-21T17:40:27Z",
       "notes": []
     }
   ]
