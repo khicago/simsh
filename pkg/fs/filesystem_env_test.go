@@ -115,3 +115,32 @@ func TestNewRuntimeOpsRejectsNestedSymlinkEscapeWrite(t *testing.T) {
 		t.Fatalf("outside path unexpectedly written: err=%v", err)
 	}
 }
+
+func TestNewRuntimeOpsIsDirPathReturnsEscapeError(t *testing.T) {
+	hostRoot := t.TempDir()
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hostRoot, "task_outputs"), 0o755); err != nil {
+		t.Fatalf("create task_outputs dir failed: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(hostRoot, "task_outputs", "escape")); err != nil {
+		t.Fatalf("create symlink failed: %v", err)
+	}
+
+	ops, err := NewRuntimeOps(EnvironmentOptions{
+		HostRoot: hostRoot,
+		Policy: contract.ExecutionPolicy{
+			WriteMode: contract.WriteModeFull,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntimeOps failed: %v", err)
+	}
+
+	isDir, err := ops.IsDirPath(context.Background(), "/task_outputs/escape/pwned.txt")
+	if err == nil {
+		t.Fatalf("expected escape-aware IsDirPath to fail, got isDir=%v", isDir)
+	}
+	if !strings.Contains(err.Error(), "path escape is not allowed") {
+		t.Fatalf("unexpected IsDirPath error: %v", err)
+	}
+}

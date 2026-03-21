@@ -196,23 +196,24 @@ func (f *aiFilesystem) IsDirPath(ctx context.Context, pathValue string) (bool, e
 	if pathValue == "/" {
 		return true, nil
 	}
-	if z, _, ok := f.resolveZone(pathValue); ok {
+	if z, ok := f.matchZone(pathValue); ok {
 		if pathValue == z.virtualRoot {
 			return true, nil
 		}
-	}
-	_, hostPath, err := f.resolvePath(pathValue)
-	if err != nil {
-		return false, nil
-	}
-	info, err := os.Stat(hostPath)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
+		_, hostPath, err := f.resolvePath(pathValue)
+		if err != nil {
+			return false, err
 		}
-		return false, err
+		info, err := os.Stat(hostPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		return info.IsDir(), nil
 	}
-	return info.IsDir(), nil
+	return false, nil
 }
 
 func (f *aiFilesystem) ReadRawContent(ctx context.Context, pathValue string) (string, error) {
@@ -486,30 +487,38 @@ func (f *aiFilesystem) PathEnv() []string {
 
 func (f *aiFilesystem) resolveZone(pathValue string) (zone, string, bool) {
 	pathValue = normalizeVirtualPath(pathValue)
-	for _, z := range f.zones {
-		if pathValue == z.virtualRoot || strings.HasPrefix(pathValue, z.virtualRoot+"/") {
-			hostPath, err := f.toHostPath(z, pathValue)
-			if err != nil {
-				return zone{}, "", false
-			}
-			return z, hostPath, true
-		}
+	z, ok := f.matchZone(pathValue)
+	if !ok {
+		return zone{}, "", false
 	}
-	return zone{}, "", false
+	hostPath, err := f.toHostPath(z, pathValue)
+	if err != nil {
+		return zone{}, "", false
+	}
+	return z, hostPath, true
 }
 
 func (f *aiFilesystem) resolvePath(pathValue string) (zone, string, error) {
 	pathValue = normalizeVirtualPath(pathValue)
+	z, ok := f.matchZone(pathValue)
+	if !ok {
+		return zone{}, "", fmt.Errorf("path is outside allowed roots: %s", pathValue)
+	}
+	hostPath, err := f.toHostPath(z, pathValue)
+	if err != nil {
+		return zone{}, "", err
+	}
+	return z, hostPath, nil
+}
+
+func (f *aiFilesystem) matchZone(pathValue string) (zone, bool) {
+	pathValue = normalizeVirtualPath(pathValue)
 	for _, z := range f.zones {
 		if pathValue == z.virtualRoot || strings.HasPrefix(pathValue, z.virtualRoot+"/") {
-			hostPath, err := f.toHostPath(z, pathValue)
-			if err != nil {
-				return zone{}, "", err
-			}
-			return z, hostPath, nil
+			return z, true
 		}
 	}
-	return zone{}, "", fmt.Errorf("path is outside allowed roots: %s", pathValue)
+	return zone{}, false
 }
 
 func (f *aiFilesystem) toHostPath(z zone, virtualPath string) (string, error) {

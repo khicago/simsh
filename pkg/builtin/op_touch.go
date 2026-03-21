@@ -40,22 +40,21 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(paths) == 0 {
 		return "touch: missing operand", contract.ExitCodeUsage
 	}
-	missingPaths := make([]string, 0, len(paths))
+	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {
-		_, err := runtime.Ops.ReadRawContent(runtime.Ctx, p)
-		if err == nil {
-			continue
-		}
-		missingPaths = append(missingPaths, p)
-	}
-	checks := make([]pathCheck, 0, len(missingPaths))
-	for _, p := range missingPaths {
 		checks = append(checks, pathCheck{path: p, op: contract.PathOpWrite, unsupportedMessage: "touch: write is not supported"})
 	}
 	if out, code, ok := preflightPathChecks(runtime, "touch", checks); !ok {
 		return out, code
 	}
-	for _, p := range missingPaths {
+	for _, p := range paths {
+		_, err := runtime.Ops.ReadRawContent(runtime.Ctx, p)
+		if err == nil {
+			continue
+		}
+		if !isPathMissing(err) {
+			return fmt.Sprintf("touch: %v", err), contract.ExitCodeGeneral
+		}
 		if writeErr := runtime.Ops.WriteFile(runtime.Ctx, p, ""); writeErr != nil {
 			if errors.Is(writeErr, contract.ErrUnsupported) {
 				return "touch: write is not supported", contract.ExitCodeUnsupported
@@ -64,4 +63,12 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 	}
 	return "", 0
+}
+
+func isPathMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "no such file") || strings.Contains(message, "not found")
 }

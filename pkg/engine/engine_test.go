@@ -571,6 +571,19 @@ func TestEngineCompositeMutationsPreflightUnsupportedPaths(t *testing.T) {
 		}
 	})
 
+	t.Run("touch rejects existing unsupported operand before later creation", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "touch /sys/bin/ls /workspace/new.txt", ops)
+		if code == 0 {
+			t.Fatalf("expected touch to fail: out=%q", out)
+		}
+		if _, ok := fs.files["/workspace/new.txt"]; ok {
+			t.Fatalf("touch should not create later file after existing unsupported operand")
+		}
+	})
+
 	t.Run("mv keeps source when destination is unsupported", func(t *testing.T) {
 		fs := newTestFS()
 		ops := writableOps(fs)
