@@ -1383,6 +1383,59 @@ func TestCommandRm(t *testing.T) {
 	})
 }
 
+func TestCommandRmdir(t *testing.T) {
+	eng := newTestEngine()
+
+	t.Run("basic rmdir", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		if _, code := eng.Execute(context.Background(), "mkdir -p /workspace/empty", ops); code != 0 {
+			t.Fatalf("setup mkdir failed")
+		}
+		out, code := eng.Execute(context.Background(), "rmdir /workspace/empty", ops)
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("rmdir failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("rmdir --confirm", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		if _, code := eng.Execute(context.Background(), "mkdir -p /workspace/empty", ops); code != 0 {
+			t.Fatalf("setup mkdir failed")
+		}
+		out, code := eng.Execute(context.Background(), "rmdir --confirm /workspace/empty", ops)
+		if code != 0 || strings.TrimSpace(out) != "removed /workspace/empty" {
+			t.Fatalf("rmdir --confirm failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("rmdir --json", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		if _, code := eng.Execute(context.Background(), "mkdir -p /workspace/empty", ops); code != 0 {
+			t.Fatalf("setup mkdir failed")
+		}
+		out, code := eng.Execute(context.Background(), "rmdir --json /workspace/empty", ops)
+		if code != 0 || !strings.Contains(out, `"status":"removed"`) || !strings.Contains(out, `"/workspace/empty"`) {
+			t.Fatalf("rmdir --json failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("rmdir read-only rejected", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		fsWritable := writableOps(fs)
+		if _, code := eng.Execute(context.Background(), "mkdir -p /workspace/empty", fsWritable); code != 0 {
+			t.Fatalf("setup mkdir failed")
+		}
+		_, code := eng.Execute(context.Background(), "rmdir --json /workspace/empty", ops)
+		if code == 0 {
+			t.Fatalf("expected rmdir to fail in read-only")
+		}
+	})
+}
+
 func TestCommandTouch(t *testing.T) {
 	eng := newTestEngine()
 

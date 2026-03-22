@@ -67,6 +67,12 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	if out, code := rt.exec("mkdir -p " + emptyDir); code != 0 {
 		t.Fatalf("setup empty dir failed: code=%d out=%q", code, out)
 	}
+	if out, code := rt.exec("mkdir -p " + rt.abs("workspace", "rmdir-confirm")); code != 0 {
+		t.Fatalf("setup rmdir-confirm dir failed: code=%d out=%q", code, out)
+	}
+	if out, code := rt.exec("mkdir -p " + rt.abs("workspace", "rmdir-json")); code != 0 {
+		t.Fatalf("setup rmdir-json dir failed: code=%d out=%q", code, out)
+	}
 	if err := rt.ops.WriteFile(context.Background(), readme, "hello\nworld\n"); err != nil {
 		t.Fatalf("setup write readme failed: %v", err)
 	}
@@ -683,8 +689,27 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "rmdir",
 			cmd:  "rmdir " + emptyDir,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("rmdir failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rmdir-confirm",
+			cmd:  "rmdir --confirm " + rt.abs("workspace", "rmdir-confirm"),
+			want: func(t *testing.T, out string, code int) {
+				expected := "removed " + rt.abs("workspace", "rmdir-confirm")
+				if code != 0 || strings.TrimSpace(out) != expected {
+					t.Fatalf("rmdir --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rmdir-json",
+			cmd:  "rmdir --json " + rt.abs("workspace", "rmdir-json"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"status\":\"removed\"") || !strings.Contains(out, "\"path\":\""+rt.abs("workspace", "rmdir-json")+"\"") {
+					t.Fatalf("rmdir --json failed: code=%d out=%q", code, out)
 				}
 			},
 		},

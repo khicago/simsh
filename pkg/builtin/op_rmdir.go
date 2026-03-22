@@ -12,27 +12,34 @@ import (
 func specRmdir() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandRmdir,
-		Manual: "rmdir PATH...",
+		Manual: "rmdir [--confirm] [--json] PATH...",
 		Tips: []string{
 			"Removes empty directories only.",
+			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
 			"Use rm for files; rmdir rejects non-empty directories.",
 		},
-		Examples:       ExamplesFor("rmdir"),
-		DetailedManual: LoadEmbeddedManual("rmdir"),
-		Run:            runRmdir,
+		StructuredOutput: "path status entries",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("rmdir"),
+		DetailedManual:   LoadEmbeddedManual("rmdir"),
+		Run:              runRmdir,
 	}
 }
 
 func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
-	if len(args) == 0 {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("rmdir", args)
+	if !ok {
+		return out, code
+	}
+	if len(filteredArgs) == 0 {
 		return "rmdir: missing operand", contract.ExitCodeUsage
 	}
 	if runtime.Ops.RemoveDir == nil {
 		return "rmdir: not supported", contract.ExitCodeUnsupported
 	}
 
-	dirs := make([]string, 0, len(args))
-	for _, arg := range args {
+	dirs := make([]string, 0, len(filteredArgs))
+	for _, arg := range filteredArgs {
 		if strings.HasPrefix(arg, "-") {
 			return fmt.Sprintf("rmdir: unsupported flag %s", arg), contract.ExitCodeUsage
 		}
@@ -54,6 +61,7 @@ func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "rmdir", checks); !ok {
 		return out, code
 	}
+	results := make([]mutationPathStatus, 0, len(dirs))
 	for _, dirPath := range dirs {
 		if err := runtime.Ops.RemoveDir(runtime.Ctx, dirPath); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
@@ -61,6 +69,11 @@ func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
 			}
 			return fmt.Sprintf("rmdir: %v", err), contract.ExitCodeGeneral
 		}
+		results = append(results, mutationPathStatus{Path: dirPath, Status: "removed"})
 	}
-	return "", 0
+	rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
+	if err != nil {
+		return fmt.Sprintf("rmdir: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }
