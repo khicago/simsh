@@ -237,10 +237,10 @@ When choosing whether to defer something:
 ## Immediate Next Actions
 
 The next kernel-focused loop should start with:
-- building `K-005` as a `simsh`-native reference validation and metric-gates feat;
-- encoding the first-pass P4 thresholds into runnable benchmark output;
-- validating the current kernel against relative-path, file-loop, boundary, trace, and cancellation scenarios;
-- keeping legacy feat schema and archive cleanup in a separate non-kernel maintenance feat.
+- iterating on the committed `simsh`-native reference benchmark after the first baseline report;
+- raising benchmark realism carefully without turning P4 into product orchestration work;
+- keeping legacy feat schema and archive cleanup in a separate non-kernel maintenance feat;
+- using the benchmark results to decide future kernel investment rather than adding primitives by default.
 
 ## Supporting Material
 
