@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Lock feat plan, tool inventory, and requirements baseline
+- [x] T-001 Lock feat plan, tool inventory, and requirements baseline
 - [ ] T-002 Add builtin contract metadata and man/manual plumbing
 - [ ] T-003 Optimize tree
 - [ ] T-004 Optimize grep
@@ -22,6 +22,7 @@ JSON SSOT: `tasks.json`
 - [ ] T-017 Optimize sed
 - [ ] T-018 Add JSON query tooling
 - [ ] T-019 Refresh README and aggregate docs after tool rollout
+- [ ] T-020 Reframe README and architecture around kernel and default workspace
 
 ## Status Legend
 - todo

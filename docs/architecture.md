@@ -1,75 +1,138 @@
-# simsh Architecture Plan
+---
+title: Architecture Overview
+required: false
+sop:
+  - Read this doc before changing the high-level narrative order of simsh architecture.
+  - Update this doc when the relationship between kernel, default workspace, adapters, and entry surfaces changes.
+  - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+---
 
-## Goal
-Build a production-ready command runtime for agentic services with explicit safety controls and AI-friendly filesystem semantics.
+# simsh Architecture
 
-## Core Package Model
+## Framing
+
+`simsh` should be explained in agent-facing dependency order, not in package-directory order.
+
+The right narrative is:
+1. what the kernel is;
+2. what default workspace the agent sees;
+3. where that workspace can extend into the real world;
+4. how external callers enter the runtime.
+
+That order is more faithful to the project than starting with CLI or HTTP entrypoints.
+
+## 1. Kernel
+
+The kernel is the product core.
+
+It owns:
+- shell execution semantics
+- virtual filesystem projection boundaries
+- policy and profile enforcement
+- path metadata and capability signaling
+- execution result and trace contracts
+- session lifecycle primitives
+
+Core package model:
 - `pkg/contract`: stable interfaces and shared types
 - `pkg/sh`: shell runtime (`parser + planner + executor + builtin dispatch`)
 - `pkg/fs`: filesystem runtime (virtual zones + metadata + safety boundaries)
 - `pkg/engine/runtime`: runtime composition (`sh + fs + policy/profile`)
 
-## Entry Adapters
-- `pkg/cmd`: runtime entry adapters (`TUI + CLI helpers`).
-- `pkg/service/httpapi`: HTTP execute endpoint.
-- `cmd/simsh-cli`: local runner (TUI + one-shot + `serve -P`).
-- `cmd/simshd`: server runner.
+The kernel is the place where trust, determinism, and default agent leverage should be judged first.
 
-## Supporting Layers
-- `cmd/simsh-doc`: root document generator.
+## 2. Default Agent Workspace
 
-## Entry Adapter Prioritization
-- `CLI`/`TUI` and HTTP are important integration surfaces, but they are not the kernel SSOT for architecture decisions.
-- Near-term review and refactor work should prioritize the runtime core: `pkg/contract`, `pkg/sh`, `pkg/fs`, and `pkg/engine/runtime`.
-- Entry adapters should stay thin wrappers over the unified runtime stack and should not become the place where product semantics or trust-boundary rules are invented first.
-- Later optimization work for entry adapters should focus on:
-  - keeping CLI and HTTP behavior aligned with core `ExecutionResult` / `ExecutionTrace` contracts;
-  - reducing adapter-local policy/root override semantics that can drift away from the kernel model;
-  - improving boundary/integration regression coverage without letting adapter concerns dominate kernel design.
+For an agent, architecture is experienced first as a working environment.
 
-## Filesystem Semantics
-- `/task_outputs`: persistent outputs.
-- `/temp_work`: temporary artifacts.
-- `/knowledge_base`: read-only references.
+### Filesystem zones
 
-These names are intentionally explicit so an agent can infer write intent directly from path names.
+The default workspace exposes explicit filesystem zones:
+- `/knowledge_base`: source-oriented reference material
+- `/task_outputs`: durable derived outputs
+- `/temp_work`: scratch and disposable intermediates
+- `/sys`: runtime metadata and builtin command namespace
 
-## Runtime Capability Model
-- Profiles:
-  - `core-strict`
-  - `bash-plus`
-  - `zsh-lite`
-- Policies:
-  - `disabled`
-  - `read-only`
-  - `write-limited`
-  - `full`
-- Mounts:
-  - `/sys/bin`: system builtins
-  - `/bin`: custom external commands (injected bridge)
-  - `/test`: optional regression corpus mount
-  - synthetic parent mount directories are exposed (e.g. `/sys` for `/sys/bin`)
-  - mount-backed paths are immutable for write/mkdir/remove and move/copy flows
-- Command introspection:
-  - `tree`: renders ASCII directory hierarchy (supports hidden/depth filters)
-  - `pwd`: prints current runtime root
-  - `which` / `type`: resolve command path and source (`alias` vs `builtin` vs `external`)
-  - `frontmatter`: stat/get/print markdown frontmatter across multiple files
-  - `rmdir`: removes empty directories only
-  - generic command aliases are supported (`ll` -> `ls -l`, `fm` -> `frontmatter`)
-  - runtime rc bootstrap supports read-only mounted config files with `export` and `alias`
-- Manual system:
-  - SSOT path: `pkg/builtin/commands/*/manual.md` (single source; remove duplicated `pkg/builtin/manuals/*`)
-  - `man <cmd>` returns concise summary + `Use-When` / `Avoid-When`
-  - `man -v <cmd>` renders full manual with frontmatter stripped
-- Path access SSOT + `ls -l`/API formats: `docs/architecture-path-access-metadata.md`
-- Memory/skills business-layer extension plan: `docs/architecture-memory-skills-extension.md`
+These names are intentionally semantic so an agent can reason about write intent before mutation begins.
+
+### Path model and `cwd`
+
+The workspace uses a virtual path model rather than inheriting host shell behavior:
+- session-local virtual `cwd`
+- explicit relative-path resolution
+- mount-backed and synthetic paths with stable capability limits
+- path metadata via `access` and `capabilities`
+
+### Builtin command surface
+
+The default ACI includes a focused builtin command set for:
+- inspection and workspace awareness
+- search and text slicing
+- safe file mutation
+- command introspection and manuals
+
+The builtin surface is part of the default workspace contract, not just a tool list.
+
+### Result and trace contract
+
+The default workspace also includes machine-visible execution semantics:
+- structured `ExecutionResult`
+- structured `ExecutionTrace`
+- path metadata surfaced through command output and API metadata
+
+This matters because agents do not only need files and commands; they also need low-noise feedback about what actually happened.
+
+## 3. Adapter Boundary
+
+Adapters define how the kernel reaches the real world.
+
+They are more important than CLI/HTTP entry surfaces, but still conceptually later than the kernel and the default workspace.
+
+Adapter responsibilities include:
+- projecting external systems into stable virtual paths
+- participating in session lifecycle when persistent state exists
+- consuming trace/result fields that matter for platform behavior
+- validating the seam with at least one adapter-backed workload
+
+Recommended references:
+- `docs/architecture-platform-adapter-contract.md`
+- `docs/architecture-memory-skills-extension.md`
+
+## 4. Entry Surfaces
+
+Entry surfaces are how external callers reach the runtime. They are not the architecture center.
+
+Entry surfaces:
+- `pkg/cmd`: runtime entry helpers for CLI/TUI use
+- `pkg/service/httpapi`: HTTP execute endpoint
+- `cmd/simsh-cli`: local runner (`CLI + TUI + serve`)
+- `cmd/simshd`: dedicated HTTP service
+
+Design rule:
+- keep entry surfaces thin over the unified runtime stack
+- do not invent product semantics or trust-boundary rules in entry adapters first
+
+## 5. Supporting Layers
+
+Supporting layers are useful, but not core architecture anchors:
+- `cmd/simsh-doc`: generated runtime profile tooling
+
+## Prioritization Rule
+
+When architecture tradeoffs are discussed, prefer this order:
+1. kernel correctness and trust
+2. default agent workspace / default ACI quality
+3. adapter contract quality
+4. entry-surface ergonomics
+
+This keeps the project aligned with its charter as a lightweight agent runtime kernel rather than drifting into a CLI-first or HTTP-first product narrative.
 
 ## Current Status
-- [x] Core package split (`sh/fs/cmd`).
-- [x] Runtime composition moved to `pkg/engine/runtime`; `cmd` keeps entry-facing concerns.
-- [x] AI-friendly filesystem naming and zone policy.
-- [x] CLI and HTTP switched to unified engine runtime stack.
-- [x] Root `simsh.md` generated from package-level descriptors.
-- [x] `cmd/simsh-cli` upgraded with high-quality TUI default mode.
-- [x] `cmd/simsh-cli serve -P` provides web runtime access.
+
+- [x] Core package split (`contract` / `sh` / `fs` / `engine/runtime`)
+- [x] Unified runtime composition shared by CLI and HTTP entry surfaces
+- [x] Default workspace zones and path metadata
+- [x] Structured execution result and trace contracts
+- [x] First-class session lifecycle primitives
+- [x] Adapter-extension boundary documented
+- [x] CLI/TUI and HTTP surfaces available as thin runtime entry layers

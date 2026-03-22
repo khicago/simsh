@@ -59,21 +59,44 @@ General-purpose shells are powerful, but they are noisy execution environments f
 
 ```mermaid
 flowchart TB
-  platform["Agent Platform"] --> runtime["simsh Runtime"]
+  platform["Agent Platform"] --> runtime["simsh Runtime Kernel"]
   runtime --> shell["Deterministic shell subset"]
-  runtime --> fs["Virtual filesystem"]
-  runtime --> controls["Policy, profile, and audit hooks"]
+  runtime --> fs["Virtual filesystem + path model"]
+  runtime --> controls["Policy, profile, trace, session"]
   fs --> kb["/knowledge_base"]
   fs --> out["/task_outputs"]
   fs --> tmp["/temp_work"]
   fs --> sys["/sys"]
   adapters["Platform adapters"] --> fs
   adapters --> adapter_logic["RPC projections, memory, indexing, product logic"]
+  entry["CLI / TUI / HTTP"] --> runtime
 ```
 
-## Core Ideas
+## Kernel Model
 
-### 1. Purpose-oriented filesystem zones
+`simsh` should be read first as a runtime kernel, not as a CLI or HTTP product.
+
+The kernel owns:
+- shell execution semantics
+- filesystem projection boundaries
+- policy and profile enforcement
+- path metadata and capability signaling
+- structured execution result and trace contracts
+- session primitives
+
+Core packages:
+- `pkg/contract`: stable interfaces and shared types
+- `pkg/sh`: shell parsing and execution semantics
+- `pkg/fs`: virtual filesystem composition and adapter glue
+- `pkg/engine/runtime`: runtime assembly (`sh + fs + policy/profile`)
+
+The target property is not shell completeness. The target property is a lightweight execution kernel that agents can trust.
+
+## Default Agent Workspace
+
+What matters to an agent is not the repository package order. It is the default working environment it sees when execution begins.
+
+### Filesystem zones
 
 The virtual root exposes only a small set of high-signal directories:
 
@@ -82,32 +105,63 @@ The virtual root exposes only a small set of high-signal directories:
 | `/knowledge_base` | source-oriented reference material and mirrored external artifacts |
 | `/task_outputs` | durable deliverables and final agent-authored artifacts |
 | `/temp_work` | temporary intermediates, scratch output, and disposable state |
-| `/sys` | virtual runtime metadata |
+| `/sys` | virtual runtime metadata and builtin command namespace |
 
 These names are intentionally explicit so an agent can reason about where output belongs before it writes. Writeability is still controlled by the active policy.
 
-### 2. Deterministic execution model
+### Path model and `cwd`
 
-`simsh` supports a focused shell subset rather than emulating all of Bash:
+`simsh` exposes an explicit virtual path model instead of inheriting host-shell ambiguity:
+- session-local virtual `cwd`
+- relative-path resolution against that virtual `cwd`
+- path metadata and capabilities instead of trial-and-error probing
+- mount-backed and synthetic paths that remain capability-limited even when reachable through the same tree
 
-- operators: `;`, `&&`, `||`, `|`
-- redirections: `>`, `>>`, `<`, `<<`
-- profiles: `core-strict`, `bash-plus`, `zsh-lite`
-- policies: `disabled`, `read-only`, `write-limited`, `full`
+### Default builtin surface
 
-### 3. Agent-visible path semantics
+The default workspace includes a focused builtin command set for inspection, search, text manipulation, and safe file mutation:
+- inspection and workspace awareness: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `date`
+- text and search: `cat`, `head`, `tail`, `grep`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
+- file mutation: `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `tee`
 
-The runtime exposes path metadata instead of forcing agents to probe by failure:
+The command surface is intentionally constrained. The goal is a high-signal agent workspace, not a full shell clone.
 
-- `ls -l` shows mode, access, semantic kind, line counts, and path
-- `ls -l --fmt json` returns machine-readable entries with capabilities
-- `/v1/execute` supports `include_meta=true` for opt-in path metadata
+### Result and trace contract
 
-### 4. Generic core, adapter-driven extensions
+The default workspace is not just files and commands. It also includes a machine-consumable execution contract:
+- structured `ExecutionResult`
+- structured `ExecutionTrace`
+- path access metadata via `ls -l` and opt-in API metadata
 
-`simsh` keeps domain logic out of core packages. Memory systems, resource projections, and skill-like trees are expected to live behind adapter-driven `VirtualMount` integrations rather than being hard-coded into the kernel.
+That is part of the default ACI, because it shapes how an agent verifies what happened after each step.
 
-See [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md) for the boundary.
+## Adapter Boundary
+
+Adapters matter more than entry surfaces because they define how the kernel reaches the real world.
+
+`simsh` keeps domain logic out of core packages. Memory systems, resource projections, skill-like trees, and RPC-backed views are expected to live behind adapter-driven `VirtualMount` integrations rather than being hard-coded into the kernel.
+
+That means:
+- generic core
+- opinionated adapters
+- explicit projection boundaries
+
+See:
+- [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md)
+- [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md)
+
+## Entry Surfaces
+
+CLI, TUI, and HTTP are important integration surfaces, but they are not the product soul of `simsh`.
+
+Entry surfaces:
+- `pkg/cmd`: CLI/TUI-facing runtime helpers
+- `pkg/service/httpapi`: HTTP execute endpoint
+- `cmd/simsh-cli`: local runtime (`CLI + TUI + serve`)
+- `cmd/simshd`: dedicated HTTP service
+- `cmd/simsh-doc`: generator for `simsh.md`
+
+They should stay thin wrappers over the same runtime kernel rather than becoming a second architecture center.
 
 ## Quick Start
 
@@ -205,28 +259,6 @@ Example response:
 }
 ```
 
-## Builtin Commands
-
-Current builtins are grouped around inspection, text processing, and safe file mutation:
-
-- inspection: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `date`
-- text processing: `cat`, `head`, `tail`, `grep`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
-- file operations: `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `tee`
-
-The generated runtime profile in [`simsh.md`](simsh.md) contains the fuller command reference and examples.
-
-## Package Layout
-
-- `pkg/sh`: shell parsing and execution semantics
-- `pkg/fs`: AI-friendly filesystem composition and adapter glue
-- `pkg/engine/runtime`: runtime assembly (`sh + fs + policy/profile`)
-- `pkg/contract`: stable contracts and shared types
-- `pkg/service/httpapi`: HTTP execute endpoint
-- `pkg/cmd`: CLI/TUI-facing runtime entry helpers
-- `cmd/simsh-cli`: local runtime (`CLI + TUI + serve`)
-- `cmd/simshd`: dedicated HTTP service
-- `cmd/simsh-doc`: generator for `simsh.md`
-
 ## What simsh is not
 
 `simsh` intentionally does not try to solve everything inside the runtime kernel.
@@ -246,6 +278,8 @@ Start here:
 - [`simsh.md`](simsh.md): generated runtime profile
 - [`docs/notes-project-charter.md`](docs/notes-project-charter.md): project goals, scope, and non-goals
 - [`docs/architecture.md`](docs/architecture.md): current architecture overview
+- [`docs/notes-requirements.md`](docs/notes-requirements.md): current cross-cutting product/ACI requirements
+- [`docs/notes-builtin-aci-review.md`](docs/notes-builtin-aci-review.md): builtin ACI review and per-tool optimization directions
 - [`docs/architecture-path-access-metadata.md`](docs/architecture-path-access-metadata.md): path metadata and listing/API formats
 - [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md): extension boundary for mounts and business-layer systems
 

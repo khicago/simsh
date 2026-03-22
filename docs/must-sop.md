@@ -35,6 +35,12 @@ Source: `docs/architecture-session-trace-model.md`
 - Keep session and trace contracts generic; product semantics belong in adapters.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Architecture Overview
+Source: `docs/architecture.md`
+- Read this doc before changing the high-level narrative order of simsh architecture.
+- Update this doc when the relationship between kernel, default workspace, adapters, and entry surfaces changes.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### First Version Plan (Historical Retrospective)
 Source: `docs/first_version_plan.md`
 - Read this doc only when you need historical context about the first implementation wave and completed hardening/tooling work.

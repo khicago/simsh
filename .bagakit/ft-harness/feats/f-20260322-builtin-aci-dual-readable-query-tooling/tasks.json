@@ -1,12 +1,12 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T10:43:30Z",
+  "updated_at": "2026-03-22T10:49:51Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Lock feat plan, tool inventory, and requirements baseline",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Create the K-006 feat, record the dual-readable/pipeline-aware requirements, enumerate every in-scope tool, and commit the baseline planning docs before implementation starts.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T10:43:30Z",
@@ -19,8 +19,8 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T10:43:00Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T10:43:30Z",
+      "finished_at": "2026-03-22T10:44:26Z",
+      "updated_at": "2026-03-22T10:44:26Z",
       "notes": []
     },
     {
@@ -273,6 +273,26 @@
       "started_at": null,
       "finished_at": null,
       "updated_at": "2026-03-22T10:39:53Z",
+      "notes": []
+    },
+    {
+      "id": "T-020",
+      "title": "Reframe README and architecture around kernel and default workspace",
+      "status": "in_progress",
+      "summary": "Reorganize README and docs/architecture.md so they explain simsh in agent-facing dependency order: kernel, default workspace/ACI, adapters, then entry surfaces.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T10:49:51Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-22T10:47:46Z",
+      "finished_at": null,
+      "updated_at": "2026-03-22T10:49:51Z",
       "notes": []
     }
   ]
