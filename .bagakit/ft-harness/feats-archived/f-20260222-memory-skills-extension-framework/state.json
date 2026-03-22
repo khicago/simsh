@@ -5,6 +5,7 @@
   "slug": "memory-skills-extension-framework",
   "goal": "Define and document a core-safe extension model for memory/resource/skill systems via VirtualMount drivers and business-layer control plane.",
   "status": "archived",
+  "workspace_mode": "worktree",
   "base_ref": "main",
   "branch": "feat/f-20260222-memory-skills-extension-framework",
   "worktree_name": "wt-f-20260222-memory-skills-extension-framework",

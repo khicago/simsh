@@ -1,0 +1,3304 @@
+diff --git a/cmd/simsh-cli/main.go b/cmd/simsh-cli/main.go
+index 603be2f..6a9b646 100644
+--- a/cmd/simsh-cli/main.go
++++ b/cmd/simsh-cli/main.go
+@@ -198,27 +198,28 @@ func runCLI(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io.Wri
+ }
+ 
+ func runRunMode(ctx context.Context, opts cliOptions, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+-	policy, _ := contract.PolicyPreset(opts.policy)
+-	profile, _ := contract.ParseProfile(opts.profile)
+ 	rootDir := resolveRootDir(opts.rootDir)
+-
+-	env, err := runtimeengine.New(runtimeengine.Options{
+-		HostRoot:         rootDir,
+-		Profile:          profile,
+-		Policy:           policy,
+-		RCFiles:          opts.rcFiles,
+-		EnableTestCorpus: contains(opts.mounts, "test"),
+-	})
+-	if err != nil {
+-		fmt.Fprintln(stderr, err)
+-		return contract.ExitCodeGeneral
+-	}
++	runtimeOpts := runtimeOptionsFromCLI(opts, rootDir)
+ 
+ 	if opts.command == "" {
++		manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
++		session, err := manager.Create(ctx, runtimeOpts)
++		if err != nil {
++			fmt.Fprintln(stderr, err)
++			return contract.ExitCodeGeneral
++		}
++		defer func() { _, _ = manager.Close(ctx, session.SessionID) }()
++		executor := &sessionExecutor{manager: manager, sessionID: session.SessionID}
+ 		if opts.lineREPL || opts.disableTUI || !isTerminal(stdin, stdout) {
+-			return runREPL(ctx, opts, rootDir, env, stdin, stdout, stderr)
++			return runREPL(ctx, opts, rootDir, executor, session.SessionID, stdin, stdout, stderr)
+ 		}
+-		return runTUI(ctx, opts, rootDir, env, stdin, stdout, stderr)
++		return runTUI(ctx, opts, rootDir, executor, session.SessionID, stdin, stdout, stderr)
++	}
++
++	env, err := runtimeengine.New(runtimeOpts)
++	if err != nil {
++		fmt.Fprintln(stderr, err)
++		return contract.ExitCodeGeneral
+ 	}
+ 
+ 	out, code := env.Execute(ctx, opts.command)
+@@ -258,14 +259,15 @@ func runServe(opts cliOptions, stdout io.Writer, stderr io.Writer) int {
+ 	return 0
+ }
+ 
+-func runTUI(ctx context.Context, opts cliOptions, rootDir string, env *runtimecmd.Environment, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
++func runTUI(ctx context.Context, opts cliOptions, rootDir string, env runtimecmd.Executor, sessionID string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+ 	err := runtimecmd.RunConsoleTUI(ctx, env, runtimecmd.ConsoleOptions{
+-		Profile:  opts.profile,
+-		Policy:   opts.policy,
+-		HostRoot: rootDir,
+-		Mounts:   opts.mounts,
+-		Input:    stdin,
+-		Output:   stdout,
++		Profile:   opts.profile,
++		Policy:    opts.policy,
++		HostRoot:  rootDir,
++		SessionID: sessionID,
++		Mounts:    opts.mounts,
++		Input:     stdin,
++		Output:    stdout,
+ 	})
+ 	if err != nil {
+ 		fmt.Fprintln(stderr, err)
+@@ -274,8 +276,8 @@ func runTUI(ctx context.Context, opts cliOptions, rootDir string, env *runtimecm
+ 	return 0
+ }
+ 
+-func runREPL(ctx context.Context, opts cliOptions, rootDir string, env *runtimecmd.Environment, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
+-	_, _ = fmt.Fprintf(stdout, "simsh line-repl profile=%s policy=%s host_root=%s\n", opts.profile, opts.policy, rootDir)
++func runREPL(ctx context.Context, opts cliOptions, rootDir string, env runtimecmd.Executor, sessionID string, stdin io.Reader, stdout io.Writer, stderr io.Writer) int {
++	_, _ = fmt.Fprintf(stdout, "simsh line-repl profile=%s policy=%s host_root=%s session=%s\n", opts.profile, opts.policy, rootDir, sessionID)
+ 	if len(opts.mounts) > 0 {
+ 		_, _ = fmt.Fprintf(stdout, "mounts=%s\n", strings.Join(opts.mounts, ","))
+ 	}
+@@ -311,6 +313,34 @@ func runREPL(ctx context.Context, opts cliOptions, rootDir string, env *runtimec
+ 	}
+ }
+ 
++func runtimeOptionsFromCLI(opts cliOptions, rootDir string) runtimeengine.Options {
++	policy, _ := contract.PolicyPreset(opts.policy)
++	profile, _ := contract.ParseProfile(opts.profile)
++	return runtimeengine.Options{
++		HostRoot:         rootDir,
++		Profile:          profile,
++		Policy:           policy,
++		RCFiles:          opts.rcFiles,
++		EnableTestCorpus: contains(opts.mounts, "test"),
++	}
++}
++
++type sessionExecutor struct {
++	manager   *runtimeengine.SessionManager
++	sessionID string
++}
++
++func (s *sessionExecutor) Execute(ctx context.Context, commandLine string) (string, int) {
++	if s == nil || s.manager == nil {
++		return "execute: session runtime is not initialized", contract.ExitCodeGeneral
++	}
++	executed, err := s.manager.Execute(ctx, s.sessionID, commandLine, contract.ExecutionPolicy{})
++	if err != nil {
++		return "execute: " + err.Error(), contract.ExitCodeGeneral
++	}
++	return executed.Result.FlattenOutput(), executed.Result.ExitCode
++}
++
+ func resolveRootDir(rootDir string) string {
+ 	root := strings.TrimSpace(rootDir)
+ 	if root != "" {
+diff --git a/cmd/simsh-cli/main_test.go b/cmd/simsh-cli/main_test.go
+index 310663d..ea2ca8d 100644
+--- a/cmd/simsh-cli/main_test.go
++++ b/cmd/simsh-cli/main_test.go
+@@ -1,6 +1,15 @@
+ package main
+ 
+-import "testing"
++import (
++	"bytes"
++	"context"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
+ 
+ func TestParseCLIOptionsServePort(t *testing.T) {
+ 	opts, err := parseCLIOptions([]string{"serve", "-P", "19090", "-profile", "bash-plus", "-policy", "full", "-mount", "test", "-rc", "/etc/simshrc"})
+@@ -46,3 +55,37 @@ func TestParseCLIOptionsInvalidMount(t *testing.T) {
+ 		t.Fatalf("expected error for invalid mount")
+ 	}
+ }
++
++func TestRunRunModeLineREPLUsesSessionLifecycle(t *testing.T) {
++	tmp := t.TempDir()
++	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")
++	if err := os.MkdirAll(filepath.Dir(rcPath), 0o755); err != nil {
++		t.Fatalf("mkdir failed: %v", err)
++	}
++	if err := os.WriteFile(rcPath, []byte("export REPL_FLAG=enabled\n"), 0o644); err != nil {
++		t.Fatalf("write rc failed: %v", err)
++	}
++
++	opts := cliOptions{
++		mode:     modeRun,
++		lineREPL: true,
++		rootDir:  tmp,
++		policy:   string(contract.WriteModeReadOnly),
++		profile:  string(contract.ProfileCoreStrict),
++		rcFiles:  []string{"/task_outputs/simshrc"},
++	}
++	stdin := strings.NewReader("env REPL_FLAG\nquit\n")
++	var stdout bytes.Buffer
++	var stderr bytes.Buffer
++
++	code := runRunMode(context.Background(), opts, stdin, &stdout, &stderr)
++	if code != 0 {
++		t.Fatalf("runRunMode code=%d stderr=%q", code, stderr.String())
++	}
++	if !strings.Contains(stdout.String(), "session=sess_") {
++		t.Fatalf("expected session header in stdout, got %q", stdout.String())
++	}
++	if !strings.Contains(stdout.String(), "REPL_FLAG=enabled") {
++		t.Fatalf("expected rc env in stdout, got %q", stdout.String())
++	}
++}
+diff --git a/docs/.bagakit/inbox/decision-execute-preflight-prepared-ops.md b/docs/.bagakit/inbox/decision-execute-preflight-prepared-ops.md
+new file mode 100644
+index 0000000..70997bf
+--- /dev/null
++++ b/docs/.bagakit/inbox/decision-execute-preflight-prepared-ops.md
+@@ -0,0 +1,32 @@
++---
++title: Use prepared ops to remove per-exec normalize overhead
++kind: decision
++status: inbox
++tags:
++  - decision
++  - performance
++  - engine
++sources:
++  - pkg/engine/orchestrator.go
++  - pkg/engine/runtime/runtime_stack.go
++  - pkg/engine/engine_benchmark_test.go
++  - docs/refs/notes-execute-preflight-performance-refs.md
++created: 2026-03-02T17:32:41Z
++---
++
++## Candidate
++- Problem: the hot path was not command execution itself, but per-exec preparation (`normalizeOps` + mount wrapping + alias merge), causing high alloc/op and GC pressure.
++- Decision:
++  - Introduce `PreparedOps` (`Engine.PrepareOps` + `Engine.ExecutePrepared`) so ops normalization happens once and execution reuses compiled callbacks.
++  - Make `runtime.Stack` prepare once in `New` and always execute through `ExecutePrepared`.
++  - Keep `Engine.Execute` behavior-compatible by delegating to prepare+execute internally.
++  - Simplify alias expansion hot path to avoid re-normalizing alias maps on every command dispatch.
++- Validation:
++  - Functional: `go test ./...` passes.
++  - Performance benchmarks (5 runs): prepared path reduces both latency and allocations.
++    - `echo`: ~1.8us / 3336B / 56 allocs -> ~0.8-0.96us / 1048B / 22 allocs.
++    - `echo > file`: ~2.35-2.55us / 3536B / 61 allocs -> ~1.34-1.43us / 1248B / 27 allocs.
++
++## Promote To
++- `docs/.bagakit/memory/decision-execute-preflight-prepared-ops.md` (curated), or
++- `docs/<type>-<topic>.md` (normative/deep guide)
+diff --git a/docs/must-sop.md b/docs/must-sop.md
+index e4c269d..0ef87c1 100644
+--- a/docs/must-sop.md
++++ b/docs/must-sop.md
+@@ -4,7 +4,7 @@ This SOP is generated from docs frontmatter. Do not edit manually.
+ 
+ ## Update Requirements
+ - When a document with SOP frontmatter changes, regenerate this file and commit the result:
+-  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="${BAGAKIT_LIVING_DOCS_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-living-docs}"`
++  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="<path-to-bagakit-living-docs-skill>"`
+   - `sh "$BAGAKIT_LIVING_DOCS_SKILL_DIR/scripts/living-docs-generate-sop.sh" .`
+ - Add new SOP items by updating the `sop` list in the source document frontmatter.
+ - Keep SOP items small and actionable; use the source document for details.
+@@ -59,3 +59,9 @@ Source: `docs/notes-reusable-items-coding.md`
+ - When you remove or deprecate something, update this list and point to the replacement or migration.
+ - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+ 
++### Execute Preflight Performance References
++Source: `docs/refs/notes-execute-preflight-performance-refs.md`
++- Use this list before major runtime-performance refactors around per-exec setup overhead.
++- Update the actionable-takeaways section when adopting a new optimization strategy.
++- Regenerate docs/must-sop.md after SOP/frontmatter changes.
++
+diff --git a/docs/notes-reusable-items-coding.md b/docs/notes-reusable-items-coding.md
+index 1840c26..b300ea4 100644
+--- a/docs/notes-reusable-items-coding.md
++++ b/docs/notes-reusable-items-coding.md
+@@ -33,6 +33,7 @@ Examples: error handling patterns, feature flag patterns, logging/metrics conven
+ | `man` progressive disclosure guard | SHOULD | Need concise default manual output with escalation path to full details | `pkg/builtin/op_help_manual.go` |
+ | RC parser subset (`export` + `alias`) | SHOULD | Need deterministic startup customization from read-only mounted rc files while rejecting ambiguous shell constructs | `pkg/engine/orchestrator.go` |
+ | VirtualMount driver + mount-router composition | SHOULD | Need to project business context trees (memory/resources/skills) without coupling core to backend | `pkg/contract/mount_contract.go`, `pkg/engine/virtualfs_bridge.go` |
++| PreparedOps snapshot (`PrepareOps` + `ExecutePrepared`) | SHOULD | Need high-frequency command execution with stable callbacks; avoid repeating per-exec normalize/wrap/bootstrap work | `pkg/engine/orchestrator.go`, `pkg/engine/runtime/runtime_stack.go` |
+ 
+ ## Deprecations
+ - `pkg/builtin/manuals/*.md` -> `pkg/builtin/commands/*/manual.md` (remove duplicated manual sources and drift risk)
+diff --git a/docs/refs/notes-execute-preflight-performance-refs.md b/docs/refs/notes-execute-preflight-performance-refs.md
+new file mode 100644
+index 0000000..0f46498
+--- /dev/null
++++ b/docs/refs/notes-execute-preflight-performance-refs.md
+@@ -0,0 +1,65 @@
++---
++title: Execute Preflight Performance References
++required: false
++sop:
++  - Use this list before major runtime-performance refactors around per-exec setup overhead.
++  - Update the actionable-takeaways section when adopting a new optimization strategy.
++  - Regenerate docs/must-sop.md after SOP/frontmatter changes.
++---
++
++# Execute Preflight Performance References
++
++## Context
++This reference list targets one class of latency issue: **command execution is fast, but per-exec preparation is expensive** (normalization, wrapper construction, alias/env bootstrap, and short-lived allocations).
++
++## Curated Sources (Articles + Papers)
++
++1. Go diagnostics workflow (official)
++- Link: https://go.dev/doc/diagnostics
++- Why it matters: establishes the standard measure-first flow (profiling, tracing, benchmarking) before changing code.
++
++2. Profiling Go Programs (Go blog)
++- Link: https://go.dev/blog/profiling-go-programs
++- Why it matters: shows how to identify true hot paths and GC pressure with pprof instead of inferring from wall-clock only.
++
++3. A Guide to the Go Garbage Collector (official)
++- Link: https://go.dev/doc/gc-guide
++- Why it matters: explains allocation-rate vs GC-cost trade-offs; directly relevant when per-exec prep creates many short-lived objects.
++
++4. Profile-guided optimization (official)
++- Link: https://go.dev/doc/pgo
++- Why it matters: provides production-profile-driven optimization to improve hot code paths without manual micro-tuning everywhere.
++
++5. `golang.org/x/perf` + `benchstat` workflow
++- Link: https://pkg.go.dev/golang.org/x/perf
++- Why it matters: offers statistically sound benchmark comparisons for before/after optimization validation.
++
++6. `sync.Map` design intent (official package docs)
++- Link: https://pkg.go.dev/sync#Map
++- Why it matters: highlights read-heavy optimization patterns and safe trade-offs for cache-like access paths.
++
++7. Read-Copy Update (RCU) memory/latency trade-offs (paper)
++- Link: https://arxiv.org/abs/2406.11607
++- Why it matters: formalizes the read-mostly design principle (pay update cost once, keep read path cheap), matching precompute-once execute-many flows.
++
++8. A Verification Perspective on RCU (paper)
++- Link: https://arxiv.org/abs/1512.05438
++- Why it matters: gives a correctness model for read-mostly concurrency patterns, useful when introducing cached/prepared execution artifacts.
++
++## Actionable Takeaways for simsh
++
++- Separate cold path from hot path:
++  - Cold path: ops validation, mount routing composition, alias/env/rc normalization.
++  - Hot path: parse + dispatch + builtin/external execution.
++
++- Prefer precompute/reuse for read-mostly execution:
++  - Build a prepared execution snapshot once per runtime instance.
++  - Reuse it across commands instead of re-running normalization every `Execute`.
++
++- Validate optimizations with statistical rigor:
++  - Keep microbenchmarks for representative commands (e.g. `echo`, redirect write).
++  - Compare with `benchstat` and track allocs/op, B/op, and ns/op.
++
++- Keep correctness guardrails:
++  - Add behavior-equivalence tests between default execute path and prepared execute path.
++  - Keep policy/timeout and path-access semantics unchanged.
+diff --git a/pkg/cmd/console_tui.go b/pkg/cmd/console_tui.go
+index 3795dcf..70182ad 100644
+--- a/pkg/cmd/console_tui.go
++++ b/pkg/cmd/console_tui.go
+@@ -16,12 +16,13 @@ import (
+ )
+ 
+ type ConsoleOptions struct {
+-	Profile  string
+-	Policy   string
+-	HostRoot string
+-	Mounts   []string
+-	Input    io.Reader
+-	Output   io.Writer
++	Profile   string
++	Policy    string
++	HostRoot  string
++	SessionID string
++	Mounts    []string
++	Input     io.Reader
++	Output    io.Writer
+ }
+ 
+ type executeResultMsg struct {
+@@ -31,11 +32,12 @@ type executeResultMsg struct {
+ 
+ type consoleModel struct {
+ 	ctx context.Context
+-	env *Environment
++	env Executor
+ 
+ 	profile string
+ 	policy  string
+ 	hostDir string
++	session string
+ 	mounts  string
+ 
+ 	input   textinput.Model
+@@ -51,7 +53,7 @@ type consoleModel struct {
+ 	transcript   []string
+ }
+ 
+-func RunConsoleTUI(ctx context.Context, env *Environment, opts ConsoleOptions) error {
++func RunConsoleTUI(ctx context.Context, env Executor, opts ConsoleOptions) error {
+ 	model := newConsoleModel(ctx, env, opts)
+ 	programOptions := []tea.ProgramOption{tea.WithAltScreen()}
+ 	if opts.Input != nil {
+@@ -65,7 +67,7 @@ func RunConsoleTUI(ctx context.Context, env *Environment, opts ConsoleOptions) e
+ 	return err
+ }
+ 
+-func newConsoleModel(ctx context.Context, env *Environment, opts ConsoleOptions) consoleModel {
++func newConsoleModel(ctx context.Context, env Executor, opts ConsoleOptions) consoleModel {
+ 	in := textinput.New()
+ 	in.Placeholder = "Enter command and press Enter"
+ 	in.Focus()
+@@ -95,6 +97,7 @@ func newConsoleModel(ctx context.Context, env *Environment, opts ConsoleOptions)
+ 		profile: strings.TrimSpace(opts.Profile),
+ 		policy:  strings.TrimSpace(opts.Policy),
+ 		hostDir: root,
++		session: strings.TrimSpace(opts.SessionID),
+ 		mounts:  mounts,
+ 		input:   in,
+ 		output:  view,
+@@ -190,7 +193,7 @@ func (m consoleModel) View() string {
+ 	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
+ 
+ 	title := titleStyle.Width(topWidth).Render("simsh command runtime")
+-	meta := metaStyle.Render("root=" + m.hostDir)
++	meta := metaStyle.Render(fmt.Sprintf("root=%s session=%s", m.hostDir, fallbackConsoleLabel(m.session, "ephemeral")))
+ 	statusBar := statusStyle.Width(topWidth).Render(statusLine)
+ 	outputPane := outputStyle.Render(m.output.View())
+ 	inputPane := inputStyle.Render(m.input.View())
+@@ -199,13 +202,21 @@ func (m consoleModel) View() string {
+ 	return lipgloss.JoinVertical(lipgloss.Left, title, meta, statusBar, outputPane, inputPane, help)
+ }
+ 
+-func runCommand(ctx context.Context, env *Environment, commandLine string) tea.Cmd {
++func runCommand(ctx context.Context, env Executor, commandLine string) tea.Cmd {
+ 	return func() tea.Msg {
+ 		out, code := env.Execute(ctx, commandLine)
+ 		return executeResultMsg{Output: out, ExitCode: code}
+ 	}
+ }
+ 
++func fallbackConsoleLabel(value string, fallback string) string {
++	label := strings.TrimSpace(value)
++	if label == "" {
++		return fallback
++	}
++	return label
++}
++
+ func (m *consoleModel) resize(width, height int) {
+ 	m.width = width
+ 	m.height = height
+diff --git a/pkg/cmd/runtime_env.go b/pkg/cmd/runtime_env.go
+index 89a5279..34e7132 100644
+--- a/pkg/cmd/runtime_env.go
++++ b/pkg/cmd/runtime_env.go
+@@ -1,6 +1,7 @@
+ package cmd
+ 
+ import (
++	"context"
+ 	"strings"
+ 
+ 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
+@@ -10,6 +11,9 @@ import (
+ 
+ type EnvironmentOptions = runtimeengine.Options
+ type Environment = runtimeengine.Stack
++type Executor interface {
++	Execute(ctx context.Context, commandLine string) (string, int)
++}
+ 
+ func NewEnvironment(opts EnvironmentOptions) (*Environment, error) {
+ 	return runtimeengine.New(opts)
+diff --git a/pkg/contract/adapter_contract.go b/pkg/contract/adapter_contract.go
+new file mode 100644
+index 0000000..fa85da9
+--- /dev/null
++++ b/pkg/contract/adapter_contract.go
+@@ -0,0 +1,35 @@
++package contract
++
++import (
++	"context"
++	"encoding/json"
++)
++
++type MemoryProjection struct {
++	Mount     VirtualMount
++	Freshness string
++}
++
++type AdapterProjection struct {
++	VirtualMounts []VirtualMount
++	Memory        MemoryProjection
++	OpaqueState   json.RawMessage
++}
++
++func (p AdapterProjection) ProjectionMounts() []VirtualMount {
++	mounts := make([]VirtualMount, 0, len(p.VirtualMounts)+1)
++	mounts = append(mounts, p.VirtualMounts...)
++	if p.Memory.Mount != nil {
++		mounts = append(mounts, p.Memory.Mount)
++	}
++	return mounts
++}
++
++type SessionAdapter interface {
++	AdapterID() string
++	CreateSession(ctx context.Context, session Session) (AdapterProjection, error)
++	ResumeSession(ctx context.Context, session Session) (AdapterProjection, error)
++	ObserveExecution(ctx context.Context, session Session, result ExecutionResult) (AdapterProjection, error)
++	CheckpointSession(ctx context.Context, session Session) (AdapterProjection, error)
++	CloseSession(ctx context.Context, session Session) (AdapterProjection, error)
++}
+diff --git a/pkg/contract/execution_result.go b/pkg/contract/execution_result.go
+new file mode 100644
+index 0000000..ed42dde
+--- /dev/null
++++ b/pkg/contract/execution_result.go
+@@ -0,0 +1,65 @@
++package contract
++
++import (
++	"strings"
++	"time"
++)
++
++// ExecutionResult is the structured source of truth for one execution.
++type ExecutionResult struct {
++	ExecutionID string         `json:"execution_id"`
++	SessionID   string         `json:"session_id,omitempty"`
++	ExitCode    int            `json:"exit_code"`
++	Stdout      string         `json:"stdout"`
++	Stderr      string         `json:"stderr"`
++	StartedAt   time.Time      `json:"started_at"`
++	FinishedAt  time.Time      `json:"finished_at"`
++	DurationMS  int64          `json:"duration_ms"`
++	Trace       ExecutionTrace `json:"trace"`
++}
++
++// ExecutionTrace is the machine-consumable execution summary attached to results.
++type ExecutionTrace struct {
++	CommandLine      string               `json:"command_line,omitempty"`
++	Command          string               `json:"command,omitempty"`
++	Argv             []string             `json:"argv,omitempty"`
++	Pipeline         []ExecutionTraceStep `json:"pipeline,omitempty"`
++	EffectiveProfile CompatibilityProfile `json:"effective_profile,omitempty"`
++	EffectivePolicy  ExecutionPolicy      `json:"effective_policy"`
++	TimedOut         bool                 `json:"timed_out,omitempty"`
++	Canceled         bool                 `json:"canceled,omitempty"`
++	RequestedPaths   []string             `json:"requested_paths,omitempty"`
++	ReadPaths        []string             `json:"read_paths,omitempty"`
++	WrittenPaths     []string             `json:"written_paths,omitempty"`
++	AppendedPaths    []string             `json:"appended_paths,omitempty"`
++	EditedPaths      []string             `json:"edited_paths,omitempty"`
++	CreatedDirs      []string             `json:"created_dirs,omitempty"`
++	RemovedPaths     []string             `json:"removed_paths,omitempty"`
++	DeniedPaths      []string             `json:"denied_paths,omitempty"`
++	BytesRead        int                  `json:"bytes_read,omitempty"`
++	BytesWritten     int                  `json:"bytes_written,omitempty"`
++	OutputTruncated  bool                 `json:"output_truncated,omitempty"`
++}
++
++type ExecutionTraceStep struct {
++	Command string   `json:"command"`
++	Argv    []string `json:"argv,omitempty"`
++}
++
++func (r ExecutionResult) FlattenOutput() string {
++	switch {
++	case r.Stdout == "":
++		return r.Stderr
++	case r.Stderr == "":
++		return r.Stdout
++	case strings.HasSuffix(r.Stdout, "\n"):
++		return r.Stdout + r.Stderr
++	default:
++		return r.Stdout + "\n" + r.Stderr
++	}
++}
++
++func (r ExecutionResult) WithSessionID(sessionID string) ExecutionResult {
++	r.SessionID = strings.TrimSpace(sessionID)
++	return r
++}
+diff --git a/pkg/contract/safety_policy.go b/pkg/contract/safety_policy.go
+index fe640c7..6369d05 100644
+--- a/pkg/contract/safety_policy.go
++++ b/pkg/contract/safety_policy.go
+@@ -1,11 +1,14 @@
+ package contract
+ 
+ import (
++	"errors"
+ 	"fmt"
+ 	"strings"
+ 	"time"
+ )
+ 
++var ErrPolicyCeilingExceeded = errors.New("requested policy exceeds session ceiling")
++
+ type WriteMode string
+ 
+ const (
+@@ -34,6 +37,10 @@ func DefaultPolicy() ExecutionPolicy {
+ 	}
+ }
+ 
++func (p ExecutionPolicy) Clone() ExecutionPolicy {
++	return p
++}
++
+ func PolicyPreset(name string) (ExecutionPolicy, error) {
+ 	policy := DefaultPolicy()
+ 	switch strings.TrimSpace(name) {
+@@ -60,6 +67,75 @@ func (p ExecutionPolicy) AllowWrite() bool {
+ 	}
+ }
+ 
++func (p ExecutionPolicy) WithInheritedUnset(limit ExecutionPolicy) ExecutionPolicy {
++	out := p
++	if out.WriteMode == "" {
++		out.WriteMode = limit.WriteMode
++	}
++	if out.MaxWriteBytes == 0 {
++		out.MaxWriteBytes = limit.MaxWriteBytes
++	}
++	if out.MaxPipelineDepth == 0 {
++		out.MaxPipelineDepth = limit.MaxPipelineDepth
++	}
++	if out.MaxOutputBytes == 0 {
++		out.MaxOutputBytes = limit.MaxOutputBytes
++	}
++	if out.Timeout == 0 {
++		out.Timeout = limit.Timeout
++	}
++	return out
++}
++
++func PolicyWithinCeiling(requested ExecutionPolicy, ceiling ExecutionPolicy) error {
++	if writeModeRank(requested.WriteMode) > writeModeRank(ceiling.WriteMode) {
++		return fmt.Errorf("%w: requested write mode %q exceeds session ceiling %q", ErrPolicyCeilingExceeded, requested.WriteMode, ceiling.WriteMode)
++	}
++	if ceiling.WriteMode == WriteModeWriteLimited && requested.WriteMode == WriteModeWriteLimited &&
++		ceiling.MaxWriteBytes > 0 && requested.MaxWriteBytes > ceiling.MaxWriteBytes {
++		return fmt.Errorf("%w: requested max_write_bytes %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxWriteBytes, ceiling.MaxWriteBytes)
++	}
++	if ceiling.MaxPipelineDepth > 0 && requested.MaxPipelineDepth > ceiling.MaxPipelineDepth {
++		return fmt.Errorf("%w: requested max_pipeline_depth %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxPipelineDepth, ceiling.MaxPipelineDepth)
++	}
++	if ceiling.MaxOutputBytes > 0 && requested.MaxOutputBytes > ceiling.MaxOutputBytes {
++		return fmt.Errorf("%w: requested max_output_bytes %d exceeds session ceiling %d", ErrPolicyCeilingExceeded, requested.MaxOutputBytes, ceiling.MaxOutputBytes)
++	}
++	if ceiling.Timeout > 0 && requested.Timeout > ceiling.Timeout {
++		return fmt.Errorf("%w: requested timeout %s exceeds session ceiling %s", ErrPolicyCeilingExceeded, requested.Timeout, ceiling.Timeout)
++	}
++	return nil
++}
++
++func EffectivePolicyWithinCeiling(requested ExecutionPolicy, ceiling ExecutionPolicy) (ExecutionPolicy, error) {
++	if ceiling.WriteMode == "" {
++		ceiling = DefaultPolicy()
++	}
++	effective := requested.WithInheritedUnset(ceiling)
++	if effective.WriteMode == "" {
++		effective.WriteMode = ceiling.WriteMode
++	}
++	if err := PolicyWithinCeiling(effective, ceiling); err != nil {
++		return ExecutionPolicy{}, err
++	}
++	return effective, nil
++}
++
++func writeModeRank(mode WriteMode) int {
++	switch mode {
++	case WriteModeDisabled:
++		return 0
++	case WriteModeReadOnly:
++		return 1
++	case WriteModeWriteLimited:
++		return 2
++	case WriteModeFull:
++		return 3
++	default:
++		return 1
++	}
++}
++
+ // CheckWriteSize returns an error if writing contentLen bytes is not allowed by policy.
+ func (p ExecutionPolicy) CheckWriteSize(contentLen int) error {
+ 	if !p.AllowWrite() {
+diff --git a/pkg/contract/session_contract.go b/pkg/contract/session_contract.go
+new file mode 100644
+index 0000000..78dc999
+--- /dev/null
++++ b/pkg/contract/session_contract.go
+@@ -0,0 +1,45 @@
++package contract
++
++import (
++	"encoding/json"
++	"time"
++)
++
++// Session captures resumable runtime state across execute calls.
++type Session struct {
++	SessionID     string               `json:"session_id"`
++	CreatedAt     time.Time            `json:"created_at"`
++	UpdatedAt     time.Time            `json:"updated_at"`
++	Profile       CompatibilityProfile `json:"profile"`
++	PolicyCeiling ExecutionPolicy      `json:"policy_ceiling"`
++	State         SessionState         `json:"state"`
++}
++
++// SessionState keeps only runtime-scoped continuation data.
++type SessionState struct {
++	CommandAliases map[string][]string        `json:"command_aliases,omitempty"`
++	EnvVars        map[string]string          `json:"env_vars,omitempty"`
++	RCFiles        []string                   `json:"rc_files,omitempty"`
++	Opaque         map[string]json.RawMessage `json:"opaque,omitempty"`
++}
++
++func (s Session) Clone() Session {
++	s.State = s.State.Clone()
++	s.PolicyCeiling = s.PolicyCeiling.Clone()
++	return s
++}
++
++func (s SessionState) Clone() SessionState {
++	out := SessionState{
++		CommandAliases: NormalizeCommandAliases(s.CommandAliases),
++		EnvVars:        NormalizeEnvVars(s.EnvVars),
++		RCFiles:        NormalizeRCFiles(s.RCFiles),
++	}
++	if len(s.Opaque) > 0 {
++		out.Opaque = make(map[string]json.RawMessage, len(s.Opaque))
++		for key, value := range s.Opaque {
++			out.Opaque[key] = append(json.RawMessage(nil), value...)
++		}
++	}
++	return out
++}
+diff --git a/pkg/engine/engine_benchmark_test.go b/pkg/engine/engine_benchmark_test.go
+new file mode 100644
+index 0000000..0d1e70f
+--- /dev/null
++++ b/pkg/engine/engine_benchmark_test.go
+@@ -0,0 +1,78 @@
++package engine_test
++
++import (
++	"context"
++	"testing"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
++
++func BenchmarkEngineExecuteEcho(b *testing.B) {
++	eng := newTestEngine()
++	ops := contract.OpsFromFilesystem(newTestFS())
++	ctx := context.Background()
++
++	b.ReportAllocs()
++	b.ResetTimer()
++	for i := 0; i < b.N; i++ {
++		out, code := eng.Execute(ctx, "echo hello", ops)
++		if code != 0 || out != "hello" {
++			b.Fatalf("unexpected result: code=%d out=%q", code, out)
++		}
++	}
++}
++
++func BenchmarkEngineExecutePreparedEcho(b *testing.B) {
++	eng := newTestEngine()
++	ops := contract.OpsFromFilesystem(newTestFS())
++	prepared, err := eng.PrepareOps(context.Background(), ops)
++	if err != nil {
++		b.Fatalf("prepare ops failed: %v", err)
++	}
++	ctx := context.Background()
++
++	b.ReportAllocs()
++	b.ResetTimer()
++	for i := 0; i < b.N; i++ {
++		out, code := eng.ExecutePrepared(ctx, "echo hello", prepared)
++		if code != 0 || out != "hello" {
++			b.Fatalf("unexpected result: code=%d out=%q", code, out)
++		}
++	}
++}
++
++func BenchmarkEngineExecuteRedirectWrite(b *testing.B) {
++	eng := newTestEngine()
++	fs := newTestFS()
++	ops := writableOps(fs)
++	ctx := context.Background()
++
++	b.ReportAllocs()
++	b.ResetTimer()
++	for i := 0; i < b.N; i++ {
++		out, code := eng.Execute(ctx, "echo hello > /workspace/out.txt", ops)
++		if code != 0 || out != "" {
++			b.Fatalf("unexpected result: code=%d out=%q", code, out)
++		}
++	}
++}
++
++func BenchmarkEngineExecutePreparedRedirectWrite(b *testing.B) {
++	eng := newTestEngine()
++	fs := newTestFS()
++	ops := writableOps(fs)
++	prepared, err := eng.PrepareOps(context.Background(), ops)
++	if err != nil {
++		b.Fatalf("prepare ops failed: %v", err)
++	}
++	ctx := context.Background()
++
++	b.ReportAllocs()
++	b.ResetTimer()
++	for i := 0; i < b.N; i++ {
++		out, code := eng.ExecutePrepared(ctx, "echo hello > /workspace/out.txt", prepared)
++		if code != 0 || out != "" {
++			b.Fatalf("unexpected result: code=%d out=%q", code, out)
++		}
++	}
++}
+diff --git a/pkg/engine/engine_test.go b/pkg/engine/engine_test.go
+index 30084ec..a52b8c6 100644
+--- a/pkg/engine/engine_test.go
++++ b/pkg/engine/engine_test.go
+@@ -712,6 +712,114 @@ func writeLimitedOps(fs contract.Filesystem, maxBytes int) contract.Ops {
+ 	return ops
+ }
+ 
++func TestExecutePreparedMatchesExecute(t *testing.T) {
++	eng := newTestEngine()
++	ops := readOnlyOps(newTestFS())
++	prepared, err := eng.PrepareOps(context.Background(), ops)
++	if err != nil {
++		t.Fatalf("prepare ops failed: %v", err)
++	}
++
++	for _, cmd := range []string{
++		"echo hello",
++		"ll /sys",
++		"man ls",
++		"grep hello /workspace/readme.md",
++	} {
++		wantOut, wantCode := eng.Execute(context.Background(), cmd, ops)
++		gotOut, gotCode := eng.ExecutePrepared(context.Background(), cmd, prepared)
++		if gotCode != wantCode {
++			t.Fatalf("command %q: code=%d want=%d", cmd, gotCode, wantCode)
++		}
++		if gotOut != wantOut {
++			t.Fatalf("command %q: output mismatch\ngot:  %q\nwant: %q", cmd, gotOut, wantOut)
++		}
++	}
++}
++
++func TestExecutePreparedAllocReduction(t *testing.T) {
++	eng := newTestEngine()
++	ops := readOnlyOps(newTestFS())
++	// Force non-cacheable Execute path so this test continues to measure
++	// PrepareOps overhead against ExecutePrepared.
++	ops.CommandAliases = map[string][]string{"noop": {"echo"}}
++	prepared, err := eng.PrepareOps(context.Background(), ops)
++	if err != nil {
++		t.Fatalf("prepare ops failed: %v", err)
++	}
++
++	command := "echo hello"
++	baseAllocs := testing.AllocsPerRun(1000, func() {
++		out, code := eng.Execute(context.Background(), command, ops)
++		if code != 0 || out != "hello" {
++			t.Fatalf("execute failed: code=%d out=%q", code, out)
++		}
++	})
++	preparedAllocs := testing.AllocsPerRun(1000, func() {
++		out, code := eng.ExecutePrepared(context.Background(), command, prepared)
++		if code != 0 || out != "hello" {
++			t.Fatalf("execute prepared failed: code=%d out=%q", code, out)
++		}
++	})
++
++	if preparedAllocs >= baseAllocs {
++		t.Fatalf("expected prepared execution to allocate less: prepared=%.2f base=%.2f", preparedAllocs, baseAllocs)
++	}
++}
++
++func TestExecuteCachesPreparedOpsForStableOps(t *testing.T) {
++	eng := newTestEngine()
++	ops := readOnlyOps(newTestFS())
++
++	// Prime Execute-level cache.
++	_, _ = eng.Execute(context.Background(), "echo hello", ops)
++
++	warmAllocs := testing.AllocsPerRun(1000, func() {
++		out, code := eng.Execute(context.Background(), "echo hello", ops)
++		if code != 0 || out != "hello" {
++			t.Fatalf("warm execute failed: code=%d out=%q", code, out)
++		}
++	})
++	prepared, err := eng.PrepareOps(context.Background(), ops)
++	if err != nil {
++		t.Fatalf("prepare ops failed: %v", err)
++	}
++	preparedAllocs := testing.AllocsPerRun(1000, func() {
++		out, code := eng.ExecutePrepared(context.Background(), "echo hello", prepared)
++		if code != 0 || out != "hello" {
++			t.Fatalf("prepared execute failed: code=%d out=%q", code, out)
++		}
++	})
++
++	if warmAllocs > preparedAllocs+1 {
++		t.Fatalf("expected warm execute to be close to prepared path: warm=%.2f prepared=%.2f", warmAllocs, preparedAllocs)
++	}
++}
++
++func TestExecuteCacheIsolationAcrossOpsInstances(t *testing.T) {
++	eng := newTestEngine()
++	fsA := newTestFS()
++	fsB := newTestFS()
++	fsB.mustWrite("/workspace/readme.md", "second fs\n")
++	opsA := readOnlyOps(fsA)
++	opsB := readOnlyOps(fsB)
++
++	outA, codeA := eng.Execute(context.Background(), "cat /workspace/readme.md", opsA)
++	if codeA != 0 {
++		t.Fatalf("execute with opsA failed: code=%d out=%q", codeA, outA)
++	}
++	outB, codeB := eng.Execute(context.Background(), "cat /workspace/readme.md", opsB)
++	if codeB != 0 {
++		t.Fatalf("execute with opsB failed: code=%d out=%q", codeB, outB)
++	}
++	if outA == outB {
++		t.Fatalf("expected cache isolation across ops instances, both outputs=%q", outA)
++	}
++	if strings.TrimSpace(outB) != "second fs" {
++		t.Fatalf("unexpected output from opsB: %q", outB)
++	}
++}
++
+ // ==================== Security Tests ====================
+ 
+ func TestSecurityTeeWritePolicy(t *testing.T) {
+diff --git a/pkg/engine/execution_result.go b/pkg/engine/execution_result.go
+new file mode 100644
+index 0000000..89c7169
+--- /dev/null
++++ b/pkg/engine/execution_result.go
+@@ -0,0 +1,69 @@
++package engine
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"sync/atomic"
++	"time"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
++
++var executionCounter uint64
++
++func nextExecutionID() string {
++	value := atomic.AddUint64(&executionCounter, 1)
++	return fmt.Sprintf("exec_%d", value)
++}
++
++func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prepared PreparedOps) contract.ExecutionResult {
++	startedAt := time.Now().UTC()
++	collector := newExecutionTraceCollector(cmdline, prepared.Ops())
++	result := contract.ExecutionResult{
++		ExecutionID: nextExecutionID(),
++		StartedAt:   startedAt,
++		Trace:       collector.Snapshot(),
++	}
++	if e == nil {
++		result.ExitCode = contract.ExitCodeGeneral
++		result.Stdout = "execute: runtime is not initialized"
++		result.FinishedAt = startedAt
++		return result
++	}
++
++	normalized := prepared.Ops()
++	if normalized.RequireAbsolutePath == nil {
++		result.ExitCode = contract.ExitCodeGeneral
++		result.Stdout = "execute: prepared ops are required"
++		result.FinishedAt = time.Now().UTC()
++		result.DurationMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
++		return result
++	}
++
++	execCtx := ctx
++	cancel := func() {}
++	if normalized.Policy.Timeout > 0 {
++		if deadline, ok := ctx.Deadline(); !ok || time.Until(deadline) > normalized.Policy.Timeout {
++			var cancelFunc context.CancelFunc
++			execCtx, cancelFunc = context.WithTimeout(ctx, normalized.Policy.Timeout)
++			cancel = cancelFunc
++		}
++	}
++	defer cancel()
++
++	execCtx = collector.WithContext(execCtx)
++	tracedOps := collector.WrapOps(normalized)
++
++	stdout, code := e.runScript(execCtx, cmdline, tracedOps)
++	result.ExitCode = code
++	result.Stdout = stdout
++	result.FinishedAt = time.Now().UTC()
++	result.DurationMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
++	result.Trace = collector.Snapshot()
++	if err := execCtx.Err(); err != nil {
++		result.Trace.TimedOut = result.Trace.TimedOut || errors.Is(err, context.DeadlineExceeded)
++		result.Trace.Canceled = result.Trace.Canceled || errors.Is(err, context.Canceled)
++	}
++	return result
++}
+diff --git a/pkg/engine/execution_result_test.go b/pkg/engine/execution_result_test.go
+new file mode 100644
+index 0000000..dbdefec
+--- /dev/null
++++ b/pkg/engine/execution_result_test.go
+@@ -0,0 +1,102 @@
++package engine_test
++
++import (
++	"context"
++	"testing"
++
++	"github.com/khicago/simsh/pkg/builtin"
++	"github.com/khicago/simsh/pkg/contract"
++	"github.com/khicago/simsh/pkg/engine"
++)
++
++func TestEngineExecuteResultStructuredFields(t *testing.T) {
++	registry := engine.NewRegistry()
++	builtin.RegisterDefaults(registry)
++	eng := engine.New(registry)
++	ops := contract.OpsFromFilesystem(newTestFS())
++	ops.Profile = contract.ProfileCoreStrict
++	ops.Policy = contract.DefaultPolicy()
++
++	result := eng.ExecuteResult(context.Background(), "echo hello", ops)
++	if result.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", result)
++	}
++	if result.ExitCode != 0 {
++		t.Fatalf("exit_code = %d, want 0", result.ExitCode)
++	}
++	if result.Stdout != "hello" || result.Stderr != "" {
++		t.Fatalf("unexpected stdout/stderr: %+v", result)
++	}
++	if result.Trace.CommandLine != "echo hello" {
++		t.Fatalf("unexpected trace: %+v", result.Trace)
++	}
++	if result.Trace.Command != "echo" || len(result.Trace.Pipeline) != 1 {
++		t.Fatalf("unexpected command shape: %+v", result.Trace)
++	}
++	if result.Trace.EffectiveProfile != contract.ProfileCoreStrict {
++		t.Fatalf("unexpected effective profile: %+v", result.Trace)
++	}
++	if result.Trace.EffectivePolicy.WriteMode != contract.WriteModeReadOnly {
++		t.Fatalf("unexpected effective policy: %+v", result.Trace.EffectivePolicy)
++	}
++}
++
++func TestEngineExecuteResultTracePaths(t *testing.T) {
++	registry := engine.NewRegistry()
++	builtin.RegisterDefaults(registry)
++	eng := engine.New(registry)
++	ops := contract.OpsFromFilesystem(newTestFS())
++	ops.Profile = contract.ProfileCoreStrict
++	ops.Policy = contract.ExecutionPolicy{
++		WriteMode:        contract.WriteModeFull,
++		MaxPipelineDepth: 16,
++		MaxOutputBytes:   4 << 20,
++		Timeout:          contract.DefaultPolicy().Timeout,
++	}
++
++	result := eng.ExecuteResult(context.Background(), "echo hello > /workspace/out.txt; cat /workspace/out.txt", ops)
++	if result.ExitCode != 0 {
++		t.Fatalf("unexpected exit_code=%d stdout=%q", result.ExitCode, result.Stdout)
++	}
++	if !containsTracePath(result.Trace.RequestedPaths, "/workspace/out.txt") {
++		t.Fatalf("expected requested path in trace: %+v", result.Trace)
++	}
++	if !containsTracePath(result.Trace.WrittenPaths, "/workspace/out.txt") {
++		t.Fatalf("expected written path in trace: %+v", result.Trace)
++	}
++	if !containsTracePath(result.Trace.ReadPaths, "/workspace/out.txt") {
++		t.Fatalf("expected read path in trace: %+v", result.Trace)
++	}
++	if result.Trace.BytesWritten == 0 || result.Trace.BytesRead == 0 {
++		t.Fatalf("expected resource summary bytes in trace: %+v", result.Trace)
++	}
++}
++
++func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
++	registry := engine.NewRegistry()
++	builtin.RegisterDefaults(registry)
++	eng := engine.New(registry)
++	ops := contract.OpsFromFilesystem(newTestFS())
++	ops.Profile = contract.ProfileCoreStrict
++	ops.Policy = contract.ExecutionPolicy{WriteMode: contract.WriteModeReadOnly, MaxOutputBytes: 1024}
++
++	denied := eng.ExecuteResult(context.Background(), "echo hello > /workspace/out.txt", ops)
++	if !containsTracePath(denied.Trace.DeniedPaths, "/workspace/out.txt") {
++		t.Fatalf("expected denied path in trace: %+v", denied.Trace)
++	}
++
++	ops.Policy = contract.ExecutionPolicy{WriteMode: contract.WriteModeReadOnly, MaxOutputBytes: 4}
++	truncated := eng.ExecuteResult(context.Background(), "echo hello", ops)
++	if !truncated.Trace.OutputTruncated {
++		t.Fatalf("expected output_truncated trace flag: %+v", truncated.Trace)
++	}
++}
++
++func containsTracePath(paths []string, target string) bool {
++	for _, pathValue := range paths {
++		if pathValue == target {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/pkg/engine/orchestrator.go b/pkg/engine/orchestrator.go
+index b30340a..11ddda4 100644
+--- a/pkg/engine/orchestrator.go
++++ b/pkg/engine/orchestrator.go
+@@ -7,7 +7,9 @@ import (
+ 	"path"
+ 	"sort"
+ 	"strings"
++	"sync"
+ 	"time"
++	"unsafe"
+ 
+ 	"github.com/khicago/simsh/pkg/contract"
+ 	"github.com/khicago/simsh/pkg/mount"
+@@ -16,6 +18,46 @@ import (
+ // Engine executes shell-like scripts using a command registry and injected ops.
+ type Engine struct {
+ 	registry *Registry
++
++	cacheMu     sync.RWMutex
++	cacheValid  bool
++	cacheKey    preparedCacheKey
++	cacheResult PreparedOps
++}
++
++// PreparedOps is a compiled execution callback set that can be safely reused
++// across many Execute calls to avoid repeated normalize/wrap/bootstrap work.
++type PreparedOps struct {
++	normalized contract.Ops
++}
++
++type preparedCacheKey struct {
++	rootDir string
++	profile contract.CompatibilityProfile
++	policy  contract.ExecutionPolicy
++
++	requireAbsolutePathID uintptr
++	listChildrenID        uintptr
++	isDirPathID           uintptr
++	describePathID        uintptr
++	formatLSLongRowID     uintptr
++	readRawContentID      uintptr
++	resolveSearchPathsID  uintptr
++	collectFilesUnderID   uintptr
++	writeFileID           uintptr
++	appendFileID          uintptr
++	editFileID            uintptr
++	makeDirID             uintptr
++	removeFileID          uintptr
++	removeDirID           uintptr
++	checkPathOpID         uintptr
++
++	listExternalCommandsID uintptr
++	runExternalCommandID   uintptr
++	readExternalManualID   uintptr
++	auditSinkID            uintptr
++
++	pathEnvHash uint64
+ }
+ 
+ type contextKey string
+@@ -41,17 +83,60 @@ func (e *Engine) BuiltinCommandDocs() []contract.BuiltinCommandDoc {
+ 	return e.registry.BuiltinCommandDocs()
+ }
+ 
+-func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
++// PrepareOps validates and compiles ops into an execution-ready form.
++func (e *Engine) PrepareOps(ctx context.Context, ops contract.Ops) (PreparedOps, error) {
+ 	normalized, err := e.normalizeOps(ctx, ops)
+ 	if err != nil {
+-		return fmt.Sprintf("execute: %v", err), contract.ExitCodeGeneral
++		return PreparedOps{}, err
+ 	}
+-	if normalized.Policy.Timeout > 0 {
+-		var cancel context.CancelFunc
+-		ctx, cancel = context.WithTimeout(ctx, normalized.Policy.Timeout)
+-		defer cancel()
++	return PreparedOps{normalized: normalized}, nil
++}
++
++// Ops returns the normalized callback set.
++func (p PreparedOps) Ops() contract.Ops {
++	return p.normalized
++}
++
++func (e *Engine) Execute(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
++	result := e.ExecuteResult(ctx, cmdline, ops)
++	return result.FlattenOutput(), result.ExitCode
++}
++
++// ExecutePrepared runs a command with pre-normalized ops.
++func (e *Engine) ExecutePrepared(ctx context.Context, cmdline string, prepared PreparedOps) (string, int) {
++	result := e.ExecutePreparedResult(ctx, cmdline, prepared)
++	return result.FlattenOutput(), result.ExitCode
++}
++
++func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract.Ops) contract.ExecutionResult {
++	if key, ok := buildPreparedCacheKey(ops); ok {
++		if cached, found := e.loadPreparedFromCache(key); found {
++			return e.ExecutePreparedResult(ctx, cmdline, cached)
++		}
++		prepared, err := e.PrepareOps(ctx, ops)
++		if err != nil {
++			return contract.ExecutionResult{
++				ExecutionID: nextExecutionID(),
++				ExitCode:    contract.ExitCodeGeneral,
++				Stdout:      fmt.Sprintf("execute: %v", err),
++				StartedAt:   time.Now().UTC(),
++				FinishedAt:  time.Now().UTC(),
++			}
++		}
++		e.storePreparedInCache(key, prepared)
++		return e.ExecutePreparedResult(ctx, cmdline, prepared)
+ 	}
+-	return e.runScript(ctx, cmdline, normalized)
++	prepared, err := e.PrepareOps(ctx, ops)
++	if err != nil {
++		return contract.ExecutionResult{
++			ExecutionID: nextExecutionID(),
++			ExitCode:    contract.ExitCodeGeneral,
++			Stdout:      fmt.Sprintf("execute: %v", err),
++			StartedAt:   time.Now().UTC(),
++			FinishedAt:  time.Now().UTC(),
++		}
++	}
++	return e.ExecutePreparedResult(ctx, cmdline, prepared)
+ }
+ 
+ func (e *Engine) ExecuteWithFilesystem(ctx context.Context, cmdline string, fs contract.Filesystem) (string, int) {
+@@ -61,6 +146,105 @@ func (e *Engine) ExecuteWithFilesystem(ctx context.Context, cmdline string, fs c
+ 	return e.Execute(ctx, cmdline, contract.OpsFromFilesystem(fs))
+ }
+ 
++func (e *Engine) loadPreparedFromCache(key preparedCacheKey) (PreparedOps, bool) {
++	e.cacheMu.RLock()
++	defer e.cacheMu.RUnlock()
++	if !e.cacheValid || e.cacheKey != key {
++		return PreparedOps{}, false
++	}
++	return e.cacheResult, true
++}
++
++func (e *Engine) storePreparedInCache(key preparedCacheKey, prepared PreparedOps) {
++	e.cacheMu.Lock()
++	defer e.cacheMu.Unlock()
++	e.cacheKey = key
++	e.cacheResult = prepared
++	e.cacheValid = true
++}
++
++func buildPreparedCacheKey(ops contract.Ops) (preparedCacheKey, bool) {
++	// Cache is only safe for the stable no-bootstrap/no-overlay path.
++	if len(ops.CommandAliases) > 0 || len(ops.EnvVars) > 0 || len(ops.RCFiles) > 0 || len(ops.VirtualMounts) > 0 {
++		return preparedCacheKey{}, false
++	}
++
++	policy := ops.Policy
++	if policy.WriteMode == "" {
++		policy = contract.DefaultPolicy()
++	}
++	profile := ops.Profile
++	if profile == "" {
++		profile = contract.DefaultProfile()
++	}
++	if _, err := contract.ParseProfile(string(profile)); err != nil {
++		return preparedCacheKey{}, false
++	}
++
++	key := preparedCacheKey{
++		rootDir: strings.TrimSpace(ops.RootDir),
++		profile: profile,
++		policy:  policy,
++
++		requireAbsolutePathID: funcValueIdentity(ops.RequireAbsolutePath),
++		listChildrenID:        funcValueIdentity(ops.ListChildren),
++		isDirPathID:           funcValueIdentity(ops.IsDirPath),
++		describePathID:        funcValueIdentity(ops.DescribePath),
++		formatLSLongRowID:     funcValueIdentity(ops.FormatLSLongRow),
++		readRawContentID:      funcValueIdentity(ops.ReadRawContent),
++		resolveSearchPathsID:  funcValueIdentity(ops.ResolveSearchPaths),
++		collectFilesUnderID:   funcValueIdentity(ops.CollectFilesUnder),
++		writeFileID:           funcValueIdentity(ops.WriteFile),
++		appendFileID:          funcValueIdentity(ops.AppendFile),
++		editFileID:            funcValueIdentity(ops.EditFile),
++		makeDirID:             funcValueIdentity(ops.MakeDir),
++		removeFileID:          funcValueIdentity(ops.RemoveFile),
++		removeDirID:           funcValueIdentity(ops.RemoveDir),
++		checkPathOpID:         funcValueIdentity(ops.CheckPathOp),
++
++		listExternalCommandsID: funcValueIdentity(ops.ListExternalCommands),
++		runExternalCommandID:   funcValueIdentity(ops.RunExternalCommand),
++		readExternalManualID:   funcValueIdentity(ops.ReadExternalManual),
++		auditSinkID:            interfaceIdentity(ops.AuditSink),
++		pathEnvHash:            stableStringSliceHash(ops.PathEnv),
++	}
++	if key.rootDir == "" {
++		key.rootDir = "/"
++	}
++	if key.requireAbsolutePathID == 0 || key.listChildrenID == 0 || key.isDirPathID == 0 || key.readRawContentID == 0 || key.resolveSearchPathsID == 0 || key.collectFilesUnderID == 0 {
++		return preparedCacheKey{}, false
++	}
++	return key, true
++}
++
++func stableStringSliceHash(values []string) uint64 {
++	var h uint64 = 1469598103934665603
++	for _, value := range values {
++		for idx := 0; idx < len(value); idx++ {
++			h ^= uint64(value[idx])
++			h *= 1099511628211
++		}
++		h ^= 0
++		h *= 1099511628211
++	}
++	return h
++}
++
++func funcValueIdentity(fn any) uintptr {
++	return interfaceIdentity(fn)
++}
++
++func interfaceIdentity(v any) uintptr {
++	if v == nil {
++		return 0
++	}
++	type eface struct {
++		typ  unsafe.Pointer
++		data unsafe.Pointer
++	}
++	return uintptr((*eface)(unsafe.Pointer(&v)).data)
++}
++
+ func (e *Engine) normalizeOps(ctx context.Context, ops contract.Ops) (contract.Ops, error) {
+ 	if strings.TrimSpace(ops.RootDir) == "" {
+ 		ops.RootDir = "/"
+@@ -393,10 +577,15 @@ func expandCommandAlias(args []string, aliases map[string][]string) ([]string, e
+ 			return nil, fmt.Errorf("alias loop detected at %q", name)
+ 		}
+ 		seen[name] = struct{}{}
+-		tokens := contract.NormalizeCommandAliases(map[string][]string{name: expansion})[name]
++		tokens := expansion
+ 		if len(tokens) == 0 {
+ 			return nil, fmt.Errorf("alias %q has empty expansion", name)
+ 		}
++		for _, token := range tokens {
++			if strings.TrimSpace(token) == "" {
++				return nil, fmt.Errorf("alias %q has empty expansion", name)
++			}
++		}
+ 		next := make([]string, 0, len(tokens)+len(current)-1)
+ 		next = append(next, tokens...)
+ 		next = append(next, current[1:]...)
+@@ -500,10 +689,10 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
+ 			ExitCode: code,
+ 			Message:  strings.TrimSpace(out),
+ 		})
+-		return enforceOutputLimit(out, code, ops.Policy)
++		return enforceOutputLimit(ctx, out, code, ops.Policy)
+ 	}
+ 	out, code := e.runExternalCommand(ctx, rawCmd, args[1:], input, hasInput, ops)
+-	return enforceOutputLimit(out, code, ops.Policy)
++	return enforceOutputLimit(ctx, out, code, ops.Policy)
+ }
+ 
+ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) (string, int) {
+@@ -553,8 +742,9 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
+ 	return result.Stdout, result.ExitCode
+ }
+ 
+-func enforceOutputLimit(out string, code int, policy contract.ExecutionPolicy) (string, int) {
++func enforceOutputLimit(ctx context.Context, out string, code int, policy contract.ExecutionPolicy) (string, int) {
+ 	if policy.MaxOutputBytes > 0 && len(out) > policy.MaxOutputBytes {
++		markTraceOutputTruncated(ctx)
+ 		return fmt.Sprintf("execute: output exceeds limit (%d bytes)", policy.MaxOutputBytes), contract.ExitCodeGeneral
+ 	}
+ 	return out, code
+diff --git a/pkg/engine/runtime/runtime_stack.go b/pkg/engine/runtime/runtime_stack.go
+index 50293f9..29c1e07 100644
+--- a/pkg/engine/runtime/runtime_stack.go
++++ b/pkg/engine/runtime/runtime_stack.go
+@@ -2,6 +2,7 @@ package runtime
+ 
+ import (
+ 	"context"
++	"time"
+ 
+ 	"github.com/khicago/simsh/pkg/builtin"
+ 	"github.com/khicago/simsh/pkg/contract"
+@@ -17,6 +18,8 @@ type Options struct {
+ 	CommandAliases    map[string][]string
+ 	EnvVars           map[string]string
+ 	RCFiles           []string
++	VirtualMounts     []contract.VirtualMount
++	Adapters          []contract.SessionAdapter
+ 	EnableTestCorpus  bool
+ 	PathEnv           []string
+ 	ExternalCallbacks fs.ExternalCallbacks
+@@ -26,8 +29,9 @@ type Options struct {
+ 
+ // Stack composes shell execution engine with filesystem callbacks.
+ type Stack struct {
+-	engine *engine.Engine
+-	ops    contract.Ops
++	engine   *engine.Engine
++	ops      contract.Ops
++	prepared engine.PreparedOps
+ }
+ 
+ // New composes the runtime from builtin shell engine and fs adapters.
+@@ -43,6 +47,7 @@ func New(opts Options) (*Stack, error) {
+ 		CommandAliases:    opts.CommandAliases,
+ 		EnvVars:           opts.EnvVars,
+ 		RCFiles:           opts.RCFiles,
++		VirtualMounts:     append([]contract.VirtualMount(nil), opts.VirtualMounts...),
+ 		PathEnv:           opts.PathEnv,
+ 		EnableTestCorpus:  opts.EnableTestCorpus,
+ 		ExternalCallbacks: opts.ExternalCallbacks,
+@@ -52,20 +57,39 @@ func New(opts Options) (*Stack, error) {
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	return &Stack{engine: core, ops: ops}, nil
++	prepared, err := core.PrepareOps(context.Background(), ops)
++	if err != nil {
++		return nil, err
++	}
++	return &Stack{engine: core, ops: ops, prepared: prepared}, nil
+ }
+ 
+ func (r *Stack) Execute(ctx context.Context, commandLine string) (string, int) {
++	result := r.ExecuteResult(ctx, commandLine)
++	return result.FlattenOutput(), result.ExitCode
++}
++
++func (r *Stack) ExecuteResult(ctx context.Context, commandLine string) contract.ExecutionResult {
+ 	if r == nil || r.engine == nil {
+-		return "execute: runtime is not initialized", contract.ExitCodeGeneral
++		now := time.Now().UTC()
++		return contract.ExecutionResult{
++			ExecutionID: "",
++			ExitCode:    contract.ExitCodeGeneral,
++			Stdout:      "execute: runtime is not initialized",
++			StartedAt:   now,
++			FinishedAt:  now,
++		}
+ 	}
+-	return r.engine.Execute(ctx, commandLine, r.ops)
++	return r.engine.ExecutePreparedResult(ctx, commandLine, r.prepared)
+ }
+ 
+ func (r *Stack) Ops() contract.Ops {
+ 	if r == nil {
+ 		return contract.Ops{}
+ 	}
++	if prepared := r.prepared.Ops(); prepared.RequireAbsolutePath != nil {
++		return prepared
++	}
+ 	return r.ops
+ }
+ 
+@@ -75,3 +99,15 @@ func (r *Stack) BuiltinDocs() []contract.BuiltinCommandDoc {
+ 	}
+ 	return r.engine.BuiltinCommandDocs()
+ }
++
++func (r *Stack) SessionState(rcFiles []string) contract.SessionState {
++	if r == nil {
++		return contract.SessionState{RCFiles: contract.NormalizeRCFiles(rcFiles)}
++	}
++	ops := r.Ops()
++	return contract.SessionState{
++		CommandAliases: contract.NormalizeCommandAliases(ops.CommandAliases),
++		EnvVars:        contract.NormalizeEnvVars(ops.EnvVars),
++		RCFiles:        contract.NormalizeRCFiles(rcFiles),
++	}
++}
+diff --git a/pkg/engine/runtime/runtime_stack_test.go b/pkg/engine/runtime/runtime_stack_test.go
+index e642d49..1e4f20b 100644
+--- a/pkg/engine/runtime/runtime_stack_test.go
++++ b/pkg/engine/runtime/runtime_stack_test.go
+@@ -57,3 +57,59 @@ func TestRuntimeRespectsPolicy(t *testing.T) {
+ 		t.Fatalf("exit code = %d, want %d", code, contract.ExitCodeUnsupported)
+ 	}
+ }
++
++func TestRuntimeOpsUsesPreparedPathMetadata(t *testing.T) {
++	runtime, err := New(Options{
++		HostRoot: t.TempDir(),
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.DefaultPolicy(),
++	})
++	if err != nil {
++		t.Fatalf("new runtime failed: %v", err)
++	}
++
++	meta, err := runtime.Ops().DescribePath(context.Background(), "/sys")
++	if err != nil {
++		t.Fatalf("describe /sys failed: %v", err)
++	}
++	if !meta.Exists || !meta.IsDir {
++		t.Fatalf("expected /sys to be a virtual dir, got %+v", meta)
++	}
++	if meta.Access != contract.PathAccessReadOnly {
++		t.Fatalf("expected /sys access=ro, got %q", meta.Access)
++	}
++}
++
++func TestRuntimeExecuteResultStructuredFields(t *testing.T) {
++	runtime, err := New(Options{
++		HostRoot: t.TempDir(),
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.DefaultPolicy(),
++	})
++	if err != nil {
++		t.Fatalf("new runtime failed: %v", err)
++	}
++
++	result := runtime.ExecuteResult(context.Background(), "echo hello")
++	if result.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", result)
++	}
++	if result.ExitCode != 0 {
++		t.Fatalf("exit_code = %d, want 0", result.ExitCode)
++	}
++	if result.Stdout != "hello" || result.Stderr != "" {
++		t.Fatalf("unexpected stdout/stderr: %+v", result)
++	}
++	if result.StartedAt.IsZero() || result.FinishedAt.IsZero() {
++		t.Fatalf("expected timestamps, got %+v", result)
++	}
++	if result.Trace.CommandLine != "echo hello" {
++		t.Fatalf("unexpected trace command_line: %+v", result.Trace)
++	}
++	if result.Trace.Command != "echo" || len(result.Trace.Pipeline) != 1 {
++		t.Fatalf("unexpected trace shape: %+v", result.Trace)
++	}
++	if result.Trace.EffectiveProfile != contract.ProfileCoreStrict {
++		t.Fatalf("unexpected effective profile: %+v", result.Trace)
++	}
++}
+diff --git a/pkg/engine/runtime/session_adapters.go b/pkg/engine/runtime/session_adapters.go
+new file mode 100644
+index 0000000..e9168c9
+--- /dev/null
++++ b/pkg/engine/runtime/session_adapters.go
+@@ -0,0 +1,63 @@
++package runtime
++
++import (
++	"context"
++	"encoding/json"
++	"fmt"
++	"strings"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
++
++type adapterPhase string
++
++const (
++	adapterPhaseCreate     adapterPhase = "create"
++	adapterPhaseResume     adapterPhase = "resume"
++	adapterPhaseObserve    adapterPhase = "observe"
++	adapterPhaseCheckpoint adapterPhase = "checkpoint"
++	adapterPhaseClose      adapterPhase = "close"
++)
++
++func applySessionAdapters(ctx context.Context, session contract.Session, adapters []contract.SessionAdapter, phase adapterPhase, result contract.ExecutionResult) (contract.Session, []contract.VirtualMount, error) {
++	next := session.Clone()
++	mounts := make([]contract.VirtualMount, 0)
++	for _, adapter := range adapters {
++		if adapter == nil {
++			continue
++		}
++		adapterID := strings.TrimSpace(adapter.AdapterID())
++		if adapterID == "" {
++			return session.Clone(), nil, fmt.Errorf("session adapter id is required")
++		}
++		projection, err := invokeAdapterPhase(ctx, adapter, phase, next, result)
++		if err != nil {
++			return session.Clone(), nil, fmt.Errorf("adapter %s %s failed: %w", adapterID, phase, err)
++		}
++		if len(projection.OpaqueState) > 0 {
++			if next.State.Opaque == nil {
++				next.State.Opaque = map[string]json.RawMessage{}
++			}
++			next.State.Opaque[adapterID] = append(json.RawMessage(nil), projection.OpaqueState...)
++		}
++		mounts = append(mounts, projection.ProjectionMounts()...)
++	}
++	return next, mounts, nil
++}
++
++func invokeAdapterPhase(ctx context.Context, adapter contract.SessionAdapter, phase adapterPhase, session contract.Session, result contract.ExecutionResult) (contract.AdapterProjection, error) {
++	switch phase {
++	case adapterPhaseCreate:
++		return adapter.CreateSession(ctx, session)
++	case adapterPhaseResume:
++		return adapter.ResumeSession(ctx, session)
++	case adapterPhaseObserve:
++		return adapter.ObserveExecution(ctx, session, result)
++	case adapterPhaseCheckpoint:
++		return adapter.CheckpointSession(ctx, session)
++	case adapterPhaseClose:
++		return adapter.CloseSession(ctx, session)
++	default:
++		return contract.AdapterProjection{}, fmt.Errorf("unsupported adapter phase %q", phase)
++	}
++}
+diff --git a/pkg/engine/runtime/session_manager.go b/pkg/engine/runtime/session_manager.go
+new file mode 100644
+index 0000000..160e5b9
+--- /dev/null
++++ b/pkg/engine/runtime/session_manager.go
+@@ -0,0 +1,339 @@
++package runtime
++
++import (
++	"context"
++	"errors"
++	"fmt"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"time"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
++
++var (
++	ErrSessionNotFound = errors.New("runtime session not found")
++	ErrSessionClosed   = errors.New("runtime session is closed")
++)
++
++type SessionManagerOptions struct {
++	Now   func() time.Time
++	NewID func() string
++}
++
++type SessionExecution struct {
++	Session contract.Session
++	Runtime *Stack
++	Result  contract.ExecutionResult
++}
++
++type SessionManager struct {
++	mu       sync.RWMutex
++	sessions map[string]*managedSession
++	now      func() time.Time
++	newID    func() string
++}
++
++type managedSession struct {
++	snapshot      contract.Session
++	checkpoint    contract.Session
++	base          Options
++	runtime       *Stack
++	active        bool
++	adapterMounts []contract.VirtualMount
++}
++
++var sessionCounter uint64
++
++func NewSessionManager(opts SessionManagerOptions) *SessionManager {
++	nowFn := opts.Now
++	if nowFn == nil {
++		nowFn = func() time.Time { return time.Now().UTC() }
++	}
++	idFn := opts.NewID
++	if idFn == nil {
++		idFn = func() string {
++			value := atomic.AddUint64(&sessionCounter, 1)
++			return fmt.Sprintf("sess_%d", value)
++		}
++	}
++	return &SessionManager{
++		sessions: map[string]*managedSession{},
++		now:      nowFn,
++		newID:    idFn,
++	}
++}
++
++func (m *SessionManager) Create(ctx context.Context, opts Options) (contract.Session, error) {
++	if m == nil {
++		return contract.Session{}, fmt.Errorf("session manager is not initialized")
++	}
++	runtime, err := New(opts)
++	if err != nil {
++		return contract.Session{}, err
++	}
++	now := m.now()
++	session := contract.Session{
++		SessionID:     m.newID(),
++		CreatedAt:     now,
++		UpdatedAt:     now,
++		Profile:       runtime.Ops().Profile,
++		PolicyCeiling: runtime.Ops().Policy.Clone(),
++		State:         runtime.SessionState(opts.RCFiles),
++	}
++	session, adapterMounts, err := applySessionAdapters(ctx, session, opts.Adapters, adapterPhaseCreate, contract.ExecutionResult{})
++	if err != nil {
++		return contract.Session{}, err
++	}
++	if len(adapterMounts) > 0 {
++		runtime, err = New(runtimeOptionsFromSession(cloneOptions(opts), session, session.PolicyCeiling, adapterMounts))
++		if err != nil {
++			return contract.Session{}, err
++		}
++	}
++	record := &managedSession{
++		snapshot:      session.Clone(),
++		checkpoint:    session.Clone(),
++		base:          cloneOptions(opts),
++		runtime:       runtime,
++		active:        true,
++		adapterMounts: cloneMounts(adapterMounts),
++	}
++	record.base.Profile = session.Profile
++	record.base.Policy = session.PolicyCeiling.Clone()
++	record.base.CommandAliases = session.State.Clone().CommandAliases
++	record.base.EnvVars = session.State.Clone().EnvVars
++	record.base.RCFiles = nil
++
++	m.mu.Lock()
++	defer m.mu.Unlock()
++	m.sessions[session.SessionID] = record
++	return session.Clone(), nil
++}
++
++func (m *SessionManager) Get(sessionID string) (contract.Session, error) {
++	record, err := m.lookup(strings.TrimSpace(sessionID))
++	if err != nil {
++		return contract.Session{}, err
++	}
++	return record.snapshot.Clone(), nil
++}
++
++func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandLine string, requested contract.ExecutionPolicy) (SessionExecution, error) {
++	commandLine = strings.TrimSpace(commandLine)
++	if commandLine == "" {
++		return SessionExecution{
++			Result: contract.ExecutionResult{
++				ExitCode: contract.ExitCodeUsage,
++				Stdout:   "execute: command is required",
++			},
++		}, nil
++	}
++
++	record, err := m.lookup(strings.TrimSpace(sessionID))
++	if err != nil {
++		return SessionExecution{}, err
++	}
++	if !record.active || record.runtime == nil {
++		return SessionExecution{}, ErrSessionClosed
++	}
++
++	effectivePolicy, err := contract.EffectivePolicyWithinCeiling(requested, record.snapshot.PolicyCeiling)
++	if err != nil {
++		return SessionExecution{}, err
++	}
++
++	runtime := record.runtime
++	if !samePolicy(effectivePolicy, record.snapshot.PolicyCeiling) {
++		runtime, err = New(runtimeOptionsForSession(record, effectivePolicy))
++		if err != nil {
++			return SessionExecution{}, err
++		}
++	}
++
++	result := runtime.ExecuteResult(ctx, commandLine).WithSessionID(record.snapshot.SessionID)
++
++	m.mu.Lock()
++	defer m.mu.Unlock()
++	current, ok := m.sessions[record.snapshot.SessionID]
++	if !ok {
++		return SessionExecution{}, ErrSessionNotFound
++	}
++	nextSession := current.snapshot.Clone()
++	nextSession.UpdatedAt = m.now()
++	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
++	if len(current.base.Adapters) > 0 {
++		var adapterErr error
++		nextSession, current.adapterMounts, adapterErr = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseObserve, result)
++		if adapterErr != nil {
++			return SessionExecution{}, adapterErr
++		}
++		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
++		if err != nil {
++			return SessionExecution{}, err
++		}
++	}
++	current.snapshot = nextSession.Clone()
++	return SessionExecution{
++		Session: current.snapshot.Clone(),
++		Runtime: runtime,
++		Result:  result.WithSessionID(current.snapshot.SessionID),
++	}, nil
++}
++
++func (m *SessionManager) Checkpoint(ctx context.Context, sessionID string) (contract.Session, error) {
++	record, err := m.lookup(strings.TrimSpace(sessionID))
++	if err != nil {
++		return contract.Session{}, err
++	}
++
++	m.mu.Lock()
++	defer m.mu.Unlock()
++	current := m.sessions[record.snapshot.SessionID]
++	nextSession := current.snapshot.Clone()
++	nextSession.UpdatedAt = m.now()
++	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
++	if len(current.base.Adapters) > 0 {
++		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
++		if err != nil {
++			return contract.Session{}, err
++		}
++	}
++	current.snapshot = nextSession.Clone()
++	current.checkpoint = current.snapshot.Clone()
++	return current.checkpoint.Clone(), nil
++}
++
++func (m *SessionManager) Resume(ctx context.Context, sessionID string) (contract.Session, error) {
++	record, err := m.lookup(strings.TrimSpace(sessionID))
++	if err != nil {
++		return contract.Session{}, err
++	}
++	if record.active && record.runtime != nil {
++		return record.snapshot.Clone(), nil
++	}
++	resumed := record.checkpoint.Clone()
++	resumed, adapterMounts, err := applySessionAdapters(ctx, resumed, record.base.Adapters, adapterPhaseResume, contract.ExecutionResult{})
++	if err != nil {
++		return contract.Session{}, err
++	}
++	runtime, err := New(runtimeOptionsFromSession(record.base, resumed, resumed.PolicyCeiling, adapterMounts))
++	if err != nil {
++		return contract.Session{}, err
++	}
++
++	m.mu.Lock()
++	defer m.mu.Unlock()
++	current := m.sessions[record.snapshot.SessionID]
++	current.runtime = runtime
++	current.active = true
++	current.snapshot = resumed.Clone()
++	current.adapterMounts = cloneMounts(adapterMounts)
++	current.snapshot.UpdatedAt = m.now()
++	return current.snapshot.Clone(), nil
++}
++
++func (m *SessionManager) Close(ctx context.Context, sessionID string) (contract.Session, error) {
++	record, err := m.lookup(strings.TrimSpace(sessionID))
++	if err != nil {
++		return contract.Session{}, err
++	}
++
++	m.mu.Lock()
++	defer m.mu.Unlock()
++	current := m.sessions[record.snapshot.SessionID]
++	nextSession := current.snapshot.Clone()
++	nextSession.UpdatedAt = m.now()
++	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
++	if len(current.base.Adapters) > 0 {
++		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
++		if err != nil {
++			return contract.Session{}, err
++		}
++	}
++	current.snapshot = nextSession.Clone()
++	current.checkpoint = current.snapshot.Clone()
++	current.runtime = nil
++	current.active = false
++	return current.snapshot.Clone(), nil
++}
++
++func (m *SessionManager) lookup(sessionID string) (*managedSession, error) {
++	if m == nil {
++		return nil, fmt.Errorf("session manager is not initialized")
++	}
++	if sessionID == "" {
++		return nil, ErrSessionNotFound
++	}
++	m.mu.RLock()
++	defer m.mu.RUnlock()
++	record, ok := m.sessions[sessionID]
++	if !ok {
++		return nil, ErrSessionNotFound
++	}
++	clone := *record
++	clone.snapshot = record.snapshot.Clone()
++	clone.checkpoint = record.checkpoint.Clone()
++	clone.base = cloneOptions(record.base)
++	clone.adapterMounts = cloneMounts(record.adapterMounts)
++	return &clone, nil
++}
++
++func runtimeOptionsForSession(record *managedSession, policy contract.ExecutionPolicy) Options {
++	return runtimeOptionsFromSession(record.base, record.snapshot, policy, record.adapterMounts)
++}
++
++func runtimeOptionsFromSession(base Options, session contract.Session, policy contract.ExecutionPolicy, adapterMounts []contract.VirtualMount) Options {
++	opts := cloneOptions(base)
++	opts.Profile = session.Profile
++	opts.Policy = policy.Clone()
++	opts.CommandAliases = session.State.Clone().CommandAliases
++	opts.EnvVars = session.State.Clone().EnvVars
++	opts.RCFiles = nil
++	opts.VirtualMounts = append(opts.VirtualMounts, adapterMounts...)
++	return opts
++}
++
++func mergeSessionState(previous contract.SessionState, runtime *Stack) contract.SessionState {
++	state := previous.Clone()
++	if runtime == nil {
++		return state
++	}
++	state.CommandAliases = runtime.SessionState(state.RCFiles).CommandAliases
++	state.EnvVars = runtime.SessionState(state.RCFiles).EnvVars
++	return state
++}
++
++func cloneOptions(opts Options) Options {
++	return Options{
++		HostRoot:          strings.TrimSpace(opts.HostRoot),
++		Profile:           opts.Profile,
++		Policy:            opts.Policy.Clone(),
++		CommandAliases:    contract.NormalizeCommandAliases(opts.CommandAliases),
++		EnvVars:           contract.NormalizeEnvVars(opts.EnvVars),
++		RCFiles:           contract.NormalizeRCFiles(opts.RCFiles),
++		VirtualMounts:     cloneMounts(opts.VirtualMounts),
++		Adapters:          append([]contract.SessionAdapter(nil), opts.Adapters...),
++		EnableTestCorpus:  opts.EnableTestCorpus,
++		PathEnv:           append([]string(nil), opts.PathEnv...),
++		ExternalCallbacks: opts.ExternalCallbacks,
++		FormatLSLongRow:   opts.FormatLSLongRow,
++		AuditSink:         opts.AuditSink,
++	}
++}
++
++func cloneMounts(mounts []contract.VirtualMount) []contract.VirtualMount {
++	if len(mounts) == 0 {
++		return nil
++	}
++	return append([]contract.VirtualMount(nil), mounts...)
++}
++
++func samePolicy(left contract.ExecutionPolicy, right contract.ExecutionPolicy) bool {
++	return left.WriteMode == right.WriteMode &&
++		left.MaxWriteBytes == right.MaxWriteBytes &&
++		left.MaxPipelineDepth == right.MaxPipelineDepth &&
++		left.MaxOutputBytes == right.MaxOutputBytes &&
++		left.Timeout == right.Timeout
++}
+diff --git a/pkg/engine/runtime/session_manager_test.go b/pkg/engine/runtime/session_manager_test.go
+new file mode 100644
+index 0000000..af05395
+--- /dev/null
++++ b/pkg/engine/runtime/session_manager_test.go
+@@ -0,0 +1,307 @@
++package runtime
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/khicago/simsh/pkg/contract"
++	"github.com/khicago/simsh/pkg/mount"
++)
++
++func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
++	tmp := t.TempDir()
++	rcHostPath := filepath.Join(tmp, "task_outputs", "simshrc")
++	if err := os.MkdirAll(filepath.Dir(rcHostPath), 0o755); err != nil {
++		t.Fatalf("mkdir rc dir failed: %v", err)
++	}
++	if err := os.WriteFile(rcHostPath, []byte("export SESSION_FLAG=enabled\n"), 0o644); err != nil {
++		t.Fatalf("write rc failed: %v", err)
++	}
++
++	nowValues := []time.Time{
++		time.Date(2026, 3, 1, 21, 2, 34, 0, time.UTC),
++		time.Date(2026, 3, 1, 21, 2, 35, 0, time.UTC),
++		time.Date(2026, 3, 1, 21, 2, 36, 0, time.UTC),
++		time.Date(2026, 3, 1, 21, 2, 37, 0, time.UTC),
++	}
++	idx := 0
++	manager := NewSessionManager(SessionManagerOptions{
++		Now: func() time.Time {
++			value := nowValues[idx]
++			if idx < len(nowValues)-1 {
++				idx++
++			}
++			return value
++		},
++		NewID: func() string { return "sess_test" },
++	})
++
++	session, err := manager.Create(context.Background(), Options{
++		HostRoot: tmp,
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.DefaultPolicy(),
++		RCFiles:  []string{"/task_outputs/simshrc"},
++	})
++	if err != nil {
++		t.Fatalf("create session failed: %v", err)
++	}
++	if session.SessionID != "sess_test" {
++		t.Fatalf("session_id = %q, want sess_test", session.SessionID)
++	}
++	if session.CreatedAt != nowValues[0] || session.UpdatedAt != nowValues[0] {
++		t.Fatalf("unexpected timestamps: %+v", session)
++	}
++
++	executed, err := manager.Execute(context.Background(), session.SessionID, "env SESSION_FLAG", contract.ExecutionPolicy{})
++	if err != nil {
++		t.Fatalf("execute failed: %v", err)
++	}
++	if executed.Result.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", executed.Result)
++	}
++	if executed.Result.SessionID != session.SessionID {
++		t.Fatalf("unexpected session_id in result: %+v", executed.Result)
++	}
++	if executed.Result.ExitCode != 0 || strings.TrimSpace(executed.Result.Stdout) != "SESSION_FLAG=enabled" {
++		t.Fatalf("unexpected execute result: %+v", executed.Result)
++	}
++	if executed.Session.UpdatedAt != nowValues[1] {
++		t.Fatalf("updated_at = %s, want %s", executed.Session.UpdatedAt, nowValues[1])
++	}
++
++	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
++	if err != nil {
++		t.Fatalf("checkpoint failed: %v", err)
++	}
++	if checkpoint.UpdatedAt != nowValues[2] {
++		t.Fatalf("checkpoint updated_at = %s, want %s", checkpoint.UpdatedAt, nowValues[2])
++	}
++	if len(checkpoint.State.RCFiles) != 1 || checkpoint.State.RCFiles[0] != "/task_outputs/simshrc" {
++		t.Fatalf("unexpected checkpoint rc files: %v", checkpoint.State.RCFiles)
++	}
++
++	closed, err := manager.Close(context.Background(), session.SessionID)
++	if err != nil {
++		t.Fatalf("close failed: %v", err)
++	}
++	if closed.UpdatedAt != nowValues[3] {
++		t.Fatalf("close updated_at = %s, want %s", closed.UpdatedAt, nowValues[3])
++	}
++	if _, err := manager.Execute(context.Background(), session.SessionID, "env SESSION_FLAG", contract.ExecutionPolicy{}); !errors.Is(err, ErrSessionClosed) {
++		t.Fatalf("execute after close err = %v, want ErrSessionClosed", err)
++	}
++
++	if err := os.Remove(rcHostPath); err != nil {
++		t.Fatalf("remove rc file failed: %v", err)
++	}
++	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
++		t.Fatalf("resume failed: %v", err)
++	}
++	resumed, err := manager.Execute(context.Background(), session.SessionID, "env SESSION_FLAG", contract.ExecutionPolicy{})
++	if err != nil {
++		t.Fatalf("resume execute failed: %v", err)
++	}
++	if resumed.Result.ExitCode != 0 || strings.TrimSpace(resumed.Result.Stdout) != "SESSION_FLAG=enabled" {
++		t.Fatalf("unexpected resumed output: %+v", resumed.Result)
++	}
++}
++
++func TestSessionManagerRejectsPolicyEscalation(t *testing.T) {
++	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_policy" }})
++	session, err := manager.Create(context.Background(), Options{
++		HostRoot: t.TempDir(),
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.ExecutionPolicy{WriteMode: contract.WriteModeReadOnly},
++	})
++	if err != nil {
++		t.Fatalf("create session failed: %v", err)
++	}
++
++	_, err = manager.Execute(context.Background(), session.SessionID, "echo hi", contract.ExecutionPolicy{WriteMode: contract.WriteModeFull})
++	if err == nil || !strings.Contains(err.Error(), "exceeds session ceiling") {
++		t.Fatalf("expected policy ceiling error, got %v", err)
++	}
++}
++
++func TestSessionManagerAdapterLifecycleMemoryProjection(t *testing.T) {
++	adapter := &testMemoryAdapter{}
++	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_memory" }})
++	session, err := manager.Create(context.Background(), Options{
++		HostRoot: t.TempDir(),
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.DefaultPolicy(),
++		Adapters: []contract.SessionAdapter{adapter},
++	})
++	if err != nil {
++		t.Fatalf("create session failed: %v", err)
++	}
++
++	if _, err := manager.Execute(context.Background(), session.SessionID, "echo hello", contract.ExecutionPolicy{}); err != nil {
++		t.Fatalf("observe execute failed: %v", err)
++	}
++	memoryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
++	if err != nil {
++		t.Fatalf("cat /memory/log.md failed: %v", err)
++	}
++	if strings.TrimSpace(memoryView.Result.Stdout) != "hello" {
++		t.Fatalf("unexpected memory log output: %+v", memoryView.Result)
++	}
++
++	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
++	if err != nil {
++		t.Fatalf("checkpoint failed: %v", err)
++	}
++	if len(checkpoint.State.Opaque[adapter.AdapterID()]) == 0 {
++		t.Fatalf("expected adapter opaque state at checkpoint: %+v", checkpoint.State)
++	}
++	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
++		t.Fatalf("close failed: %v", err)
++	}
++	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
++		t.Fatalf("resume failed: %v", err)
++	}
++	resumedMemory, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
++	if err != nil {
++		t.Fatalf("cat /memory/log.md after resume failed: %v", err)
++	}
++	if strings.TrimSpace(resumedMemory.Result.Stdout) != "hello" {
++		t.Fatalf("unexpected resumed memory output: %+v", resumedMemory.Result)
++	}
++	if adapter.createCalls != 1 || adapter.observeCalls == 0 || adapter.checkpointCalls == 0 || adapter.resumeCalls == 0 || adapter.closeCalls == 0 {
++		t.Fatalf("unexpected lifecycle call counts: %+v", adapter)
++	}
++}
++
++func TestSessionManagerAdapterObserveFailureDoesNotPartiallyMaterialize(t *testing.T) {
++	adapter := &testMemoryAdapter{failObserve: true}
++	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_memory_fail" }})
++	session, err := manager.Create(context.Background(), Options{
++		HostRoot: t.TempDir(),
++		Profile:  contract.ProfileCoreStrict,
++		Policy:   contract.DefaultPolicy(),
++		Adapters: []contract.SessionAdapter{adapter},
++	})
++	if err != nil {
++		t.Fatalf("create session failed: %v", err)
++	}
++
++	if _, err := manager.Execute(context.Background(), session.SessionID, "echo hello", contract.ExecutionPolicy{}); err == nil || !strings.Contains(err.Error(), "observe failed") {
++		t.Fatalf("expected observe failure, got %v", err)
++	}
++
++	adapter.failObserve = false
++	memoryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/log.md", contract.ExecutionPolicy{})
++	if err != nil {
++		t.Fatalf("cat /memory/log.md failed: %v", err)
++	}
++	if strings.TrimSpace(memoryView.Result.Stdout) != "" {
++		t.Fatalf("expected empty memory log after failed observe, got %+v", memoryView.Result)
++	}
++}
++
++type testMemoryAdapter struct {
++	failObserve     bool
++	createCalls     int
++	resumeCalls     int
++	observeCalls    int
++	checkpointCalls int
++	closeCalls      int
++}
++
++type testMemoryState struct {
++	Entries   []string `json:"entries"`
++	Freshness string   `json:"freshness"`
++}
++
++func (a *testMemoryAdapter) AdapterID() string { return "memory_test" }
++
++func (a *testMemoryAdapter) CreateSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
++	_ = ctx
++	a.createCalls++
++	return a.buildProjection(a.stateFromSession(session, "created"))
++}
++
++func (a *testMemoryAdapter) ResumeSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
++	_ = ctx
++	a.resumeCalls++
++	return a.buildProjection(a.stateFromSession(session, "resumed"))
++}
++
++func (a *testMemoryAdapter) ObserveExecution(ctx context.Context, session contract.Session, result contract.ExecutionResult) (contract.AdapterProjection, error) {
++	_ = ctx
++	a.observeCalls++
++	if a.failObserve {
++		return contract.AdapterProjection{}, errors.New("observe failed")
++	}
++	state := a.stateFromSession(session, "observed")
++	if !referencesMemory(result.Trace) {
++		trimmed := strings.TrimSpace(result.Stdout)
++		if trimmed != "" {
++			state.Entries = append(state.Entries, trimmed)
++		}
++	}
++	return a.buildProjection(state)
++}
++
++func (a *testMemoryAdapter) CheckpointSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
++	_ = ctx
++	a.checkpointCalls++
++	return a.buildProjection(a.stateFromSession(session, "checkpointed"))
++}
++
++func (a *testMemoryAdapter) CloseSession(ctx context.Context, session contract.Session) (contract.AdapterProjection, error) {
++	_ = ctx
++	a.closeCalls++
++	return a.buildProjection(a.stateFromSession(session, "closed"))
++}
++
++func (a *testMemoryAdapter) stateFromSession(session contract.Session, freshness string) testMemoryState {
++	state := testMemoryState{Freshness: freshness}
++	if raw := session.State.Opaque[a.AdapterID()]; len(raw) > 0 {
++		_ = json.Unmarshal(raw, &state)
++		state.Freshness = freshness
++	}
++	return state
++}
++
++func (a *testMemoryAdapter) buildProjection(state testMemoryState) (contract.AdapterProjection, error) {
++	raw, err := json.Marshal(state)
++	if err != nil {
++		return contract.AdapterProjection{}, err
++	}
++	files := map[string]string{
++		"/memory/log.md":      strings.Join(state.Entries, "\n"),
++		"/memory/status.json": string(raw),
++	}
++	memoryMount, err := mount.NewStaticMount("/memory", "memory", files)
++	if err != nil {
++		return contract.AdapterProjection{}, err
++	}
++	return contract.AdapterProjection{
++		OpaqueState: raw,
++		Memory: contract.MemoryProjection{
++			Mount:     memoryMount,
++			Freshness: state.Freshness,
++		},
++	}, nil
++}
++
++func referencesMemory(trace contract.ExecutionTrace) bool {
++	for _, pathValue := range trace.RequestedPaths {
++		if strings.HasPrefix(pathValue, "/memory") {
++			return true
++		}
++	}
++	for _, pathValue := range trace.ReadPaths {
++		if strings.HasPrefix(pathValue, "/memory") {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/pkg/engine/script_runner.go b/pkg/engine/script_runner.go
+index 57f967d..b13482a 100644
+--- a/pkg/engine/script_runner.go
++++ b/pkg/engine/script_runner.go
+@@ -97,6 +97,7 @@ func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, o
+ 		hasInput = true
+ 
+ 		if ops.Policy.MaxOutputBytes > 0 && len(current) > ops.Policy.MaxOutputBytes {
++			markTraceOutputTruncated(ctx)
+ 			return fmt.Sprintf("execute: pipeline intermediate result exceeds limit (%d bytes)", ops.Policy.MaxOutputBytes), contract.ExitCodeGeneral
+ 		}
+ 	}
+@@ -143,10 +144,13 @@ func applyOutputRedirections(ctx context.Context, commandName string, redirs []c
+ 		return output, "", 0
+ 	}
+ 
++	markTraceRequestedPath(ctx, redirs[lastOutputRedir].target)
+ 	if !ops.Policy.AllowWrite() {
++		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
+ 		return "", "redirection: write is not allowed by policy", contract.ExitCodeUnsupported
+ 	}
+ 	if ops.Policy.WriteMode == contract.WriteModeWriteLimited && ops.Policy.MaxWriteBytes > 0 && len(output) > ops.Policy.MaxWriteBytes {
++		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
+ 		return "", fmt.Sprintf("redirection: write exceeds limit (%d bytes)", ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral
+ 	}
+ 
+diff --git a/pkg/engine/trace_collector.go b/pkg/engine/trace_collector.go
+new file mode 100644
+index 0000000..97d43e4
+--- /dev/null
++++ b/pkg/engine/trace_collector.go
+@@ -0,0 +1,393 @@
++package engine
++
++import (
++	"context"
++	"errors"
++	"strings"
++	"sync"
++
++	"github.com/khicago/simsh/pkg/contract"
++)
++
++const traceCollectorKey contextKey = "simsh.trace.collector"
++
++type executionTraceCollector struct {
++	mu    sync.Mutex
++	trace contract.ExecutionTrace
++}
++
++func newExecutionTraceCollector(commandLine string, ops contract.Ops) *executionTraceCollector {
++	trace := contract.ExecutionTrace{
++		CommandLine:      strings.TrimSpace(commandLine),
++		EffectiveProfile: ops.Profile,
++		EffectivePolicy:  ops.Policy.Clone(),
++	}
++	if parsed, err := parseScript(commandLine); err == nil {
++		trace = populateTraceShape(trace, parsed)
++	}
++	return &executionTraceCollector{trace: trace}
++}
++
++func (c *executionTraceCollector) WithContext(ctx context.Context) context.Context {
++	if c == nil {
++		return ctx
++	}
++	return context.WithValue(ctx, traceCollectorKey, c)
++}
++
++func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
++	if c == nil {
++		return ops
++	}
++	wrapped := ops
++
++	if ops.CheckPathOp != nil {
++		orig := ops.CheckPathOp
++		wrapped.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {
++			c.recordRequested(pathValue)
++			err := orig(ctx, op, pathValue)
++			if isDeniedPathError(err) {
++				c.recordDenied(pathValue)
++			}
++			return err
++		}
++	}
++	if ops.ListChildren != nil {
++		orig := ops.ListChildren
++		wrapped.ListChildren = func(ctx context.Context, dir string) ([]string, error) {
++			c.recordRequested(dir)
++			children, err := orig(ctx, dir)
++			if err == nil {
++				c.recordRead(dir, 0)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(dir)
++			}
++			return children, err
++		}
++	}
++	if ops.IsDirPath != nil {
++		orig := ops.IsDirPath
++		wrapped.IsDirPath = func(ctx context.Context, pathValue string) (bool, error) {
++			c.recordRequested(pathValue)
++			isDir, err := orig(ctx, pathValue)
++			if err == nil {
++				c.recordRead(pathValue, 0)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(pathValue)
++			}
++			return isDir, err
++		}
++	}
++	if ops.DescribePath != nil {
++		orig := ops.DescribePath
++		wrapped.DescribePath = func(ctx context.Context, pathValue string) (contract.PathMeta, error) {
++			c.recordRequested(pathValue)
++			meta, err := orig(ctx, pathValue)
++			if err == nil {
++				c.recordRead(pathValue, 0)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(pathValue)
++			}
++			return meta, err
++		}
++	}
++	if ops.ReadRawContent != nil {
++		orig := ops.ReadRawContent
++		wrapped.ReadRawContent = func(ctx context.Context, pathValue string) (string, error) {
++			c.recordRequested(pathValue)
++			raw, err := orig(ctx, pathValue)
++			if err == nil {
++				c.recordRead(pathValue, len(raw))
++			} else if isDeniedPathError(err) {
++				c.recordDenied(pathValue)
++			}
++			return raw, err
++		}
++	}
++	if ops.ResolveSearchPaths != nil {
++		orig := ops.ResolveSearchPaths
++		wrapped.ResolveSearchPaths = func(ctx context.Context, target string, recursive bool) ([]string, error) {
++			c.recordRequested(target)
++			paths, err := orig(ctx, target, recursive)
++			if err == nil {
++				c.recordRead(target, 0)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(target)
++			}
++			return paths, err
++		}
++	}
++	if ops.CollectFilesUnder != nil {
++		orig := ops.CollectFilesUnder
++		wrapped.CollectFilesUnder = func(ctx context.Context, target string) ([]string, error) {
++			c.recordRequested(target)
++			paths, err := orig(ctx, target)
++			if err == nil {
++				c.recordRead(target, 0)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(target)
++			}
++			return paths, err
++		}
++	}
++	if ops.WriteFile != nil {
++		orig := ops.WriteFile
++		wrapped.WriteFile = func(ctx context.Context, filePath string, content string) error {
++			c.recordRequested(filePath)
++			err := orig(ctx, filePath, content)
++			if err == nil {
++				c.recordWrite(filePath, len(content))
++			} else if isDeniedPathError(err) {
++				c.recordDenied(filePath)
++			}
++			return err
++		}
++	}
++	if ops.AppendFile != nil {
++		orig := ops.AppendFile
++		wrapped.AppendFile = func(ctx context.Context, filePath string, content string) error {
++			c.recordRequested(filePath)
++			err := orig(ctx, filePath, content)
++			if err == nil {
++				c.recordAppend(filePath, len(content))
++			} else if isDeniedPathError(err) {
++				c.recordDenied(filePath)
++			}
++			return err
++		}
++	}
++	if ops.EditFile != nil {
++		orig := ops.EditFile
++		wrapped.EditFile = func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
++			c.recordRequested(filePath)
++			err := orig(ctx, filePath, oldString, newString, replaceAll)
++			if err == nil {
++				c.recordEdit(filePath, len(newString))
++			} else if isDeniedPathError(err) {
++				c.recordDenied(filePath)
++			}
++			return err
++		}
++	}
++	if ops.MakeDir != nil {
++		orig := ops.MakeDir
++		wrapped.MakeDir = func(ctx context.Context, dirPath string) error {
++			c.recordRequested(dirPath)
++			err := orig(ctx, dirPath)
++			if err == nil {
++				c.recordCreatedDir(dirPath)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(dirPath)
++			}
++			return err
++		}
++	}
++	if ops.RemoveFile != nil {
++		orig := ops.RemoveFile
++		wrapped.RemoveFile = func(ctx context.Context, filePath string) error {
++			c.recordRequested(filePath)
++			err := orig(ctx, filePath)
++			if err == nil {
++				c.recordRemoved(filePath)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(filePath)
++			}
++			return err
++		}
++	}
++	if ops.RemoveDir != nil {
++		orig := ops.RemoveDir
++		wrapped.RemoveDir = func(ctx context.Context, dirPath string) error {
++			c.recordRequested(dirPath)
++			err := orig(ctx, dirPath)
++			if err == nil {
++				c.recordRemoved(dirPath)
++			} else if isDeniedPathError(err) {
++				c.recordDenied(dirPath)
++			}
++			return err
++		}
++	}
++	if ops.RunExternalCommand != nil {
++		orig := ops.RunExternalCommand
++		wrapped.RunExternalCommand = func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
++			if strings.HasPrefix(strings.TrimSpace(req.RawPath), "/") {
++				c.recordRequested(req.RawPath)
++			}
++			result, err := orig(ctx, req)
++			if err == nil {
++				c.recordExternalStdout(len(result.Stdout))
++			}
++			return result, err
++		}
++	}
++
++	return wrapped
++}
++
++func (c *executionTraceCollector) Snapshot() contract.ExecutionTrace {
++	if c == nil {
++		return contract.ExecutionTrace{}
++	}
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	trace := c.trace
++	trace.Argv = append([]string(nil), c.trace.Argv...)
++	if len(c.trace.Pipeline) > 0 {
++		trace.Pipeline = make([]contract.ExecutionTraceStep, 0, len(c.trace.Pipeline))
++		for _, step := range c.trace.Pipeline {
++			trace.Pipeline = append(trace.Pipeline, contract.ExecutionTraceStep{
++				Command: step.Command,
++				Argv:    append([]string(nil), step.Argv...),
++			})
++		}
++	}
++	trace.RequestedPaths = append([]string(nil), c.trace.RequestedPaths...)
++	trace.ReadPaths = append([]string(nil), c.trace.ReadPaths...)
++	trace.WrittenPaths = append([]string(nil), c.trace.WrittenPaths...)
++	trace.AppendedPaths = append([]string(nil), c.trace.AppendedPaths...)
++	trace.EditedPaths = append([]string(nil), c.trace.EditedPaths...)
++	trace.CreatedDirs = append([]string(nil), c.trace.CreatedDirs...)
++	trace.RemovedPaths = append([]string(nil), c.trace.RemovedPaths...)
++	trace.DeniedPaths = append([]string(nil), c.trace.DeniedPaths...)
++	trace.EffectivePolicy = c.trace.EffectivePolicy.Clone()
++	return trace
++}
++
++func (c *executionTraceCollector) MarkOutputTruncated() {
++	if c == nil {
++		return
++	}
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.OutputTruncated = true
++}
++
++func (c *executionTraceCollector) recordRequested(pathValue string) {
++	c.recordPath(&c.trace.RequestedPaths, pathValue)
++}
++
++func (c *executionTraceCollector) recordRead(pathValue string, bytes int) {
++	c.recordPath(&c.trace.ReadPaths, pathValue)
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.BytesRead += bytes
++}
++
++func (c *executionTraceCollector) recordWrite(pathValue string, bytes int) {
++	c.recordPath(&c.trace.WrittenPaths, pathValue)
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.BytesWritten += bytes
++}
++
++func (c *executionTraceCollector) recordAppend(pathValue string, bytes int) {
++	c.recordPath(&c.trace.AppendedPaths, pathValue)
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.BytesWritten += bytes
++}
++
++func (c *executionTraceCollector) recordEdit(pathValue string, bytes int) {
++	c.recordPath(&c.trace.EditedPaths, pathValue)
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.BytesWritten += bytes
++}
++
++func (c *executionTraceCollector) recordCreatedDir(pathValue string) {
++	c.recordPath(&c.trace.CreatedDirs, pathValue)
++}
++
++func (c *executionTraceCollector) recordRemoved(pathValue string) {
++	c.recordPath(&c.trace.RemovedPaths, pathValue)
++}
++
++func (c *executionTraceCollector) recordDenied(pathValue string) {
++	c.recordPath(&c.trace.DeniedPaths, pathValue)
++}
++
++func (c *executionTraceCollector) recordExternalStdout(bytes int) {
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	c.trace.BytesRead += bytes
++}
++
++func (c *executionTraceCollector) recordPath(target *[]string, pathValue string) {
++	pathValue = strings.TrimSpace(pathValue)
++	if pathValue == "" || pathValue == "/" {
++		return
++	}
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	for _, existing := range *target {
++		if existing == pathValue {
++			return
++		}
++	}
++	*target = append(*target, pathValue)
++}
++
++func populateTraceShape(trace contract.ExecutionTrace, statements []parsedStatement) contract.ExecutionTrace {
++	for _, statement := range statements {
++		for _, node := range statement.pipelines {
++			for _, command := range node.pipeline.commands {
++				if len(command.args) == 0 {
++					continue
++				}
++				step := contract.ExecutionTraceStep{
++					Command: strings.TrimSpace(command.args[0]),
++					Argv:    append([]string(nil), command.args...),
++				}
++				trace.Pipeline = append(trace.Pipeline, step)
++				if trace.Command == "" {
++					trace.Command = step.Command
++					trace.Argv = append([]string(nil), step.Argv...)
++				}
++			}
++		}
++	}
++	return trace
++}
++
++func traceCollectorFromContext(ctx context.Context) *executionTraceCollector {
++	collector, _ := ctx.Value(traceCollectorKey).(*executionTraceCollector)
++	return collector
++}
++
++func markTraceOutputTruncated(ctx context.Context) {
++	if collector := traceCollectorFromContext(ctx); collector != nil {
++		collector.MarkOutputTruncated()
++	}
++}
++
++func markTraceRequestedPath(ctx context.Context, pathValue string) {
++	if collector := traceCollectorFromContext(ctx); collector != nil {
++		collector.recordRequested(pathValue)
++	}
++}
++
++func markTraceDeniedPath(ctx context.Context, pathValue string) {
++	if collector := traceCollectorFromContext(ctx); collector != nil {
++		collector.recordDenied(pathValue)
++	}
++}
++
++func isDeniedPathError(err error) bool {
++	if err == nil {
++		return false
++	}
++	if errors.Is(err, contract.ErrUnsupported) {
++		return true
++	}
++	message := strings.ToLower(strings.TrimSpace(err.Error()))
++	if strings.Contains(message, "no such file") || strings.Contains(message, "not found") {
++		return false
++	}
++	return strings.Contains(message, "not allowed") ||
++		strings.Contains(message, "not supported") ||
++		strings.Contains(message, "permission") ||
++		strings.Contains(message, "denied") ||
++		strings.Contains(message, "read-only") ||
++		strings.Contains(message, "access")
++}
+diff --git a/pkg/fs/filesystem_env.go b/pkg/fs/filesystem_env.go
+index 6f03dd3..3c2ed68 100644
+--- a/pkg/fs/filesystem_env.go
++++ b/pkg/fs/filesystem_env.go
+@@ -25,6 +25,7 @@ type EnvironmentOptions struct {
+ 	CommandAliases    map[string][]string
+ 	EnvVars           map[string]string
+ 	RCFiles           []string
++	VirtualMounts     []contract.VirtualMount
+ 	PathEnv           []string
+ 	EnableTestCorpus  bool
+ 	ExternalCallbacks ExternalCallbacks
+@@ -106,6 +107,7 @@ func NewRuntimeOps(opts EnvironmentOptions) (contract.Ops, error) {
+ 	ops.CommandAliases = contract.NormalizeCommandAliases(opts.CommandAliases)
+ 	ops.EnvVars = contract.NormalizeEnvVars(opts.EnvVars)
+ 	ops.RCFiles = contract.NormalizeRCFiles(opts.RCFiles)
++	ops.VirtualMounts = append(ops.VirtualMounts, opts.VirtualMounts...)
+ 	ops.FormatLSLongRow = opts.FormatLSLongRow
+ 	ops.AuditSink = opts.AuditSink
+ 
+diff --git a/pkg/service/httpapi/execute_endpoint.go b/pkg/service/httpapi/execute_endpoint.go
+index 36db772..1223911 100644
+--- a/pkg/service/httpapi/execute_endpoint.go
++++ b/pkg/service/httpapi/execute_endpoint.go
+@@ -4,6 +4,7 @@ import (
+ 	"context"
+ 	"encoding/json"
+ 	"errors"
++	"io"
+ 	"net/http"
+ 	"sort"
+ 	"strings"
+@@ -22,6 +23,7 @@ type Config struct {
+ 
+ type executeRequest struct {
+ 	Command     string `json:"command"`
++	SessionID   string `json:"session_id,omitempty"`
+ 	HostRoot    string `json:"host_root,omitempty"`
+ 	RootDir     string `json:"root_dir,omitempty"`
+ 	Profile     string `json:"profile,omitempty"`
+@@ -29,6 +31,13 @@ type executeRequest struct {
+ 	IncludeMeta bool   `json:"include_meta,omitempty"`
+ }
+ 
++type sessionRequest struct {
++	HostRoot string `json:"host_root,omitempty"`
++	RootDir  string `json:"root_dir,omitempty"`
++	Profile  string `json:"profile,omitempty"`
++	Policy   string `json:"policy,omitempty"`
++}
++
+ type pathMeta struct {
+ 	Mode         string   `json:"mode"`
+ 	Access       string   `json:"access"`
+@@ -43,9 +52,13 @@ type executeMeta struct {
+ }
+ 
+ type executeResponse struct {
+-	Output   string       `json:"output"`
+-	ExitCode int          `json:"exit_code"`
+-	Meta     *executeMeta `json:"meta,omitempty"`
++	contract.ExecutionResult
++	Output string       `json:"output,omitempty"`
++	Meta   *executeMeta `json:"meta,omitempty"`
++}
++
++type sessionResponse struct {
++	Session contract.Session `json:"session"`
+ }
+ 
+ func NewHandler(cfg Config) http.Handler {
+@@ -57,9 +70,10 @@ func NewHandler(cfg Config) http.Handler {
+ 	if defaultPolicy == "" {
+ 		defaultPolicy = string(contract.WriteModeReadOnly)
+ 	}
++	sessionManager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
+ 
+ 	mux := http.NewServeMux()
+-	mux.HandleFunc("/v1/execute", func(w http.ResponseWriter, r *http.Request) {
++	mux.HandleFunc("/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+ 		if r.Method != http.MethodPost {
+ 			w.Header().Set("Allow", http.MethodPost)
+ 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+@@ -67,53 +81,114 @@ func NewHandler(cfg Config) http.Handler {
+ 		}
+ 		defer r.Body.Close()
+ 
+-		var req executeRequest
+-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++		var req sessionRequest
++		if err := decodeOptionalJSON(r, &req); err != nil {
+ 			http.Error(w, "invalid json body", http.StatusBadRequest)
+ 			return
+ 		}
+ 
+-		command := strings.TrimSpace(req.Command)
+-		if command == "" {
+-			writeJSON(w, executeResponse{Output: "execute: command is required", ExitCode: contract.ExitCodeUsage})
++		opts, err := buildRuntimeOptions(cfg, defaultProfile, defaultPolicy, req.HostRoot, req.RootDir, req.Profile, req.Policy)
++		if err != nil {
++			http.Error(w, err.Error(), http.StatusBadRequest)
+ 			return
+ 		}
+-
+-		hostRoot := strings.TrimSpace(req.HostRoot)
+-		if hostRoot == "" {
+-			hostRoot = strings.TrimSpace(req.RootDir)
++		session, err := sessionManager.Create(r.Context(), opts)
++		if err != nil {
++			status := http.StatusInternalServerError
++			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
++				status = http.StatusRequestTimeout
++			}
++			http.Error(w, err.Error(), status)
++			return
+ 		}
+-		if hostRoot == "" {
+-			hostRoot = cfg.DefaultHostRoot
++		writeJSON(w, sessionResponse{Session: session})
++	})
++	mux.HandleFunc("/v1/sessions/{session_id}/{action}", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodPost {
++			w.Header().Set("Allow", http.MethodPost)
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		sessionID := strings.TrimSpace(r.PathValue("session_id"))
++		action := strings.TrimSpace(r.PathValue("action"))
++		if sessionID == "" || action == "" {
++			http.NotFound(w, r)
++			return
+ 		}
+ 
+-		profileName := strings.TrimSpace(req.Profile)
+-		if profileName == "" {
+-			profileName = defaultProfile
++		var (
++			session contract.Session
++			err     error
++		)
++		switch action {
++		case "checkpoint":
++			session, err = sessionManager.Checkpoint(r.Context(), sessionID)
++		case "resume":
++			session, err = sessionManager.Resume(r.Context(), sessionID)
++		case "close":
++			session, err = sessionManager.Close(r.Context(), sessionID)
++		default:
++			http.NotFound(w, r)
++			return
+ 		}
+-		profile, err := contract.ParseProfile(profileName)
+ 		if err != nil {
+-			http.Error(w, err.Error(), http.StatusBadRequest)
++			http.Error(w, err.Error(), statusForSessionError(err))
++			return
++		}
++		writeJSON(w, sessionResponse{Session: session})
++	})
++	mux.HandleFunc("/v1/execute", func(w http.ResponseWriter, r *http.Request) {
++		if r.Method != http.MethodPost {
++			w.Header().Set("Allow", http.MethodPost)
++			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
++			return
++		}
++		defer r.Body.Close()
++
++		var req executeRequest
++		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
++			http.Error(w, "invalid json body", http.StatusBadRequest)
+ 			return
+ 		}
+ 
+-		policyName := strings.TrimSpace(req.Policy)
+-		if policyName == "" {
+-			policyName = defaultPolicy
++		command := strings.TrimSpace(req.Command)
++		if command == "" {
++			result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
++			writeJSON(w, executeResponse{ExecutionResult: result, Output: result.FlattenOutput()})
++			return
+ 		}
+-		policy, err := contract.PolicyPreset(policyName)
++		if sessionID := strings.TrimSpace(req.SessionID); sessionID != "" {
++			if strings.TrimSpace(req.HostRoot) != "" || strings.TrimSpace(req.RootDir) != "" || strings.TrimSpace(req.Profile) != "" {
++				http.Error(w, "session-bound execute does not accept host_root/root_dir/profile overrides", http.StatusBadRequest)
++				return
++			}
++			requestedPolicy, err := parseRequestedPolicy(req.Policy)
++			if err != nil {
++				http.Error(w, err.Error(), http.StatusBadRequest)
++				return
++			}
++			executed, err := sessionManager.Execute(r.Context(), sessionID, command, requestedPolicy)
++			if err != nil {
++				http.Error(w, err.Error(), statusForSessionError(err))
++				return
++			}
++			resp := executeResponse{
++				ExecutionResult: executed.Result,
++				Output:          executed.Result.FlattenOutput(),
++			}
++			if req.IncludeMeta {
++				resp.Meta = buildExecuteMeta(r.Context(), executed.Runtime, command)
++			}
++			writeJSON(w, resp)
++			return
++		}
++
++		opts, err := buildRuntimeOptions(cfg, defaultProfile, defaultPolicy, req.HostRoot, req.RootDir, req.Profile, req.Policy)
+ 		if err != nil {
+ 			http.Error(w, err.Error(), http.StatusBadRequest)
+ 			return
+ 		}
+-
+-		env, err := runtimeengine.New(runtimeengine.Options{
+-			HostRoot:         hostRoot,
+-			Profile:          profile,
+-			Policy:           policy,
+-			RCFiles:          append([]string(nil), cfg.DefaultRCFiles...),
+-			EnableTestCorpus: cfg.EnableTestMount,
+-		})
++		env, err := runtimeengine.New(opts)
+ 		if err != nil {
+ 			status := http.StatusInternalServerError
+ 			if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+@@ -123,8 +198,8 @@ func NewHandler(cfg Config) http.Handler {
+ 			return
+ 		}
+ 
+-		out, code := env.Execute(r.Context(), command)
+-		resp := executeResponse{Output: out, ExitCode: code}
++		result := env.ExecuteResult(r.Context(), command)
++		resp := executeResponse{ExecutionResult: result, Output: result.FlattenOutput()}
+ 		if req.IncludeMeta {
+ 			resp.Meta = buildExecuteMeta(r.Context(), env, command)
+ 		}
+@@ -133,11 +208,87 @@ func NewHandler(cfg Config) http.Handler {
+ 	return mux
+ }
+ 
+-func writeJSON(w http.ResponseWriter, payload executeResponse) {
++func writeJSON(w http.ResponseWriter, payload any) {
+ 	w.Header().Set("Content-Type", "application/json")
+ 	_ = json.NewEncoder(w).Encode(payload)
+ }
+ 
++func decodeOptionalJSON(r *http.Request, target any) error {
++	if r.Body == nil {
++		return nil
++	}
++	var raw json.RawMessage
++	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
++		if errors.Is(err, io.EOF) {
++			return nil
++		}
++		return err
++	}
++	if len(raw) == 0 || string(raw) == "null" {
++		return nil
++	}
++	return json.Unmarshal(raw, target)
++}
++
++func buildRuntimeOptions(cfg Config, defaultProfile string, defaultPolicy string, hostRootRaw string, rootDirRaw string, profileRaw string, policyRaw string) (runtimeengine.Options, error) {
++	hostRoot := strings.TrimSpace(hostRootRaw)
++	if hostRoot == "" {
++		hostRoot = strings.TrimSpace(rootDirRaw)
++	}
++	if hostRoot == "" {
++		hostRoot = cfg.DefaultHostRoot
++	}
++
++	profileName := strings.TrimSpace(profileRaw)
++	if profileName == "" {
++		profileName = defaultProfile
++	}
++	profile, err := contract.ParseProfile(profileName)
++	if err != nil {
++		return runtimeengine.Options{}, err
++	}
++
++	policyName := strings.TrimSpace(policyRaw)
++	if policyName == "" {
++		policyName = defaultPolicy
++	}
++	policy, err := contract.PolicyPreset(policyName)
++	if err != nil {
++		return runtimeengine.Options{}, err
++	}
++
++	return runtimeengine.Options{
++		HostRoot:         hostRoot,
++		Profile:          profile,
++		Policy:           policy,
++		RCFiles:          append([]string(nil), cfg.DefaultRCFiles...),
++		EnableTestCorpus: cfg.EnableTestMount,
++	}, nil
++}
++
++func parseRequestedPolicy(raw string) (contract.ExecutionPolicy, error) {
++	name := strings.TrimSpace(raw)
++	if name == "" {
++		return contract.ExecutionPolicy{}, nil
++	}
++	return contract.PolicyPreset(name)
++}
++
++func statusForSessionError(err error) int {
++	switch {
++	case errors.Is(err, runtimeengine.ErrSessionNotFound):
++		return http.StatusNotFound
++	case errors.Is(err, runtimeengine.ErrSessionClosed):
++		return http.StatusConflict
++	case errors.Is(err, contract.ErrPolicyCeilingExceeded):
++		return http.StatusBadRequest
++	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
++		return http.StatusRequestTimeout
++	default:
++		return http.StatusInternalServerError
++	}
++}
++
+ func buildExecuteMeta(ctx context.Context, env *runtimeengine.Stack, command string) *executeMeta {
+ 	if env == nil {
+ 		return nil
+diff --git a/pkg/service/httpapi/handler_test.go b/pkg/service/httpapi/handler_test.go
+index 57006e2..2729411 100644
+--- a/pkg/service/httpapi/handler_test.go
++++ b/pkg/service/httpapi/handler_test.go
+@@ -31,15 +31,24 @@ func TestExecuteHandler(t *testing.T) {
+ 		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+ 	}
+ 	var out struct {
+-		Output   string `json:"output"`
+-		ExitCode int    `json:"exit_code"`
++		ExecutionID string `json:"execution_id"`
++		Output      string `json:"output"`
++		Stdout      string `json:"stdout"`
++		Stderr      string `json:"stderr"`
++		ExitCode    int    `json:"exit_code"`
+ 	}
+ 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+ 		t.Fatalf("decode failed: %v", err)
+ 	}
++	if out.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", out)
++	}
+ 	if out.ExitCode != 0 {
+ 		t.Fatalf("unexpected exit code %d output=%q", out.ExitCode, out.Output)
+ 	}
++	if out.Stdout != out.Output || out.Stderr != "" {
++		t.Fatalf("unexpected structured stdout/stderr: %+v", out)
++	}
+ 	if !strings.Contains(out.Output, "PATH=/sys/bin:/bin") {
+ 		t.Fatalf("unexpected output %q", out.Output)
+ 	}
+@@ -344,3 +353,228 @@ func TestExtractAbsPathsParsesShellStyleTokens(t *testing.T) {
+ 		}
+ 	}
+ }
++
++func TestSessionLifecycleHandler(t *testing.T) {
++	tmp := t.TempDir()
++	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")
++	if err := os.MkdirAll(filepath.Dir(rcPath), 0o755); err != nil {
++		t.Fatalf("mkdir failed: %v", err)
++	}
++	if err := os.WriteFile(rcPath, []byte("export HTTP_SESSION=enabled\n"), 0o644); err != nil {
++		t.Fatalf("write rc file failed: %v", err)
++	}
++
++	h := NewHandler(Config{
++		DefaultHostRoot: tmp,
++		DefaultProfile:  "core-strict",
++		DefaultPolicy:   "read-only",
++		DefaultRCFiles:  []string{"/task_outputs/simshrc"},
++	})
++	ts := httptest.NewServer(h)
++	defer ts.Close()
++
++	createResp := postJSON(t, ts.URL+"/v1/sessions", map[string]any{})
++	defer createResp.Body.Close()
++	if createResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(createResp.Body)
++		t.Fatalf("unexpected create status=%d body=%s", createResp.StatusCode, string(raw))
++	}
++	var created struct {
++		Session struct {
++			SessionID string `json:"session_id"`
++			State     struct {
++				RCFiles []string `json:"rc_files"`
++			} `json:"state"`
++		} `json:"session"`
++	}
++	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
++		t.Fatalf("decode create failed: %v", err)
++	}
++	if created.Session.SessionID == "" {
++		t.Fatalf("expected session_id in create response")
++	}
++	if len(created.Session.State.RCFiles) != 1 || created.Session.State.RCFiles[0] != "/task_outputs/simshrc" {
++		t.Fatalf("unexpected create rc files: %v", created.Session.State.RCFiles)
++	}
++
++	executeResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
++		"session_id": created.Session.SessionID,
++		"command":    "env HTTP_SESSION",
++	})
++	defer executeResp.Body.Close()
++	if executeResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(executeResp.Body)
++		t.Fatalf("unexpected execute status=%d body=%s", executeResp.StatusCode, string(raw))
++	}
++	var executed struct {
++		ExecutionID string `json:"execution_id"`
++		Output      string `json:"output"`
++		Stdout      string `json:"stdout"`
++		ExitCode    int    `json:"exit_code"`
++		SessionID   string `json:"session_id"`
++	}
++	if err := json.NewDecoder(executeResp.Body).Decode(&executed); err != nil {
++		t.Fatalf("decode execute failed: %v", err)
++	}
++	if executed.SessionID != created.Session.SessionID {
++		t.Fatalf("unexpected execute session_id=%q want=%q", executed.SessionID, created.Session.SessionID)
++	}
++	if executed.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", executed)
++	}
++	if executed.ExitCode != 0 || strings.TrimSpace(executed.Stdout) != "HTTP_SESSION=enabled" {
++		t.Fatalf("unexpected execute output: %+v", executed)
++	}
++
++	checkpointResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/checkpoint", map[string]any{})
++	defer checkpointResp.Body.Close()
++	if checkpointResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(checkpointResp.Body)
++		t.Fatalf("unexpected checkpoint status=%d body=%s", checkpointResp.StatusCode, string(raw))
++	}
++
++	closeResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/close", map[string]any{})
++	defer closeResp.Body.Close()
++	if closeResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(closeResp.Body)
++		t.Fatalf("unexpected close status=%d body=%s", closeResp.StatusCode, string(raw))
++	}
++
++	closedExecuteResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
++		"session_id": created.Session.SessionID,
++		"command":    "env HTTP_SESSION",
++	})
++	defer closedExecuteResp.Body.Close()
++	if closedExecuteResp.StatusCode != http.StatusConflict {
++		raw, _ := io.ReadAll(closedExecuteResp.Body)
++		t.Fatalf("unexpected closed execute status=%d body=%s", closedExecuteResp.StatusCode, string(raw))
++	}
++
++	if err := os.Remove(rcPath); err != nil {
++		t.Fatalf("remove rc failed: %v", err)
++	}
++	resumeResp := postJSON(t, ts.URL+"/v1/sessions/"+created.Session.SessionID+"/resume", map[string]any{})
++	defer resumeResp.Body.Close()
++	if resumeResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(resumeResp.Body)
++		t.Fatalf("unexpected resume status=%d body=%s", resumeResp.StatusCode, string(raw))
++	}
++
++	resumeExecuteResp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
++		"session_id": created.Session.SessionID,
++		"command":    "env HTTP_SESSION",
++	})
++	defer resumeExecuteResp.Body.Close()
++	if resumeExecuteResp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(resumeExecuteResp.Body)
++		t.Fatalf("unexpected resumed execute status=%d body=%s", resumeExecuteResp.StatusCode, string(raw))
++	}
++	var resumed struct {
++		ExecutionID string `json:"execution_id"`
++		Output      string `json:"output"`
++		Stdout      string `json:"stdout"`
++		ExitCode    int    `json:"exit_code"`
++	}
++	if err := json.NewDecoder(resumeExecuteResp.Body).Decode(&resumed); err != nil {
++		t.Fatalf("decode resumed execute failed: %v", err)
++	}
++	if resumed.ExecutionID == "" {
++		t.Fatalf("expected execution_id, got %+v", resumed)
++	}
++	if resumed.ExitCode != 0 || strings.TrimSpace(resumed.Stdout) != "HTTP_SESSION=enabled" {
++		t.Fatalf("unexpected resumed output: %+v", resumed)
++	}
++}
++
++func TestExecuteHandlerRejectsSessionPolicyEscalation(t *testing.T) {
++	tmp := t.TempDir()
++	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
++	ts := httptest.NewServer(h)
++	defer ts.Close()
++
++	createResp := postJSON(t, ts.URL+"/v1/sessions", map[string]any{})
++	defer createResp.Body.Close()
++	var created struct {
++		Session struct {
++			SessionID string `json:"session_id"`
++		} `json:"session"`
++	}
++	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
++		t.Fatalf("decode create failed: %v", err)
++	}
++
++	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
++		"session_id": created.Session.SessionID,
++		"command":    "echo hi",
++		"policy":     "full",
++	})
++	defer resp.Body.Close()
++	if resp.StatusCode != http.StatusBadRequest {
++		raw, _ := io.ReadAll(resp.Body)
++		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
++	}
++}
++
++func TestExecuteHandlerReturnsTracePaths(t *testing.T) {
++	tmp := t.TempDir()
++	hostFile := filepath.Join(tmp, "task_outputs", "trace.txt")
++	if err := os.MkdirAll(filepath.Dir(hostFile), 0o755); err != nil {
++		t.Fatalf("mkdir failed: %v", err)
++	}
++	if err := os.WriteFile(hostFile, []byte("trace\n"), 0o644); err != nil {
++		t.Fatalf("write file failed: %v", err)
++	}
++
++	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
++	ts := httptest.NewServer(h)
++	defer ts.Close()
++
++	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{"command": "cat /task_outputs/trace.txt"})
++	defer resp.Body.Close()
++	if resp.StatusCode != http.StatusOK {
++		raw, _ := io.ReadAll(resp.Body)
++		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
++	}
++
++	var out struct {
++		Trace struct {
++			Command        string   `json:"command"`
++			RequestedPaths []string `json:"requested_paths"`
++			ReadPaths      []string `json:"read_paths"`
++		} `json:"trace"`
++	}
++	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
++		t.Fatalf("decode failed: %v", err)
++	}
++	if out.Trace.Command != "cat" {
++		t.Fatalf("unexpected command trace: %+v", out.Trace)
++	}
++	if !containsString(out.Trace.RequestedPaths, "/task_outputs/trace.txt") {
++		t.Fatalf("expected requested path in trace: %+v", out.Trace)
++	}
++	if !containsString(out.Trace.ReadPaths, "/task_outputs/trace.txt") {
++		t.Fatalf("expected read path in trace: %+v", out.Trace)
++	}
++}
++
++func postJSON(t *testing.T, url string, payload map[string]any) *http.Response {
++	t.Helper()
++	body, err := json.Marshal(payload)
++	if err != nil {
++		t.Fatalf("marshal payload failed: %v", err)
++	}
++	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
++	if err != nil {
++		t.Fatalf("post failed: %v", err)
++	}
++	return resp
++}
++
++func containsString(values []string, target string) bool {
++	for _, value := range values {
++		if value == target {
++			return true
++		}
++	}
++	return false
++}
+diff --git a/pkg/service/service.go b/pkg/service/service.go
+index 15cd8c7..1d571e6 100644
+--- a/pkg/service/service.go
++++ b/pkg/service/service.go
+@@ -17,8 +17,8 @@ type ExecuteRequest struct {
+ }
+ 
+ type ExecuteResponse struct {
+-	Output   string `json:"output"`
+-	ExitCode int    `json:"exit_code"`
++	contract.ExecutionResult
++	Output string `json:"output,omitempty"`
+ }
+ 
+ type OpsFactory func(ctx context.Context, req ExecuteRequest) (contract.Ops, error)
+@@ -37,12 +37,13 @@ func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (Exec
+ 	}
+ 	command := strings.TrimSpace(req.Command)
+ 	if command == "" {
+-		return ExecuteResponse{Output: "execute: command is required", ExitCode: contract.ExitCodeUsage}, nil
++		result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
++		return ExecuteResponse{ExecutionResult: result, Output: result.FlattenOutput()}, nil
+ 	}
+ 	ops, err := s.OpsFactory(ctx, req)
+ 	if err != nil {
+ 		return ExecuteResponse{}, err
+ 	}
+-	out, code := s.Engine.Execute(ctx, command, ops)
+-	return ExecuteResponse{Output: out, ExitCode: code}, nil
++	result := s.Engine.ExecuteResult(ctx, command, ops)
++	return ExecuteResponse{ExecutionResult: result, Output: result.FlattenOutput()}, nil
+ }

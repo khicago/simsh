@@ -5,6 +5,7 @@
   "slug": "plan-sync-agentfs-write-limit",
   "goal": "校准首版计划状态并把ExecutionPolicy.MaxWriteBytes联动到agentfs写入限制，补齐回归验证",
   "status": "archived",
+  "workspace_mode": "worktree",
   "base_ref": "main",
   "branch": "feat/f-20260224-plan-sync-agentfs-write-limit",
   "worktree_name": "wt-f-20260224-plan-sync-agentfs-write-limit",

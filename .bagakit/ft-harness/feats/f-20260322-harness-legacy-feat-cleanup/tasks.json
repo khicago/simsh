@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260322-harness-legacy-feat-cleanup",
-  "updated_at": "2026-03-22T08:55:02Z",
+  "updated_at": "2026-03-22T09:15:24Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Migrate legacy feat schema and archive policy safely",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Define and execute a safe migration path for pre-workspace_mode feat metadata so old done feats can be validated and archived without hand-editing live state.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T09:15:24Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T09:13:36Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T08:55:02Z",
+      "updated_at": "2026-03-22T09:15:24Z",
       "notes": []
     }
   ]

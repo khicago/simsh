@@ -5,6 +5,7 @@
   "slug": "path-access-metadata",
   "goal": "Implement SSOT path access metadata (access=ro|rw + capabilities[]) and surface it consistently in ls -l (short columns + legend, --fmt md/json) and /v1/execute (include_meta opt-in).",
   "status": "archived",
+  "workspace_mode": "worktree",
   "branch": "feat/f-20260218-path-access-metadata",
   "worktree_name": "wt-f-20260218-path-access-metadata",
   "worktree_path": ".worktrees/wt-f-20260218-path-access-metadata",

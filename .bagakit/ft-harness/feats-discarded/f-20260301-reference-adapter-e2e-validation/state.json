@@ -4,13 +4,14 @@
   "title": "Reference adapter end-to-end validation",
   "slug": "reference-adapter-e2e-validation",
   "goal": "Implement one adapter-backed reference workload that validates session, trace, projection, and memory contracts end to end.",
-  "status": "done",
+  "status": "discarded",
+  "workspace_mode": "worktree",
   "base_ref": "main",
   "branch": "codex/f-20260301-reference-adapter-e2e-validation",
   "worktree_name": "wt-f-20260301-reference-adapter-e2e-validation",
   "worktree_path": ".worktrees/wt-f-20260301-reference-adapter-e2e-validation",
   "created_at": "2026-03-01T00:00:00Z",
-  "updated_at": "2026-03-01T19:00:26Z",
+  "updated_at": "2026-03-22T09:13:37Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
@@ -60,9 +61,31 @@
       "at": "2026-03-01T19:00:26Z",
       "action": "task_finished",
       "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-03-22T09:13:37Z",
+      "action": "feat_discarded",
+      "detail": "reason=superseded; replacement=none"
     }
   ],
   "depends_on": [
     "f-20260301-adapter-lifecycle-memory-protocol"
-  ]
+  ],
+  "closed_from_status": "done",
+  "discard_reason": "superseded",
+  "replacement_feat_id": null,
+  "discarded_at": "2026-03-22T09:13:37Z",
+  "discarded_cleanup": {
+    "workspace_mode": "worktree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": true,
+    "worktree_pruned": true,
+    "branch_deleted": true,
+    "worktree_patch": "",
+    "worktree_staged_patch": "",
+    "branch_patch": ".bagakit/ft-harness/feats-discarded/f-20260301-reference-adapter-e2e-validation/artifacts/discard-branch.patch",
+    "untracked_archive": "",
+    "note": "discard closes stale/superseded work while preserving feat artifacts; worktree mode force-removes worktree and deletes branch after exporting patches when available"
+  }
 }

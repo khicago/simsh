@@ -5,6 +5,7 @@
   "slug": "tooling-docs-consistency",
   "goal": "按1/2/3顺序完成提交拆分策略、man/manual/README与工具补齐优化，并通过全量校验",
   "status": "archived",
+  "workspace_mode": "worktree",
   "base_ref": "main",
   "branch": "feat/f-20260220-tooling-docs-consistency",
   "worktree_name": "wt-f-20260220-tooling-docs-consistency",
