@@ -12,7 +12,7 @@ import (
 func specTee() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTee,
-		Manual: "echo data | tee [-a] ABS_FILE",
+		Manual: "echo data | tee [-a] PATH",
 		Tips: []string{
 			"Use -a to append instead of replacing file content.",
 			"tee requires stdin, usually from a pipeline or heredoc.",

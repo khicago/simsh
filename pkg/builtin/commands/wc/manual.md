@@ -1,6 +1,6 @@
 ---
 name: wc
-synopsis: "wc [-l] [-w] [-c] [ABS_FILE]"
+synopsis: "wc [-l] [-w] [-c] [PATH]"
 category: text-processing
 ---
 
@@ -8,7 +8,7 @@ category: text-processing
 
 ## SYNOPSIS
 
-    wc [-l] [-w] [-c] [ABS_FILE]
+    wc [-l] [-w] [-c] [PATH]
     COMMAND | wc [-l] [-w] [-c]
 
 ## DESCRIPTION
@@ -42,7 +42,7 @@ Combine flags:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Reads from stdin when no file path is provided.
 - A word is a sequence of non-whitespace characters.
 

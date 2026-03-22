@@ -26,7 +26,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "touch",
-		Manual: "touch ABS_PATH...",
+		Manual: "touch PATH...",
 		Tips: []string{
 			"Creates empty files if they do not exist.",
 		},

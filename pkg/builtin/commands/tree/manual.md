@@ -1,6 +1,6 @@
 ---
 name: tree
-synopsis: "tree [-a] [-L N] [ABS_PATH...]"
+synopsis: "tree [-a] [-L N] [PATH...]"
 category: navigation
 ---
 
@@ -8,12 +8,13 @@ category: navigation
 
 ## SYNOPSIS
 
-    tree [-a] [-L N] [ABS_PATH...]
+    tree [-a] [-L N] [PATH...]
 
 ## DESCRIPTION
 
-Render directory contents as an ASCII tree. If no path is provided, it starts
-from the virtual runtime root.
+Render directory contents as an ASCII tree. Paths may be absolute or relative
+to the current virtual working directory. If no path is provided, it starts
+from the current virtual working directory.
 
 ## FLAGS
 
@@ -36,7 +37,7 @@ Include hidden files:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - File targets are printed as a single line path.
 - `-L 0` prints only the root line for directory targets.
 

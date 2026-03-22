@@ -11,7 +11,7 @@ import (
 func specCat() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandCat,
-		Manual: "cat [-n] ABS_FILE | cat (stdin passthrough)",
+		Manual: "cat [-n] PATH | cat (stdin passthrough)",
 		Tips: []string{
 			"Use cat with no args to pass stdin through a pipeline.",
 			"Use -n to display line numbers.",
@@ -34,7 +34,7 @@ func runCat(runtime engine.CommandRuntime, args []string) (string, int) {
 			return fmt.Sprintf("cat: unsupported flag %s", arg), contract.ExitCodeUsage
 		}
 		if filePath != "" {
-			return "cat: expected exactly one absolute file path", contract.ExitCodeUsage
+			return "cat: expected exactly one file path", contract.ExitCodeUsage
 		}
 		pathValue, err := runtime.Ops.RequireAbsolutePath(arg)
 		if err != nil {
@@ -49,7 +49,7 @@ func runCat(runtime engine.CommandRuntime, args []string) (string, int) {
 		return runtime.Stdin, 0
 	}
 	if filePath == "" {
-		return "cat: expected exactly one absolute file path", contract.ExitCodeUsage
+		return "cat: expected exactly one file path", contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 	if err != nil {

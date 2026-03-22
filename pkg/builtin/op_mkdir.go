@@ -12,7 +12,7 @@ import (
 func specMkdir() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandMkdir,
-		Manual: "mkdir [-p] ABS_PATH...",
+		Manual: "mkdir [-p] PATH...",
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
 			"Mount-backed virtual paths are immutable and cannot be created.",

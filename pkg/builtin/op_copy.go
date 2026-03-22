@@ -11,9 +11,9 @@ import (
 func specCp() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandCp,
-		Manual: "cp SRC_ABS DEST_ABS",
+		Manual: "cp SRC_PATH DEST_PATH",
 		Tips: []string{
-			"Copies a file from source to destination. Both paths must be absolute.",
+			"Copies a file from source to destination.",
 			"Mount-backed virtual paths are immutable and not valid copy operands.",
 		},
 		Examples:       ExamplesFor("cp"),

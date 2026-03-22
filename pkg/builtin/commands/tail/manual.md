@@ -1,6 +1,6 @@
 ---
 name: tail
-synopsis: "tail [-n N|-N] [ABS_FILE]"
+synopsis: "tail [-n N|-N] [PATH]"
 category: navigation
 ---
 
@@ -8,7 +8,7 @@ category: navigation
 
 ## SYNOPSIS
 
-    tail [-n N|-N] [ABS_FILE]
+    tail [-n N|-N] [PATH]
     COMMAND | tail [-n N|-N]
 
 ## DESCRIPTION
@@ -40,7 +40,7 @@ From a pipeline:
 ## NOTES
 
 - N must be a non-negative integer.
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Reads from stdin when no file path is provided.
 
 ## SEE ALSO

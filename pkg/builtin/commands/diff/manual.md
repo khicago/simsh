@@ -1,6 +1,6 @@
 ---
 name: diff
-synopsis: "diff ABS_FILE1 ABS_FILE2"
+synopsis: "diff PATH1 PATH2"
 category: text-processing
 ---
 
@@ -8,7 +8,7 @@ category: text-processing
 
 ## SYNOPSIS
 
-    diff ABS_FILE1 ABS_FILE2
+    diff PATH1 PATH2
 
 ## DESCRIPTION
 

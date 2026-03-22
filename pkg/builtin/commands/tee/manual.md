@@ -1,6 +1,6 @@
 ---
 name: tee
-synopsis: "tee [-a] ABS_FILE"
+synopsis: "tee [-a] PATH"
 category: file-management
 ---
 
@@ -8,7 +8,7 @@ category: file-management
 
 ## SYNOPSIS
 
-    COMMAND | tee [-a] ABS_FILE
+    COMMAND | tee [-a] PATH
 
 ## DESCRIPTION
 
@@ -37,7 +37,7 @@ Chain with other commands:
 
 - Requires stdin input; cannot be used standalone.
 - Writes to exactly one file.
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 
 ## SEE ALSO

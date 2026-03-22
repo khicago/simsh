@@ -12,7 +12,7 @@ import (
 func specTouch() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTouch,
-		Manual: "touch ABS_PATH...",
+		Manual: "touch PATH...",
 		Tips: []string{
 			"Creates empty files if they do not exist.",
 		},

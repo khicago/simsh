@@ -1,6 +1,6 @@
 ---
 name: mv
-synopsis: "mv ABS_SRC ABS_DST"
+synopsis: "mv SRC_PATH DST_PATH"
 category: file-management
 ---
 
@@ -8,12 +8,12 @@ category: file-management
 
 ## SYNOPSIS
 
-    mv ABS_SRC ABS_DST
+    mv SRC_PATH DST_PATH
 
 ## DESCRIPTION
 
-Move or rename a file or directory. Both source and destination must be
-absolute paths.
+Move or rename a file or directory. Paths may be absolute or relative to the
+current virtual working directory.
 
 ## EXAMPLES
 
@@ -31,7 +31,7 @@ Move a directory:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 - Destination parent directory must exist.
 

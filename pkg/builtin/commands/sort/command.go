@@ -28,7 +28,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "sort",
-		Manual: "sort [-r] [-n] [-u] [ABS_FILE]",
+		Manual: "sort [-r] [-n] [-u] [PATH]",
 		Tips: []string{
 			"Sorts lines. Use stdin when no file is given.",
 			"-r reverses order, -n sorts numerically, -u removes duplicates.",
@@ -117,7 +117,7 @@ func loadSource(runtime engine.CommandRuntime, filePath string) (string, string,
 		return runtime.Stdin, "", 0
 	}
 	if filePath == "" {
-		return "", "sort: expected stdin input or one absolute file path", contract.ExitCodeUsage
+		return "", "sort: expected stdin input or one file path", contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 	if err != nil {

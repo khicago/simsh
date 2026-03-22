@@ -9,9 +9,9 @@ category: docs
 ## SYNOPSIS
 
 ```bash
-frontmatter stat [-r] [--fmt compact|json|md] ABS_PATH...
-frontmatter get [--raw] [--key KEY] ABS_FILE
-frontmatter print [-r] [--key KEY] [-B N] [-A N] [-C N] [-n] ABS_PATH...
+frontmatter stat [-r] [--fmt compact|json|md] PATH...
+frontmatter get [--raw] [--key KEY] PATH
+frontmatter print [-r] [--key KEY] [-B N] [-A N] [-C N] [-n] PATH...
 ```
 
 ## DESCRIPTION
@@ -60,6 +60,7 @@ frontmatter print --key sop -C 2 docs/must-sop.md
 ## NOTES
 
 - Frontmatter is detected only when the first line is `---` and a closing `---` exists.
+- Paths may be absolute or relative to the current virtual working directory.
 - `compact` output ends with a single legend line:
   - `# columns: has fm_lines key_count keys path`
 - Default aliases include:

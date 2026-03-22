@@ -11,9 +11,9 @@ import (
 func specMv() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandMv,
-		Manual: "mv SRC_ABS DEST_ABS",
+		Manual: "mv SRC_PATH DEST_PATH",
 		Tips: []string{
-			"Moves a file from source to destination. Both paths must be absolute.",
+			"Moves a file from source to destination.",
 			"Mount-backed virtual paths are immutable and cannot be moved.",
 		},
 		Examples:       ExamplesFor("mv"),

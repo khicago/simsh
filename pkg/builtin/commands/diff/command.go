@@ -26,7 +26,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "diff",
-		Manual: "diff ABS_FILE1 ABS_FILE2",
+		Manual: "diff PATH1 PATH2",
 		Tips: []string{
 			"Compares two files line by line.",
 			"Exit code 0 if identical, 1 if different.",

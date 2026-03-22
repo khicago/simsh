@@ -26,7 +26,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "rm",
-		Manual: "rm ABS_PATH...",
+		Manual: "rm PATH...",
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
 		},

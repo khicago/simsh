@@ -1,6 +1,6 @@
 ---
 name: touch
-synopsis: "touch ABS_FILE..."
+synopsis: "touch PATH..."
 category: file-management
 ---
 
@@ -8,7 +8,7 @@ category: file-management
 
 ## SYNOPSIS
 
-    touch ABS_FILE...
+    touch PATH...
 
 ## DESCRIPTION
 
@@ -27,7 +27,7 @@ Create multiple files:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 - Does not modify existing files.
 

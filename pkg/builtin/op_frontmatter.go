@@ -97,7 +97,7 @@ func runFrontmatterStat(runtime engine.CommandRuntime, args []string) (string, i
 	}
 
 	if len(targets) == 0 {
-		return "frontmatter stat: expected at least one absolute path", contract.ExitCodeUsage
+		return "frontmatter stat: expected at least one path", contract.ExitCodeUsage
 	}
 
 	files, out, code := expandFrontmatterTargets(runtime, "frontmatter stat", targets, recursive)
@@ -153,7 +153,7 @@ func runFrontmatterGet(runtime engine.CommandRuntime, args []string) (string, in
 			return fmt.Sprintf("frontmatter get: unsupported flag %s", arg), contract.ExitCodeUsage
 		default:
 			if pathValue != "" {
-				return "frontmatter get: expected exactly one absolute file path", contract.ExitCodeUsage
+				return "frontmatter get: expected exactly one file path", contract.ExitCodeUsage
 			}
 			resolved, err := runtime.Ops.RequireAbsolutePath(arg)
 			if err != nil {
@@ -164,7 +164,7 @@ func runFrontmatterGet(runtime engine.CommandRuntime, args []string) (string, in
 	}
 
 	if pathValue == "" {
-		return "frontmatter get: expected one absolute file path", contract.ExitCodeUsage
+		return "frontmatter get: expected one file path", contract.ExitCodeUsage
 	}
 
 	isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, pathValue)
@@ -293,7 +293,7 @@ func runFrontmatterPrint(runtime engine.CommandRuntime, args []string) (string, 
 	}
 
 	if len(targets) == 0 {
-		return "frontmatter print: expected at least one absolute path", contract.ExitCodeUsage
+		return "frontmatter print: expected at least one path", contract.ExitCodeUsage
 	}
 
 	files, out, code := expandFrontmatterTargets(runtime, "frontmatter print", targets, recursive)

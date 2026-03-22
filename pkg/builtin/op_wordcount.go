@@ -11,7 +11,7 @@ import (
 func specWc() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandWc,
-		Manual: "wc [-l] [-w] [-c] [ABS_FILE]",
+		Manual: "wc [-l] [-w] [-c] [PATH]",
 		Tips: []string{
 			"Counts lines, words, and bytes. Use stdin when no file is given.",
 		},
@@ -92,7 +92,7 @@ func loadWcSource(runtime engine.CommandRuntime, filePath string) (string, strin
 		return runtime.Stdin, "", 0
 	}
 	if filePath == "" {
-		return "", "wc: expected stdin input or one absolute file path", contract.ExitCodeUsage
+		return "", "wc: expected stdin input or one file path", contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 	if err != nil {

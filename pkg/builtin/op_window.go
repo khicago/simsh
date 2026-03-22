@@ -16,7 +16,7 @@ type headTailArgs struct {
 func specHead() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandHead,
-		Manual: "head [-n N|-N] [ABS_FILE]",
+		Manual: "head [-n N|-N] [PATH]",
 		Tips: []string{
 			"Use stdin input when no file path is provided.",
 			"-n accepts non-negative integers only.",
@@ -30,7 +30,7 @@ func specHead() engine.CommandSpec {
 func specTail() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTail,
-		Manual: "tail [-n N|-N] [ABS_FILE]",
+		Manual: "tail [-n N|-N] [PATH]",
 		Tips: []string{
 			"Use stdin input when no file path is provided.",
 			"-n accepts non-negative integers only.",
@@ -84,7 +84,7 @@ func loadHeadTailSource(runtime engine.CommandRuntime, cmd string, pathValue str
 		return runtime.Stdin, "", 0
 	}
 	if strings.TrimSpace(pathValue) == "" {
-		return "", fmt.Sprintf("%s: expected stdin input or one absolute file path", cmd), contract.ExitCodeUsage
+		return "", fmt.Sprintf("%s: expected stdin input or one file path", cmd), contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, pathValue)
 	if err != nil {

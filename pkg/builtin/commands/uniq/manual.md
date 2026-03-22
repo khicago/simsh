@@ -1,6 +1,6 @@
 ---
 name: uniq
-synopsis: "uniq [-c] [-d] [ABS_FILE]"
+synopsis: "uniq [-c] [-d] [PATH]"
 category: text-processing
 ---
 
@@ -8,7 +8,7 @@ category: text-processing
 
 ## SYNOPSIS
 
-    uniq [-c] [-d] [ABS_FILE]
+    uniq [-c] [-d] [PATH]
     COMMAND | uniq [-c] [-d]
 
 ## DESCRIPTION
@@ -41,7 +41,7 @@ Pipeline usage:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Reads from stdin when no file path is provided.
 - Only filters adjacent duplicates. Use `sort` first for global deduplication.
 

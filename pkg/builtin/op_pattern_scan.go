@@ -22,7 +22,7 @@ type grepArgs struct {
 func specGrep() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandGrep,
-		Manual: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [ABS_PATH]",
+		Manual: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]",
 		Tips: []string{
 			"Use -r for directory search and -l to list matched files only.",
 			"Context flags -A/-B/-C include neighboring lines around each match.",
@@ -56,7 +56,7 @@ func runGrep(runtime engine.CommandRuntime, args []string) (string, int) {
 		return strings.Join(out, "\n"), 0
 	}
 	if !runtime.HasStdin && opts.path == "" {
-		return "grep: expected stdin input or one absolute file/directory path", contract.ExitCodeUsage
+		return "grep: expected stdin input or one file/directory path", contract.ExitCodeUsage
 	}
 	target := opts.path
 	paths, err := runtime.Ops.ResolveSearchPaths(runtime.Ctx, target, opts.recursive)

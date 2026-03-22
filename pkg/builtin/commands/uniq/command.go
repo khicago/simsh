@@ -26,7 +26,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "uniq",
-		Manual: "uniq [-c] [-d] [ABS_FILE]",
+		Manual: "uniq [-c] [-d] [PATH]",
 		Tips: []string{
 			"Removes adjacent duplicate lines. Use stdin when no file is given.",
 			"-c prefixes lines with occurrence count, -d only prints duplicates.",
@@ -108,7 +108,7 @@ func loadSource(runtime engine.CommandRuntime, filePath string) (string, string,
 		return runtime.Stdin, "", 0
 	}
 	if filePath == "" {
-		return "", "uniq: expected stdin input or one absolute file path", contract.ExitCodeUsage
+		return "", "uniq: expected stdin input or one file path", contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 	if err != nil {

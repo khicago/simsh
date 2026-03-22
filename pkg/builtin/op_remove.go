@@ -12,7 +12,7 @@ import (
 func specRm() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandRm,
-		Manual: "rm ABS_PATH...",
+		Manual: "rm PATH...",
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
 			"Mount-backed virtual paths are immutable and cannot be removed.",

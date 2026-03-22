@@ -1,6 +1,6 @@
 ---
 name: rm
-synopsis: "rm ABS_PATH..."
+synopsis: "rm PATH..."
 category: file-management
 ---
 
@@ -8,7 +8,7 @@ category: file-management
 
 ## SYNOPSIS
 
-    rm ABS_PATH...
+    rm PATH...
 
 ## DESCRIPTION
 
@@ -26,7 +26,7 @@ Remove multiple files:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 - Directory removal is not supported.
 - This operation is not reversible.

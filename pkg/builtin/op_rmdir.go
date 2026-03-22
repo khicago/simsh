@@ -12,7 +12,7 @@ import (
 func specRmdir() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandRmdir,
-		Manual: "rmdir ABS_DIR...",
+		Manual: "rmdir PATH...",
 		Tips: []string{
 			"Removes empty directories only.",
 			"Use rm for files; rmdir rejects non-empty directories.",

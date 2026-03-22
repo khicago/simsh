@@ -1,6 +1,6 @@
 ---
 name: sort
-synopsis: "sort [-r] [-n] [-u] [ABS_FILE]"
+synopsis: "sort [-r] [-n] [-u] [PATH]"
 category: text-processing
 ---
 
@@ -8,7 +8,7 @@ category: text-processing
 
 ## SYNOPSIS
 
-    sort [-r] [-n] [-u] [ABS_FILE]
+    sort [-r] [-n] [-u] [PATH]
     COMMAND | sort [-r] [-n] [-u]
 
 ## DESCRIPTION
@@ -42,7 +42,7 @@ Unique sorted lines from stdin:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Reads from stdin when no file path is provided.
 - Numeric sort treats non-numeric lines as having value 0.
 

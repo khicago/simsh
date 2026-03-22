@@ -1,6 +1,6 @@
 ---
 name: rmdir
-synopsis: "rmdir ABS_DIR..."
+synopsis: "rmdir PATH..."
 category: file-management
 ---
 
@@ -8,7 +8,7 @@ category: file-management
 
 ## SYNOPSIS
 
-    rmdir ABS_DIR...
+    rmdir PATH...
 
 ## DESCRIPTION
 
@@ -26,7 +26,7 @@ Remove multiple empty directories:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Only empty directories can be removed.
 - Write operations are still restricted by policy and mount immutability rules.
 

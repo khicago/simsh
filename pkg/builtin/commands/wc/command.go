@@ -25,7 +25,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "wc",
-		Manual: "wc [-l] [-w] [-c] [ABS_FILE]",
+		Manual: "wc [-l] [-w] [-c] [PATH]",
 		Tips: []string{
 			"Counts lines, words, and bytes. Use stdin when no file is given.",
 		},
@@ -106,7 +106,7 @@ func loadSource(runtime engine.CommandRuntime, filePath string) (string, string,
 		return runtime.Stdin, "", 0
 	}
 	if filePath == "" {
-		return "", "wc: expected stdin input or one absolute file path", contract.ExitCodeUsage
+		return "", "wc: expected stdin input or one file path", contract.ExitCodeUsage
 	}
 	raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 	if err != nil {

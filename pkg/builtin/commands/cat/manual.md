@@ -1,6 +1,6 @@
 ---
 name: cat
-synopsis: "cat [-n] ABS_FILE"
+synopsis: "cat [-n] PATH"
 category: navigation
 ---
 
@@ -8,7 +8,7 @@ category: navigation
 
 ## SYNOPSIS
 
-    cat [-n] ABS_FILE
+    cat [-n] PATH
     COMMAND | cat
 
 ## DESCRIPTION
@@ -43,9 +43,9 @@ Use with grep to show context:
 
 ## NOTES
 
-- Expects exactly one absolute file path, or stdin with no arguments.
+- Expects exactly one file path, or stdin with no arguments.
 - The `-n` flag produces format: `LINENO:content`
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 
 ## SEE ALSO
 

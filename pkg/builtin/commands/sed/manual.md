@@ -1,6 +1,6 @@
 ---
 name: sed
-synopsis: "sed -i 's/old/new/[g]' ABS_FILE | sed -n 'Np'|'M,Np' [ABS_FILE]"
+synopsis: "sed -i 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]"
 category: text-processing
 ---
 
@@ -8,9 +8,9 @@ category: text-processing
 
 ## SYNOPSIS
 
-    sed -i 's/old/new/[g]' ABS_FILE
-    sed -n 'Np' [ABS_FILE]
-    sed -n 'M,Np' [ABS_FILE]
+    sed -i 's/old/new/[g]' PATH
+    sed -n 'Np' [PATH]
+    sed -n 'M,Np' [PATH]
     COMMAND | sed -n 'Np'
     COMMAND | sed -n 'M,Np'
 
@@ -63,7 +63,7 @@ Print lines from stdin:
 - Only `-i` and `-n` modes are supported.
 - In-place edit requires exactly one file path.
 - Line numbers are 1-based and must be positive integers.
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 
 ## SEE ALSO
 

@@ -1,6 +1,6 @@
 ---
 name: grep
-synopsis: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [ABS_PATH]"
+synopsis: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]"
 category: search
 ---
 
@@ -8,7 +8,7 @@ category: search
 
 ## SYNOPSIS
 
-    grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [ABS_PATH]
+    grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]
     COMMAND | grep [-E|-F] [-l] [-A N] [-B N] [-C N] PATTERN
 
 ## DESCRIPTION
@@ -55,7 +55,7 @@ Search stdin from a pipeline:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Exit code is 1 when no matches are found.
 - Only one path argument is accepted.
 - Use `-r` when the path is a directory.

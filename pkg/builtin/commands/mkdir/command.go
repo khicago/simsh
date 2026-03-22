@@ -26,7 +26,7 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "mkdir",
-		Manual: "mkdir [-p] ABS_PATH...",
+		Manual: "mkdir [-p] PATH...",
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
 		},

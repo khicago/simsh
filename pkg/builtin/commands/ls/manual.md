@@ -1,6 +1,6 @@
 ---
 name: ls
-synopsis: "ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]"
+synopsis: "ls [-a] [-R] [-l] [--fmt text|md|json] [PATH...]"
 category: navigation
 ---
 
@@ -8,12 +8,13 @@ category: navigation
 
 ## SYNOPSIS
 
-    ls [-a] [-R] [-l] [--fmt text|md|json] [ABS_PATH...]
+    ls [-a] [-R] [-l] [--fmt text|md|json] [PATH...]
 
 ## DESCRIPTION
 
-List files and directories at the given absolute path(s). If no path is given,
-lists the virtual root directory. Entries are returned one per line.
+List files and directories at the given path(s). Paths may be absolute or
+relative to the current virtual working directory. If no path is given, `ls`
+lists the current virtual working directory. Entries are returned one per line.
 
 ## FLAGS
 
@@ -48,7 +49,7 @@ List a specific file (returns the path):
 
 ## NOTES
 
-- All paths must be absolute (start with `/`).
+- Paths may be absolute or relative to the current virtual working directory.
 - Long format columns: `MODE ACCESS KIND LINES PATH`
 - Mode is `d` for directories, `-` for files.
 - Access is `ro|rw` derived from SSOT path metadata (mount-backed + synthetic mount parents are `ro`).

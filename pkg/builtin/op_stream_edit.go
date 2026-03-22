@@ -16,7 +16,7 @@ var sedPrintExprRe = regexp.MustCompile(`^(\d+)(?:,(\d+))?p$`)
 func specSed() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandSed,
-		Manual: "sed -i 's/old/new/[g]' ABS_FILE | sed -n 'Np'|'M,Np' [ABS_FILE]",
+		Manual: "sed -i 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]",
 		Tips: []string{
 			"Only a focused subset of sed is supported for deterministic behavior.",
 			"Use -n with Np or M,Np to print line ranges.",
@@ -46,7 +46,7 @@ func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "sed: write is not allowed by policy", contract.ExitCodeUnsupported
 	}
 	if len(args) != 3 {
-		return "sed: only supports -i 's/old/new/[g]' ABS_FILE", contract.ExitCodeUsage
+		return "sed: only supports -i 's/old/new/[g]' PATH", contract.ExitCodeUsage
 	}
 	oldValue, newValue, replaceAll, err := parseSedSubstituteExpr(args[1])
 	if err != nil {
@@ -67,7 +67,7 @@ func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
 
 func runSedPrint(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(args) < 2 || len(args) > 3 {
-		return "sed: only supports -n 'Np' or -n 'M,Np' [ABS_FILE]", contract.ExitCodeUsage
+		return "sed: only supports -n 'Np' or -n 'M,Np' [PATH]", contract.ExitCodeUsage
 	}
 	start, end, err := parseSedPrintExpr(args[1])
 	if err != nil {
@@ -86,7 +86,7 @@ func runSedPrint(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 	} else {
 		if !runtime.HasStdin {
-			return "sed: -n requires stdin input or one absolute file path", contract.ExitCodeUsage
+			return "sed: -n requires stdin input or one file path", contract.ExitCodeUsage
 		}
 		raw = runtime.Stdin
 	}

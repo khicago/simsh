@@ -25,9 +25,9 @@ func detailedManual() string {
 func Spec() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   "mv",
-		Manual: "mv SRC_ABS DEST_ABS",
+		Manual: "mv SRC_PATH DEST_PATH",
 		Tips: []string{
-			"Moves a file from source to destination. Both paths must be absolute.",
+			"Moves a file from source to destination.",
 		},
 		Examples:       append([]string(nil), examples...),
 		DetailedManual: detailedManual(),

@@ -1,6 +1,6 @@
 ---
 name: find
-synopsis: "find [ABS_DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]"
+synopsis: "find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]"
 category: search
 ---
 
@@ -8,12 +8,14 @@ category: search
 
 ## SYNOPSIS
 
-    find [ABS_DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]
+    find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]
 
 ## DESCRIPTION
 
 Recursively search for files matching one or more name patterns under the given
-directory. If no directory is specified, searches from the virtual root.
+directory. The directory may be absolute or relative to the current virtual
+working directory. If no directory is specified, `find` searches from the
+current virtual working directory.
 
 Patterns support shell glob characters: `*`, `?`, `[...]`.
 
@@ -51,7 +53,7 @@ Batch execution:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Without `-name`, matches all files (`*`).
 - Only one `-exec` clause is supported per invocation.
 

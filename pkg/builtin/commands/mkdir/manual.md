@@ -1,6 +1,6 @@
 ---
 name: mkdir
-synopsis: "mkdir [-p] ABS_DIR..."
+synopsis: "mkdir [-p] PATH..."
 category: file-management
 ---
 
@@ -8,7 +8,7 @@ category: file-management
 
 ## SYNOPSIS
 
-    mkdir [-p] ABS_DIR...
+    mkdir [-p] PATH...
 
 ## DESCRIPTION
 
@@ -35,7 +35,7 @@ Create multiple directories:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 - Without `-p`, fails if the parent directory does not exist.
 

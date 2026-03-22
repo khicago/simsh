@@ -1,6 +1,6 @@
 ---
 name: cp
-synopsis: "cp ABS_SRC ABS_DST"
+synopsis: "cp SRC_PATH DST_PATH"
 category: file-management
 ---
 
@@ -8,11 +8,12 @@ category: file-management
 
 ## SYNOPSIS
 
-    cp ABS_SRC ABS_DST
+    cp SRC_PATH DST_PATH
 
 ## DESCRIPTION
 
-Copy a file from source to destination. Both paths must be absolute.
+Copy a file from source to destination. Paths may be absolute or relative to
+the current virtual working directory.
 
 ## EXAMPLES
 
@@ -22,7 +23,7 @@ Copy a file:
 
 ## NOTES
 
-- All paths must be absolute.
+- Paths may be absolute or relative to the current virtual working directory.
 - Write operations are subject to zone policy checks.
 - Directory copy is not supported.
 
