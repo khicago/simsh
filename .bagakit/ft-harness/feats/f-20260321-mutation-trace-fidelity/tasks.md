@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Make edit trace bytes and mutation denials more truthful
+- [x] T-001 Make edit trace bytes and mutation denials more truthful
 - [ ] T-002 Preserve more structure across the external command seam
 
 ## Status Legend

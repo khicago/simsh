@@ -4,18 +4,18 @@
   "title": "Mutation trace fidelity",
   "slug": "mutation-trace-fidelity",
   "goal": "Make ExecutionTrace and related resource summaries faithful enough for planners and reviewers to trust mutation-heavy operations without hidden heuristics.",
-  "status": "in_progress",
+  "status": "ready",
   "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:03Z",
-  "updated_at": "2026-03-22T04:43:43Z",
-  "current_task_id": "T-001",
+  "updated_at": "2026-03-22T04:47:44Z",
+  "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
-    "no_progress_rounds": 1,
+    "no_progress_rounds": 0,
     "round_count": 1
   },
   "gate": {
@@ -51,6 +51,11 @@
       "at": "2026-03-22T04:43:43Z",
       "action": "task_gate",
       "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-03-22T04:47:44Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
     }
   ]
 }
