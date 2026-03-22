@@ -19,6 +19,7 @@ tags:
 - `knowledge_base/experience/agent-runtime/anthropic-building-agents-with-claude-agent-sdk-2025-09-29.md`
 - `knowledge_base/experience/agent-runtime/openai-introducing-codex-2025-05-16.md`
 - `knowledge_base/experience/agent-runtime/openai-introducing-the-codex-app-2026-02-02.md`
+- `knowledge_base/experience/agent-runtime/openai-harness-engineering-2026-02-11.md`
 - `knowledge_base/experience/agent-runtime/cognition-how-cognition-uses-devin-to-build-devin-2026-02-27.md`
 - `knowledge_base/experience/agent-runtime/cognition-closing-the-agent-loop-2026-02-10.md`
 - `knowledge_base/experience/agent-runtime/cognition-agent-trace-2026-01-29.md`

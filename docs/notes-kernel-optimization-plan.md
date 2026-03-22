@@ -242,6 +242,22 @@ The next kernel-focused loop should start with:
 - keeping legacy feat schema and archive cleanup in a separate non-kernel maintenance feat;
 - using the benchmark results to decide future kernel investment rather than adding primitives by default.
 
+## Broader System Evolution
+
+The kernel plan should now be read inside a broader harness-engineering trajectory.
+
+The direction is:
+- make the kernel smaller, more legible, and more trustworthy;
+- make the default workspace more explicit and more agent-readable;
+- let adapters project memory, observability, and external systems without pushing product semantics into core;
+- let repository-visible docs, plans, backlog, and curated memory become part of the effective runtime environment for the agent.
+
+This implies a few strategic biases for future work:
+- prefer stronger invariants and better environment legibility over broader shell emulation;
+- prefer repo-local system knowledge over off-repo instructions or tacit habits;
+- prefer continuous cleanup of trace, docs, and ACI drift over periodic large rewrites;
+- treat harness quality as a multiplier on kernel quality rather than as a separate concern.
+
 ## Supporting Material
 
 External research and field notes collected for this plan:

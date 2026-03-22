@@ -36,6 +36,7 @@ This document defines what `simsh` is, what it is not, and the design principles
 - Explicit contracts over implicit magic.
 - Generic core, opinionated adapters.
 - Auditability and side-effect clarity by default.
+- Repository-visible knowledge over off-repo tribal knowledge.
 - Filesystem projection is an integration surface, not a hidden implementation detail.
 - Promote abstractions only after they survive at least one real adapter-backed workload.
 
@@ -49,3 +50,10 @@ This document defines what `simsh` is, what it is not, and the design principles
 - Record durable scope or boundary changes here before spreading them across architecture docs.
 - Put stable contract details in focused architecture docs, not in this charter.
 - Validate major contract changes with tests and at least one adapter-backed end-to-end workload before declaring them stable.
+- Keep durable agent-facing knowledge in repository-visible docs, plans, and curated memory rather than letting it live only in chat transcripts or tacit team memory.
+
+## Evolution Direction
+- Evolve `simsh` further as a kernel inside a harness-engineering stack, not as a CLI-first product or mini-container.
+- Keep narrowing the kernel toward trustworthy execution semantics, filesystem truth, trace truth, and low-noise default ACI.
+- Let higher-level harnesses and AgentOS-style systems grow upward around the kernel through docs, plans, memory, observability, and orchestration layers.
+- Treat documentation freshness, memory curation, and contract drift cleanup as part of system quality, not as secondary process work.
