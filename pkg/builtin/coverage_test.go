@@ -356,8 +356,17 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "type",
 			cmd:  "type ls",
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 || !strings.Contains(out, "ls is /sys/bin/ls (builtin)") {
+				if code != 0 || strings.TrimSpace(out) != "ls builtin /sys/bin/ls" {
 					t.Fatalf("type failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "type-json",
+			cmd:  "type --json ls",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"name\":\"ls\"") || !strings.Contains(out, "\"kind\":\"builtin\"") || !strings.Contains(out, "\"target\":\"/sys/bin/ls\"") {
+					t.Fatalf("type --json failed: code=%d out=%q", code, out)
 				}
 			},
 		},

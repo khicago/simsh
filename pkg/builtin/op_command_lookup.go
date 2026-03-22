@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -118,19 +119,27 @@ func runWhich(runtime engine.CommandRuntime, args []string) (string, int) {
 func specType() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandType,
-		Manual: "type COMMAND...",
+		Manual: "type [--json] COMMAND...",
 		Tips: []string{
 			"Reports whether a command resolves to alias, builtin, or external.",
 			"Lookup order matches command execution: alias -> /sys/bin builtin -> /bin custom external.",
+			"Use --json when you want machine-readable command-resolution records.",
 		},
-		Examples:       ExamplesFor("type"),
-		DetailedManual: LoadEmbeddedManual("type"),
-		Run:            runType,
+		DefaultOutput:    "name kind target rows",
+		StructuredOutput: "command-resolution records",
+		StructuredFlags:  []string{"--json"},
+		Examples:         ExamplesFor("type"),
+		DetailedManual:   LoadEmbeddedManual("type"),
+		Run:              runType,
 	}
 }
 
 func runType(runtime engine.CommandRuntime, args []string) (string, int) {
-	resolved, missing, err := resolveCommandLookups(runtime, args, "type")
+	jsonOutput, filteredArgs, out, code, ok := parseLookupFormatFlag(args, "type")
+	if !ok {
+		return out, code
+	}
+	resolved, missing, err := resolveCommandLookups(runtime, filteredArgs, "type")
 	if err != nil {
 		var usageErr commandUsageError
 		if errors.As(err, &usageErr) {
@@ -138,17 +147,91 @@ func runType(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 		return err.Error(), contract.ExitCodeGeneral
 	}
-	out := make([]string, 0, len(resolved)+len(missing))
+	if jsonOutput {
+		payload := struct {
+			Entries []lookupRecord `json:"entries"`
+		}{
+			Entries: make([]lookupRecord, 0, len(resolved)+len(missing)),
+		}
+		for _, entry := range resolved {
+			payload.Entries = append(payload.Entries, lookupRecord{
+				Name:   entry.name,
+				Kind:   entry.kind,
+				Target: entry.path,
+				Found:  true,
+			})
+		}
+		for _, name := range missing {
+			payload.Entries = append(payload.Entries, lookupRecord{
+				Name:  name,
+				Found: false,
+				Error: fmt.Sprintf("type: %s: not found", name),
+			})
+		}
+		raw, err := json.Marshal(struct {
+			Entries []lookupRecord `json:"entries"`
+		}(payload))
+		if err != nil {
+			return fmt.Sprintf("type: %v", err), contract.ExitCodeGeneral
+		}
+		if len(missing) > 0 {
+			return string(raw), contract.ExitCodeGeneral
+		}
+		return string(raw), 0
+	}
+	lines := make([]string, 0, len(resolved)+len(missing))
 	for _, entry := range resolved {
-		out = append(out, fmt.Sprintf("%s is %s (%s)", entry.name, entry.path, entry.kind))
+		lines = append(lines, fmt.Sprintf("%s %s %s", entry.name, entry.kind, entry.path))
 	}
 	for _, name := range missing {
-		out = append(out, fmt.Sprintf("type: %s: not found", name))
+		lines = append(lines, fmt.Sprintf("type: %s: not found", name))
 	}
 	if len(missing) > 0 {
-		return strings.Join(out, "\n"), contract.ExitCodeGeneral
+		return strings.Join(lines, "\n"), contract.ExitCodeGeneral
 	}
-	return strings.Join(out, "\n"), 0
+	return strings.Join(lines, "\n"), 0
+}
+
+type lookupRecord struct {
+	Query        string `json:"query,omitempty"`
+	Name         string `json:"name,omitempty"`
+	Kind         string `json:"kind,omitempty"`
+	Target       string `json:"target,omitempty"`
+	ResolvedPath string `json:"resolved_path,omitempty"`
+	Found        bool   `json:"found"`
+	Error        string `json:"error,omitempty"`
+}
+
+func parseLookupFormatFlag(args []string, commandName string) (bool, []string, string, int, bool) {
+	filtered := make([]string, 0, len(args))
+	jsonOutput := false
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
+		switch arg {
+		case "--json":
+			jsonOutput = true
+			continue
+		case "--fmt":
+			if idx+1 >= len(args) {
+				return false, nil, fmt.Sprintf("%s: --fmt requires one value: json", commandName), contract.ExitCodeUsage, false
+			}
+			idx++
+			if strings.TrimSpace(args[idx]) != "json" {
+				return false, nil, fmt.Sprintf("%s: unsupported --fmt value %q", commandName, args[idx]), contract.ExitCodeUsage, false
+			}
+			jsonOutput = true
+			continue
+		}
+		if strings.HasPrefix(arg, "--fmt=") {
+			if strings.TrimSpace(strings.TrimPrefix(arg, "--fmt=")) != "json" {
+				return false, nil, fmt.Sprintf("%s: unsupported --fmt value %q", commandName, strings.TrimPrefix(arg, "--fmt=")), contract.ExitCodeUsage, false
+			}
+			jsonOutput = true
+			continue
+		}
+		filtered = append(filtered, arg)
+	}
+	return jsonOutput, filtered, "", 0, true
 }
 
 func resolveCommandLookups(runtime engine.CommandRuntime, args []string, commandName string) ([]commandLookup, []string, error) {

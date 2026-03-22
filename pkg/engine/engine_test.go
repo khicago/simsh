@@ -315,7 +315,7 @@ func TestEngineBuiltinAndExternalMounts(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("type ls report_tool failed: code=%d out=%q", code, out)
 	}
-	if !strings.Contains(out, "ls is /sys/bin/ls (builtin)") || !strings.Contains(out, "report_tool is /bin/report_tool (external)") {
+	if !strings.Contains(out, "ls builtin /sys/bin/ls") || !strings.Contains(out, "report_tool external /bin/report_tool") {
 		t.Fatalf("unexpected type output: %q", out)
 	}
 }
@@ -342,8 +342,13 @@ func TestEngineDefaultCommandAliases(t *testing.T) {
 	}
 
 	out, code = eng.Execute(context.Background(), "type ll", ops)
-	if code != 0 || !strings.Contains(out, "ll is alias ll='ls -l' (alias)") {
+	if code != 0 || !strings.Contains(out, "ll alias alias ll='ls -l'") {
 		t.Fatalf("type ll should show alias resolution: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "type --json ll", ops)
+	if code != 0 || !strings.Contains(out, `"name":"ll"`) || !strings.Contains(out, `"kind":"alias"`) {
+		t.Fatalf("type --json ll should show alias resolution: code=%d out=%q", code, out)
 	}
 }
 
@@ -674,7 +679,7 @@ func TestEngineCommandReferenceNormalization(t *testing.T) {
 		}
 
 		out, code = eng.Execute(context.Background(), "cd /sys/bin; type ./cat", ops)
-		if code != 0 || !strings.Contains(out, "cat is /sys/bin/cat (builtin)") {
+		if code != 0 || !strings.Contains(out, "cat builtin /sys/bin/cat") {
 			t.Fatalf("type ./cat failed: code=%d out=%q", code, out)
 		}
 

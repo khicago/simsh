@@ -1,6 +1,6 @@
 ---
 name: type
-synopsis: "type COMMAND..."
+synopsis: "type [--json] COMMAND..."
 category: navigation
 ---
 
@@ -8,12 +8,22 @@ category: navigation
 
 ## SYNOPSIS
 
-    type COMMAND...
+    type [--json] COMMAND...
 
 ## DESCRIPTION
 
 Describe how each command resolves in the runtime, including its resolved path
 and whether it is an alias, builtin, or external command.
+
+Default output uses one row per command in the form:
+
+    name kind target
+
+Use `--json` when you want machine-readable command-resolution records.
+
+## FLAGS
+
+- `--json` -- Emit command-resolution records as JSON.
 
 ## EXAMPLES
 
@@ -29,10 +39,14 @@ Inspect by absolute command path:
 
     type /sys/bin/ls
 
+Machine-readable resolution:
+
+    type --json ls
+
 ## NOTES
 
 - Lookup order matches execution order: aliases first, then system builtins (`/sys/bin`), then custom externals (`/bin`).
-- Does not support flags.
+- `--json` is the only supported flag.
 - Accepts command names, absolute command paths, or relative command paths that resolve under `/sys/bin` or `/bin`.
 - Returns non-zero when any requested command is not found.
 
