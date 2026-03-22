@@ -1597,6 +1597,39 @@ func TestPipelineIntegration(t *testing.T) {
 		}
 	})
 
+	t.Run("find jsonl shape", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		out, code := eng.Execute(context.Background(), "find /workspace -name \"*.md\" --fmt jsonl", ops)
+		if code != 0 {
+			t.Fatalf("find --fmt jsonl failed: code=%d out=%q", code, out)
+		}
+		if !strings.Contains(out, `"path":"/workspace/readme.md"`) && !strings.Contains(out, `"path":"/workspace/readme.md"`) {
+			t.Fatalf("expected readme path in jsonl output: %q", out)
+		}
+	})
+
+	t.Run("find no match still returns 0", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		out, code := eng.Execute(context.Background(), "find /workspace -name \"*.zzz\" --fmt jsonl", ops)
+		if code != 0 {
+			t.Fatalf("expected exit 0 for find no-match: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("find jsonl rejects exec", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		out, code := eng.Execute(context.Background(), "find /workspace -name \"*.md\" --fmt jsonl -exec cat {} \\;", ops)
+		if code == 0 {
+			t.Fatalf("expected find --fmt jsonl -exec to fail: out=%q", out)
+		}
+		if !strings.Contains(out, "not supported with -exec") {
+			t.Fatalf("expected explicit jsonl/exec error: %q", out)
+		}
+	})
+
 	t.Run("cat pipe sort", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)

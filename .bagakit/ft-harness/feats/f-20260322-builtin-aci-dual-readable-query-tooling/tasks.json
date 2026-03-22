@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T12:11:24Z",
+  "updated_at": "2026-03-22T12:16:07Z",
   "tasks": [
     {
       "id": "T-001",
@@ -66,7 +66,7 @@
     {
       "id": "T-004",
       "title": "Optimize grep",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Keep grep pipe-friendly by default while adding an explicit structured record mode and clearer contract/docs.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T12:11:24Z",
@@ -79,22 +79,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T11:32:18Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T12:11:24Z",
+      "finished_at": "2026-03-22T12:11:59Z",
+      "updated_at": "2026-03-22T12:11:59Z",
       "notes": []
     },
     {
       "id": "T-005",
       "title": "Optimize find",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Preserve path-per-line default behavior for composition while adding an explicit structured result mode and clearer command contract.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T12:16:07Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T12:12:26Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "updated_at": "2026-03-22T12:16:07Z",
       "notes": []
     },
     {

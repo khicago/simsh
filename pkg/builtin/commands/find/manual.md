@@ -1,6 +1,6 @@
 ---
 name: find
-synopsis: "find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]"
+synopsis: "find [DIR] -name PATTERN [-o -name PATTERN ...] [--fmt jsonl] [-exec CMD {} ';'|+]"
 category: search
 ---
 
@@ -8,7 +8,7 @@ category: search
 
 ## SYNOPSIS
 
-    find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]
+    find [DIR] -name PATTERN [-o -name PATTERN ...] [--fmt jsonl] [-exec CMD {} ';'|+]
 
 ## DESCRIPTION
 
@@ -26,6 +26,7 @@ or batches all matches into one invocation (with `+`).
 
 - `-name PATTERN` -- Match files whose basename matches the glob pattern.
 - `-o` -- OR operator to combine multiple `-name` patterns.
+- `--fmt jsonl` -- Emit flat JSONL path records instead of the default text stream.
 - `-exec CMD {} ';'` -- Run CMD once per matched file, replacing `{}` with the file path.
 - `-exec CMD {} +` -- Run CMD once with all matched files appended.
 
@@ -51,11 +52,18 @@ Batch execution:
 
     find /knowledge_base -name "*.md" -exec grep "TODO" {} +
 
+Machine-readable JSONL output:
+
+    find /task_outputs -name "*.json" --fmt jsonl
+
 ## NOTES
 
 - Paths may be absolute or relative to the current virtual working directory.
 - Without `-name`, matches all files (`*`).
 - Only one `-exec` clause is supported per invocation.
+- Default output remains one path per line for pipeline composability.
+- `--fmt jsonl` is the explicit structured mode for agent parsing and downstream tooling.
+- `--fmt jsonl` is not supported together with `-exec` in the current implementation.
 
 ## SEE ALSO
 

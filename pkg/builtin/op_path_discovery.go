@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
@@ -14,19 +15,29 @@ type findArgs struct {
 	patterns []string
 	execArgs []string
 	execPlus bool
+	jsonl    bool
+}
+
+type findRecord struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
 }
 
 func specFind() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandFind,
-		Manual: "find [DIR] -name PATTERN [-o -name PATTERN ...] [-exec CMD {} ';'|+]",
+		Manual: "find [DIR] -name PATTERN [-o -name PATTERN ...] [--fmt jsonl] [-exec CMD {} ';'|+]",
 		Tips: []string{
 			"Use -o to combine multiple -name patterns.",
+			"Use --fmt jsonl for explicit machine-readable path records without changing the default text stream.",
 			"-exec ... + batches matched paths in one invocation.",
 		},
-		Examples:       ExamplesFor("find"),
-		DetailedManual: LoadEmbeddedManual("find"),
-		Run:            runFind,
+		StructuredOutput: "flat path records",
+		StructuredFlags:  []string{"--fmt jsonl"},
+		Examples:         ExamplesFor("find"),
+		DetailedManual:   LoadEmbeddedManual("find"),
+		Run:              runFind,
 	}
 }
 
@@ -34,6 +45,9 @@ func runFind(runtime engine.CommandRuntime, args []string) (string, int) {
 	opts, errMsg := parseFindArgs(args, runtime.Ops.RequireAbsolutePath, currentWorkingDir(runtime.Ops))
 	if errMsg != "" {
 		return errMsg, contract.ExitCodeUsage
+	}
+	if opts.jsonl && len(opts.execArgs) > 0 {
+		return "find: --fmt jsonl is not supported with -exec", contract.ExitCodeUsage
 	}
 	ok, err := runtime.Ops.IsDirPath(runtime.Ctx, opts.target)
 	if err != nil {
@@ -65,7 +79,10 @@ func runFind(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 	}
 	if len(opts.execArgs) == 0 {
-		return strings.Join(matchedFiles, "\n"), 0
+		if !opts.jsonl {
+			return strings.Join(matchedFiles, "\n"), 0
+		}
+		return renderFindJSONL(matchedFiles), 0
 	}
 	return runFindExec(matchedFiles, opts.execArgs, opts.execPlus, runtime.Dispatch)
 }
@@ -117,6 +134,23 @@ func parseFindArgs(args []string, requireAbsolutePath func(string) (string, erro
 			opts.execArgs = append(opts.execArgs, args[start:idx]...)
 			opts.execPlus = args[idx] == "+"
 			lastWasOr = false
+			continue
+		case "--fmt":
+			if idx+1 >= len(args) {
+				return opts, "find: --fmt requires one value: jsonl"
+			}
+			idx++
+			if strings.TrimSpace(args[idx]) != "jsonl" {
+				return opts, fmt.Sprintf("find: unsupported --fmt value %q", args[idx])
+			}
+			opts.jsonl = true
+			continue
+		}
+		if strings.HasPrefix(arg, "--fmt=") {
+			if strings.TrimSpace(strings.TrimPrefix(arg, "--fmt=")) != "jsonl" {
+				return opts, fmt.Sprintf("find: unsupported --fmt value %q", strings.TrimPrefix(arg, "--fmt="))
+			}
+			opts.jsonl = true
 			continue
 		}
 		if strings.HasPrefix(arg, "-") {
@@ -195,6 +229,25 @@ func expandFindExecArgs(execArgs []string, paths []string) []string {
 		out = append(out, paths...)
 	}
 	return out
+}
+
+func renderFindJSONL(paths []string) string {
+	if len(paths) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(paths))
+	for _, filePath := range paths {
+		raw, err := json.Marshal(findRecord{
+			Path: filePath,
+			Name: path.Base(filePath),
+			Kind: "file",
+		})
+		if err != nil {
+			return fmt.Sprintf(`{"kind":"error","name":"json","path":%q}`, filePath)
+		}
+		lines = append(lines, string(raw))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func matchFindName(name, pattern string) (bool, error) {

@@ -299,6 +299,24 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "find-jsonl",
+			cmd:  "find " + rt.abs("workspace") + " -name \"*.md\" --fmt jsonl",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"path\":\""+readme+"\"") || !strings.Contains(out, "\"kind\":\"file\"") {
+					t.Fatalf("find --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "find-jsonl-relative",
+			cmd:  "cd workspace; find . -name \"*.md\" --fmt jsonl",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"name\":\"readme.md\"") {
+					t.Fatalf("find relative --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "which",
 			cmd:  "which ls",
 			want: func(t *testing.T, out string, code int) {
