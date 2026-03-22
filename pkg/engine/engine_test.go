@@ -1286,9 +1286,9 @@ func TestCommandMv(t *testing.T) {
 	t.Run("basic move", func(t *testing.T) {
 		fs := newTestFS()
 		ops := writableOps(fs)
-		_, code := eng.Execute(context.Background(), "mv /workspace/todo.txt /workspace/done.txt", ops)
-		if code != 0 {
-			t.Fatalf("mv failed: code=%d", code)
+		out, code := eng.Execute(context.Background(), "mv /workspace/todo.txt /workspace/done.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("mv failed: code=%d out=%q", code, out)
 		}
 		// source should be gone
 		_, code = eng.Execute(context.Background(), "cat /workspace/todo.txt", ops)
@@ -1296,16 +1296,34 @@ func TestCommandMv(t *testing.T) {
 			t.Fatalf("expected source to be removed after mv")
 		}
 		// dest should have content
-		out, code := eng.Execute(context.Background(), "cat /workspace/done.txt", ops)
+		out, code = eng.Execute(context.Background(), "cat /workspace/done.txt", ops)
 		if code != 0 || !strings.Contains(out, "todo item") {
 			t.Fatalf("moved content mismatch: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("mv --confirm", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "mv --confirm /workspace/todo.txt /workspace/done.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "moved /workspace/todo.txt -> /workspace/done.txt" {
+			t.Fatalf("mv --confirm failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("mv --json", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "mv --json /workspace/todo.txt /workspace/done.txt", ops)
+		if code != 0 || !strings.Contains(out, `"src":"/workspace/todo.txt"`) || !strings.Contains(out, `"dest":"/workspace/done.txt"`) || !strings.Contains(out, `"bytes":10`) {
+			t.Fatalf("mv --json failed: code=%d out=%q", code, out)
 		}
 	})
 
 	t.Run("mv read-only rejected", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		_, code := eng.Execute(context.Background(), "mv /workspace/todo.txt /workspace/done.txt", ops)
+		_, code := eng.Execute(context.Background(), "mv --json /workspace/todo.txt /workspace/done.txt", ops)
 		if code == 0 {
 			t.Fatalf("expected mv to fail in read-only")
 		}

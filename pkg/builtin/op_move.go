@@ -11,26 +11,33 @@ import (
 func specMv() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandMv,
-		Manual: "mv SRC_PATH DEST_PATH",
+		Manual: "mv [--confirm] [--json] SRC_PATH DEST_PATH",
 		Tips: []string{
 			"Moves a file from source to destination.",
+			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
 			"Mount-backed virtual paths are immutable and cannot be moved.",
 		},
-		Examples:       ExamplesFor("mv"),
-		DetailedManual: LoadEmbeddedManual("mv"),
-		Run:            runMv,
+		StructuredOutput: "move summary",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("mv"),
+		DetailedManual:   LoadEmbeddedManual("mv"),
+		Run:              runMv,
 	}
 }
 
 func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
-	if len(args) != 2 {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("mv", args)
+	if !ok {
+		return out, code
+	}
+	if len(filteredArgs) != 2 {
 		return "mv: expected exactly two arguments: SRC DEST", contract.ExitCodeUsage
 	}
-	src, err := runtime.Ops.RequireAbsolutePath(args[0])
+	src, err := runtime.Ops.RequireAbsolutePath(filteredArgs[0])
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
 	}
-	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
+	dest, err := runtime.Ops.RequireAbsolutePath(filteredArgs[1])
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
 	}
@@ -61,5 +68,13 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 	}
-	return "", 0
+	rendered, _, err := renderTransferMutation(confirm, jsonOutput, mutationTransfer{
+		Src:   src,
+		Dest:  dest,
+		Bytes: len(content),
+	}, "moved")
+	if err != nil {
+		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }

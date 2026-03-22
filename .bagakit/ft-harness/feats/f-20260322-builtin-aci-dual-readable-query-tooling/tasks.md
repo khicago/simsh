@@ -14,7 +14,7 @@ JSON SSOT: `tasks.json`
 - [x] T-009 Optimize which
 - [x] T-010 Optimize mkdir
 - [x] T-011 Optimize touch
-- [ ] T-012 Optimize cp
+- [x] T-012 Optimize cp
 - [ ] T-013 Optimize mv
 - [ ] T-014 Optimize rm
 - [ ] T-015 Optimize rmdir

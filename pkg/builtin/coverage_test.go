@@ -76,6 +76,12 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	if err := rt.ops.WriteFile(context.Background(), other, "hello\nworld\n"); err != nil {
 		t.Fatalf("setup write other failed: %v", err)
 	}
+	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", "mv-confirm-src.txt"), "abc"); err != nil {
+		t.Fatalf("setup write mv-confirm-src failed: %v", err)
+	}
+	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", "mv-json-src.txt"), "abc"); err != nil {
+		t.Fatalf("setup write mv-json-src failed: %v", err)
+	}
 	if err := rt.ops.WriteFile(context.Background(), fmDoc, "---\ntitle: Coverage Fixture\ntags:\n  - a\n  - b\n---\nbody\n"); err != nil {
 		t.Fatalf("setup write frontmatter fixture failed: %v", err)
 	}
@@ -516,8 +522,27 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "mv",
 			cmd:  "mv " + logs + " " + mvTarget,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("mv failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "mv-confirm",
+			cmd:  "mv --confirm " + rt.abs("workspace", "mv-confirm-src.txt") + " " + rt.abs("workspace", "mv-confirm-dest.txt"),
+			want: func(t *testing.T, out string, code int) {
+				expected := "moved " + rt.abs("workspace", "mv-confirm-src.txt") + " -> " + rt.abs("workspace", "mv-confirm-dest.txt")
+				if code != 0 || strings.TrimSpace(out) != expected {
+					t.Fatalf("mv --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "mv-json",
+			cmd:  "mv --json " + rt.abs("workspace", "mv-json-src.txt") + " " + rt.abs("workspace", "mv-json-dest.txt"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"src\":\""+rt.abs("workspace", "mv-json-src.txt")+"\"") || !strings.Contains(out, "\"dest\":\""+rt.abs("workspace", "mv-json-dest.txt")+"\"") || !strings.Contains(out, "\"bytes\":3") {
+					t.Fatalf("mv --json failed: code=%d out=%q", code, out)
 				}
 			},
 		},
