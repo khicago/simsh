@@ -120,11 +120,24 @@ These names are intentionally explicit so an agent can reason about where output
 ### Default builtin surface
 
 The default workspace includes a focused builtin command set for inspection, search, text manipulation, and safe file mutation:
-- inspection and workspace awareness: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `date`
+- inspection and workspace awareness: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `json`, `date`
 - text and search: `cat`, `head`, `tail`, `grep`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
 - file mutation: `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `tee`
 
 The command surface is intentionally constrained. The goal is a high-signal agent workspace, not a full shell clone.
+
+Structured output conventions in the default workspace:
+- defaults stay dual-readable and pipe-aware where that interaction model matters
+- `--json` is used when a command naturally returns one summary object
+- `--fmt jsonl` is used when a command naturally returns a stream of flat records
+- `--fmt json` stays available for commands that already expose a broader output family such as `text|json|md`
+
+Examples:
+- `wc --json ...` for one structured count summary
+- `grep --fmt jsonl ...` for one JSON record per match/context row
+- `find --fmt jsonl ...` for one JSON record per discovered path
+- `json stat --fmt json ...` for one structured JSON-shape report
+- `json get --path items[0].name ...` for one targeted JSON subtree extraction
 
 ### Result and trace contract
 

@@ -41,12 +41,18 @@ When a command naturally exposes structured records or summaries, it should also
 Preferred shape:
 - use `--json` when the command only needs one structured variant;
 - keep `--fmt json` where the command already has a broader output-family design (`text|md|json`, etc.).
+- use `--fmt jsonl` for commands whose structured output is naturally a stream of flat records rather than one summary object.
 
 The structured mode should:
 - expose the same semantics as the default output, not a separate hidden contract;
 - be stable enough for agent branching and downstream tooling;
 - remain non-invasive to the default shell experience;
 - avoid forcing the default output to become machine-only.
+
+Practical interpretation:
+- `--json` fits object-style summaries such as counts, lookup summaries, or variable snapshots.
+- `--fmt jsonl` fits record streams such as search matches or discovered paths.
+- the distinction is intentional; it follows data shape, not naming taste.
 
 ### Requirement 3: Pipeline composability remains a first-class constraint
 
@@ -70,6 +76,7 @@ This means the builtin surface should strengthen:
 - targeted extraction flows over generic `cat`-everything workflows.
 
 The `frontmatter` builtin is the current positive reference point for this direction.
+The first parallel JSON-focused tool should follow the same philosophy: inspect structure and extract subtrees without turning core builtins into a general-purpose query language.
 
 ### Requirement 5: Current wave should be guided by these rules
 

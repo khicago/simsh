@@ -68,10 +68,18 @@ The workspace uses a virtual path model rather than inheriting host shell behavi
 The default ACI includes a focused builtin command set for:
 - inspection and workspace awareness
 - search and text slicing
+- structure-aware JSON inspection
 - safe file mutation
 - command introspection and manuals
 
 The builtin surface is part of the default workspace contract, not just a tool list.
+
+Structured output conventions are part of that contract:
+- defaults should remain dual-readable
+- `--json` is for object-style summaries
+- `--fmt jsonl` is for record streams
+- `--fmt json` remains appropriate where a command already has a broader renderer family
+- the first dedicated structure-aware JSON tool is the builtin `json stat/get` surface
 
 ### Result and trace contract
 

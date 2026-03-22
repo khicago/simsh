@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T16:50:20Z",
+  "updated_at": "2026-03-22T16:56:36Z",
   "tasks": [
     {
       "id": "T-001",
@@ -346,7 +346,7 @@
     {
       "id": "T-018",
       "title": "Add JSON query tooling",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Introduce the first stronger structure-aware query builtin for JSON so agents can extract targeted data from structured files without whole-file dumps.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T16:50:20Z",
@@ -359,22 +359,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T16:44:26Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T16:50:20Z",
+      "finished_at": "2026-03-22T16:51:32Z",
+      "updated_at": "2026-03-22T16:51:32Z",
       "notes": []
     },
     {
       "id": "T-019",
       "title": "Refresh README and aggregate docs after tool rollout",
-      "status": "todo",
+      "status": "done",
       "summary": "Summarize the builtin ACI wave, update README and design docs, and close the feat after all tool-level commits are merged.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T16:55:46Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
-      "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "started_at": "2026-03-22T16:51:32Z",
+      "finished_at": "2026-03-22T16:56:36Z",
+      "updated_at": "2026-03-22T16:56:36Z",
       "notes": []
     },
     {

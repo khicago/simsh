@@ -112,7 +112,7 @@ There is a useful emerging pattern already:
 - query only the needed slice with a purpose-built inspector;
 - avoid re-reading whole files with `cat` and then letting the model parse them from scratch.
 
-`frontmatter` is the clearest example of the right direction. The broader builtin set still leans too heavily on generic text tools (`cat`, `grep`, `sed -n`) for cases where structure-aware tools would save tokens and reduce parsing error.
+`frontmatter` is the clearest example of the right direction. The first dedicated JSON follow-up should mirror that pattern with a constrained `json` inspector rather than a jq-style mini-language. The broader builtin set still leans too heavily on generic text tools (`cat`, `grep`, `sed -n`) for cases where structure-aware tools would save tokens and reduce parsing error.
 
 ## Command Review
 
@@ -121,25 +121,26 @@ There is a useful emerging pattern already:
 | `ls` | Strong baseline. Fixed columns in `-l`; `--fmt md|json` exists. | Default short listing still loses metadata unless caller remembers `-l`. | Keep current shape; treat `ls -l --fmt json` as the reference inspection contract. Consider surfacing `capabilities` in a concise text flag later. | Medium |
 | `tree` | ASCII-only output. | High token cost and weak machine parseability. | Redesign around `--fmt ascii|outline|json`; make `outline` the agent-preferred format. Consider making non-ASCII-tree output the default for `simsh`, with `--fmt ascii` as opt-in compatibility. | High |
 | `cd` / `pwd` | Semantics are now explicit and good. | Manuals should eventually expose state/change contract more directly. | Keep behavior. Minor manual contract cleanup only. | Low |
-| `find` | Plain path-per-line output is already decent. | No way to attach `kind/access/capabilities` or emit structured records. | Keep path-per-line default. Add `--fmt jsonl|json` for planning flows and agent filtering. | Medium |
+| `find` | Plain path-per-line default preserved. | Needed an explicit record mode without hurting pipe usage. | Keep path-per-line default. Add `--fmt jsonl` for planning flows and agent filtering. | Medium |
 | `cat` | Raw text or numbered text; appropriate for content reads. | Large file reads can still be too unconstrained. | Keep raw-text default. Do not over-structure. Rely on `head`/`tail`/`sed -n` for slicing. | Low |
 | `head` / `tail` | Good single-purpose text tools. | Minimal issue; mostly fine already. | Keep simple text shape. | Low |
-| `grep` | Familiar text output with context support. | Match records are not explicit objects; context line shape is awkward. | Add `--fmt jsonl` with `path`, `line`, `match`, `context`, and `text`. Keep current text mode for short terminal use. | High |
+| `grep` | Familiar text output with context support. | Match records were not explicit objects; context line shape was awkward for machine parsing. | Keep current text mode. Add `--fmt jsonl` with flat `match|context|file` records. | High |
 | `frontmatter` | Best-in-class builtin today. | Could become the template for other commands. | Preserve as reference pattern; no major redesign needed. | Low |
+| `json` | New structure-aware inspector for JSON. | Risk of scope creep into a jq-like language. | Keep the first release small: `json stat` and `json get` with minimal path syntax, no filters, no mutation, no stdin. | High |
 | `echo` | Deterministic plain text. | None worth optimizing in kernel. | Keep as-is. | Low |
-| `tee` | Useful bridge from stdin to file. | No explicit success confirmation path. | Add `--fmt json` or `--confirm` later to report destination path and write mode without forcing default noise. | Medium |
-| `sed` | Good split between print and in-place edit. | In-place mode has no output contract except silence. | Keep text print mode. Add optional structured mutation summary for `-i` later. | Medium |
+| `tee` | Useful bridge from stdin to file. | Needed explicit success feedback without breaking passthrough semantics. | Keep default passthrough. Add `--confirm` and `--json` as terminal-sink success summaries. | Medium |
+| `sed` | Good split between print and in-place edit. | In-place mode needed an optional summary without touching print-mode pipes. | Keep `sed -n` text-first. Add `-i --json` for explicit mutation summaries. | Medium |
 | `man` | Progressive disclosure is directionally right. | Summary/list output is prose-first; contract fields are implicit. | Add explicit command contract fields and let `man` render them. Also add `man --list --fmt json`. | High |
 | `date` | Fine. Deterministic and low-surface. | None significant. | Keep as-is. | Low |
-| `env` | Plain `KEY=VALUE` text works for humans. | Poor machine experience for multi-value variables like `PATH`. | Add `--fmt json`; consider `env PATH --split` or a fielded format for list-like vars. | Medium |
-| `mkdir` / `touch` | Silent success. | Agents must verify after mutation. | Keep silent default for shell composability. Add `--confirm` / `--fmt json` with touched paths and op kind. | High |
-| `cp` / `mv` | Silent success. | Same confirmation gap; also no summary of destination. | Same pattern as above; structured confirm mode. | High |
-| `rm` / `rmdir` | Silent success. | Same confirmation gap; deletes are especially important to acknowledge. | Same pattern as above; structured confirm mode. | High |
-| `wc` | Functional but default output is weak. | Unlabeled numbers are positional and easy to misread. | Change default to labeled fixed columns or add a new compact labeled default; also add `--fmt json`. | High |
+| `env` | Plain `KEY=VALUE` text works for humans. | List-like variables such as `PATH` needed better opt-in views. | Keep default text. Add `--json` and `--split` for one-key list-like inspection. | Medium |
+| `mkdir` / `touch` | Silent success. | Agents needed explicit success feedback without changing shell defaults. | Keep silent default. Add `mkdir --confirm/--json`; add `touch --json`. | High |
+| `cp` / `mv` | Silent success. | Needed explicit success confirmation and bytes summary. | Keep silent default. Add `--confirm` and `--json` summaries. | High |
+| `rm` / `rmdir` | Silent success. | Deletes needed explicit success confirmation without weakening fail-fast semantics. | Keep silent default. Add `--confirm` and `--json` summaries. | High |
+| `wc` | Functional but default output was weak. | Unlabeled numbers were positional and easy to misread. | Keep bare-number single-metric mode; switch multi-metric default to labeled compact text; add `--json`. | High |
 | `sort` / `uniq` | Text transforms are fine for pipelines. | Little value in forcing structure by default. | Keep text default. Structured mode is optional, not urgent. | Low |
 | `diff` | Unified diff is already a strong agent format for patch review. | No summary/stat mode for quick branching. | Keep unified diff default. Add optional `--fmt json` or `--stat` later if needed. | Medium |
-| `which` | Path-per-line output is acceptable. | No structured metadata for alias/builtin/external lookup. | Add `--fmt json` with `name`, `resolved_path`, and `kind`. | Medium |
-| `type` | Human sentence output. | Low-signal for agents compared with fielded output. | Add `--fmt text|json`; make text more regular or consider a fixed-column default. | Medium |
+| `which` | Path-per-line output is acceptable. | Needed explicit structured lookup summaries without changing default shell output. | Keep default path-per-line output. Add `--fmt json` with found/missing lookup entries. | Medium |
+| `type` | Now better as fielded text. | Natural-language rows were too low-signal. | Use `name kind target` by default and add `--json` for structured resolution records. | Medium |
 
 ## Design Recommendations
 
@@ -153,6 +154,11 @@ For commands that benefit from structured rendering, converge on:
 - `--fmt md` only where human review tables are genuinely useful.
 
 Do not invent one-off flags per command when one of these patterns is sufficient.
+
+The split between `--json` and `--fmt jsonl` is deliberate:
+- use `--json` when the command is fundamentally returning one object or summary;
+- use `--fmt jsonl` when the command is fundamentally producing a stream of flat records;
+- prefer the data-shape fit over superficial naming uniformity.
 
 But the default should still optimize for dual-readability and token efficiency. In other words:
 - do not default everything to JSON;
@@ -212,6 +218,7 @@ The runtime should get better at "read just the part I need", not only at "seria
 
 That means favoring tools like:
 - `frontmatter` for Markdown frontmatter;
+- the new builtin `json` for JSON shape inspection and subtree extraction;
 - future structure-aware inspectors for common agent file formats such as JSON, YAML, and tabular content;
 - stronger local search tools that can return narrow, fielded results instead of large text blobs;
 - query-style subcommands that can extract keys, ranges, fields, or stats without forcing a full-file dump.
