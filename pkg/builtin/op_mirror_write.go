@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -12,21 +13,28 @@ import (
 func specTee() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTee,
-		Manual: "echo data | tee [-a] PATH",
+		Manual: "echo data | tee [--confirm] [--json] [-a] PATH",
 		Tips: []string{
 			"Use -a to append instead of replacing file content.",
+			"Default output preserves stdin passthrough; --confirm and --json replace stdout with an explicit success summary.",
 			"tee requires stdin, usually from a pipeline or heredoc.",
 		},
-		Examples:       ExamplesFor("tee"),
-		DetailedManual: LoadEmbeddedManual("tee"),
-		Run:            runTee,
+		StructuredOutput: "write summary",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("tee"),
+		DetailedManual:   LoadEmbeddedManual("tee"),
+		Run:              runTee,
 	}
 }
 
 func runTee(runtime engine.CommandRuntime, args []string) (string, int) {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("tee", args)
+	if !ok {
+		return out, code
+	}
 	appendMode := false
 	target := ""
-	for _, arg := range args {
+	for _, arg := range filteredArgs {
 		if arg == "-a" {
 			appendMode = true
 			continue
@@ -66,7 +74,7 @@ func runTee(runtime engine.CommandRuntime, args []string) (string, int) {
 			}
 			return fmt.Sprintf("tee: %v", err), contract.ExitCodeGeneral
 		}
-		return runtime.Stdin, 0
+		return renderTeeSuccess(runtime.Stdin, target, len(runtime.Stdin), "append", confirm, jsonOutput)
 	}
 	if err := runtime.Ops.WriteFile(runtime.Ctx, target, runtime.Stdin); err != nil {
 		if errors.Is(err, contract.ErrUnsupported) {
@@ -74,5 +82,27 @@ func runTee(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 		return fmt.Sprintf("tee: %v", err), contract.ExitCodeGeneral
 	}
-	return runtime.Stdin, 0
+	return renderTeeSuccess(runtime.Stdin, target, len(runtime.Stdin), "write", confirm, jsonOutput)
+}
+
+func renderTeeSuccess(stdin string, path string, bytes int, mode string, confirm bool, jsonOutput bool) (string, int) {
+	if jsonOutput {
+		raw, err := json.Marshal(struct {
+			Path  string `json:"path"`
+			Bytes int    `json:"bytes"`
+			Mode  string `json:"mode"`
+		}{
+			Path:  path,
+			Bytes: bytes,
+			Mode:  mode,
+		})
+		if err != nil {
+			return fmt.Sprintf("tee: %v", err), contract.ExitCodeGeneral
+		}
+		return string(raw), 0
+	}
+	if confirm {
+		return fmt.Sprintf("wrote %s bytes=%d mode=%s", path, bytes, mode), 0
+	}
+	return stdin, 0
 }

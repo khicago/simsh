@@ -1069,6 +1069,22 @@ func TestSecurityTeeWritePolicy(t *testing.T) {
 		}
 	})
 
+	t.Run("tee --confirm replaces passthrough", func(t *testing.T) {
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "echo hello | tee --confirm /workspace/tee_ok.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "wrote /workspace/tee_ok.txt bytes=5 mode=write" {
+			t.Fatalf("unexpected tee --confirm output: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("tee --json replaces passthrough", func(t *testing.T) {
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "echo hello | tee --json /workspace/tee_ok.txt", ops)
+		if code != 0 || !strings.Contains(out, `"path":"/workspace/tee_ok.txt"`) || !strings.Contains(out, `"bytes":5`) || !strings.Contains(out, `"mode":"write"`) {
+			t.Fatalf("unexpected tee --json output: code=%d out=%q", code, out)
+		}
+	})
+
 	t.Run("write-limited rejects large tee", func(t *testing.T) {
 		ops := writeLimitedOps(fs, 5)
 		out, code := eng.Execute(context.Background(), "echo toolongtoolongtoolong | tee /workspace/big.txt", ops)

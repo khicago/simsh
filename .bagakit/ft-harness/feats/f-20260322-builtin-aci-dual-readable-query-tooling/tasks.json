@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T16:29:41Z",
+  "updated_at": "2026-03-22T16:36:55Z",
   "tasks": [
     {
       "id": "T-001",
@@ -286,7 +286,7 @@
     {
       "id": "T-015",
       "title": "Optimize rmdir",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Preserve empty-directory semantics while adding an explicit confirmation mode and clearer dual-readable docs.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T16:29:41Z",
@@ -299,22 +299,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T16:24:30Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T16:29:41Z",
+      "finished_at": "2026-03-22T16:31:10Z",
+      "updated_at": "2026-03-22T16:31:10Z",
       "notes": []
     },
     {
       "id": "T-016",
       "title": "Optimize tee",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Keep tee as a strong pipeline primitive while adding optional structured/confirmation output and explicit stdin contract docs.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T16:36:55Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T16:34:01Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "updated_at": "2026-03-22T16:36:55Z",
       "notes": []
     },
     {

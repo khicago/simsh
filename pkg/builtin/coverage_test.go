@@ -416,6 +416,25 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "tee-confirm",
+			cmd:  "echo tee-data | tee --confirm " + rt.abs("workspace", "tee-confirm.txt"),
+			want: func(t *testing.T, out string, code int) {
+				expected := "wrote " + rt.abs("workspace", "tee-confirm.txt") + " bytes=8 mode=write"
+				if code != 0 || strings.TrimSpace(out) != expected {
+					t.Fatalf("tee --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "tee-json",
+			cmd:  "echo tee-data | tee --json " + rt.abs("workspace", "tee-json.txt"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"path\":\""+rt.abs("workspace", "tee-json.txt")+"\"") || !strings.Contains(out, "\"bytes\":8") || !strings.Contains(out, "\"mode\":\"write\"") {
+					t.Fatalf("tee --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "sed",
 			cmd:  "sed -i 's/hello/hi/' " + readme + "; cat " + readme,
 			want: func(t *testing.T, out string, code int) {
