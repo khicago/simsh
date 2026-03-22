@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-22T09:06:32Z",
+  "updated_at": "2026-03-22T09:08:50Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -122,11 +122,11 @@
     {
       "feat_id": "f-20260322-simsh-native-reference-validation-metric-gates",
       "title": "simsh-native reference validation and metric gates",
-      "status": "in_progress",
+      "status": "archived",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-22T09:06:32Z"
+      "updated_at": "2026-03-22T09:08:50Z"
     },
     {
       "feat_id": "f-20260322-harness-legacy-feat-cleanup",

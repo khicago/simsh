@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Define the benchmark pack and metric-gate schema
+- [x] T-001 Define the benchmark pack and metric-gate schema
 
 ## Status Legend
 - todo
