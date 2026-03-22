@@ -651,6 +651,65 @@ func TestEngineRelativePathsAndWorkingDir(t *testing.T) {
 	})
 }
 
+func TestEngineCommandReferenceNormalization(t *testing.T) {
+	eng := newTestEngine()
+
+	t.Run("man which type accept relative builtin command paths", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /sys/bin; which ./cat", ops)
+		if code != 0 || strings.TrimSpace(out) != "/sys/bin/cat" {
+			t.Fatalf("which ./cat failed: code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /sys/bin; type ./cat", ops)
+		if code != 0 || !strings.Contains(out, "cat is /sys/bin/cat (builtin)") {
+			t.Fatalf("type ./cat failed: code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /sys/bin; man ./cat", ops)
+		if code != 0 || !strings.Contains(out, "cat [-n] PATH") {
+			t.Fatalf("man ./cat failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("dispatch accepts relative builtin and external command paths", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /sys/bin; ./cat /workspace/readme.md", ops)
+		if code != 0 || !strings.Contains(out, "hello") {
+			t.Fatalf("./cat dispatch failed: code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /bin; ./report_tool --warn", ops)
+		if code != 0 || !strings.Contains(out, "report ok") || !strings.Contains(out, "report warning") {
+			t.Fatalf("./report_tool dispatch failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("path-like non-command refs return actionable errors", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+
+		out, code := eng.Execute(context.Background(), "cd /workspace; man ./readme.md", ops)
+		if code == 0 || !strings.Contains(out, "not a command path") {
+			t.Fatalf("expected actionable man error, code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /workspace; which ./readme.md", ops)
+		if code == 0 || !strings.Contains(out, "not a command path") {
+			t.Fatalf("expected actionable which error, code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /workspace; ./readme.md", ops)
+		if code == 0 || !strings.Contains(out, "not a command path") {
+			t.Fatalf("expected actionable dispatch error, code=%d out=%q", code, out)
+		}
+	})
+}
+
 func TestEngineScriptOpsAndRedirectionPolicy(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()

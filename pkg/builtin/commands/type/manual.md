@@ -33,6 +33,7 @@ Inspect by absolute command path:
 
 - Lookup order matches execution order: aliases first, then system builtins (`/sys/bin`), then custom externals (`/bin`).
 - Does not support flags.
+- Accepts command names, absolute command paths, or relative command paths that resolve under `/sys/bin` or `/bin`.
 - Returns non-zero when any requested command is not found.
 
 ## SEE ALSO

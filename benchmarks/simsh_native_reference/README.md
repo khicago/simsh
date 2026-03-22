@@ -12,6 +12,7 @@ Current scenario classes:
 - relative path navigation
 - inspect/edit/write file loops
 - mount and synthetic capability boundaries
+- command namespace consistency
 - trace-consumable planning
 - cancel and timeout interruption
 

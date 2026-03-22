@@ -535,16 +535,12 @@ func normalizeAbsolutePath(raw string) string {
 
 func isVirtualSysBinExecutable(pathValue string) bool {
 	pathValue = normalizeAbsolutePath(pathValue)
-	if !strings.HasPrefix(pathValue, contract.VirtualSystemBinDir+"/") {
-		return false
-	}
-	name := strings.TrimPrefix(pathValue, contract.VirtualSystemBinDir+"/")
-	return strings.TrimSpace(name) != "" && !strings.Contains(name, "/")
+	return contract.IsCommandPathUnder(pathValue, contract.VirtualSystemBinDir)
 }
 
 func commandNameFromSysBinPath(pathValue string) string {
 	pathValue = normalizeAbsolutePath(pathValue)
-	if !isVirtualSysBinExecutable(pathValue) {
+	if !contract.IsCommandPathUnder(pathValue, contract.VirtualSystemBinDir) {
 		return ""
 	}
 	return strings.TrimPrefix(pathValue, contract.VirtualSystemBinDir+"/")
@@ -555,7 +551,7 @@ func normalizeBuiltinCommandName(raw string) string {
 	if trimmed == "" {
 		return ""
 	}
-	if isVirtualSysBinExecutable(trimmed) {
+	if contract.IsCommandPathUnder(trimmed, contract.VirtualSystemBinDir) {
 		return commandNameFromSysBinPath(trimmed)
 	}
 	return trimmed
@@ -668,59 +664,73 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 	}
 	args = expandedArgs
 	rawCmd := strings.TrimSpace(args[0])
-	builtinName := normalizeBuiltinCommandName(rawCmd)
-	if spec, ok := e.registry.Lookup(builtinName); ok {
-		if !isCommandAllowedByProfile(spec, ops.Profile) {
-			return execOutput{stdout: fmt.Sprintf("%s: not supported in profile %s", builtinName, ops.Profile), code: contract.ExitCodeUnsupported}
-		}
-		emitAudit(ctx, ops, contract.AuditEvent{
-			Time:    time.Now(),
-			Phase:   contract.AuditPhaseCommandStart,
-			Command: builtinName,
-			Args:    append([]string(nil), args[1:]...),
-		})
-		runtime := CommandRuntime{Ctx: ctx, Ops: ops, Stdin: input, HasStdin: hasInput}
-		runtime.Dispatch = func(dispatchArgs []string, dispatchInput string, dispatchHasInput bool) (string, int) {
-			depth, _ := ctx.Value(dispatchDepthKey).(int)
-			if depth >= maxDispatchDepth {
-				return fmt.Sprintf("execute: dispatch recursion depth exceeds limit (%d)", maxDispatchDepth), contract.ExitCodeGeneral
-			}
-			childCtx := context.WithValue(ctx, dispatchDepthKey, depth+1)
-			result := e.runCommand(childCtx, dispatchArgs, dispatchInput, dispatchHasInput, ops)
-			return flattenExecOutput(result), result.code
-		}
-		runtime.LookupManual = func(name string) (string, bool) {
-			return e.registry.BuiltinManual(name)
-		}
-		runtime.LookupDetailedManual = func(name string) (string, bool) {
-			return e.registry.BuiltinDetailedManual(name)
-		}
-		runtime.ListBuiltinNames = func() []string {
-			return e.registry.ListNames()
-		}
-		out, code := spec.Run(runtime, args[1:])
-		result := execOutput{stdout: out, code: code}
-		phase := contract.AuditPhaseCommandEnd
-		if code != 0 {
-			phase = contract.AuditPhaseCommandError
-		}
-		emitAudit(ctx, ops, contract.AuditEvent{
-			Time:     time.Now(),
-			Phase:    phase,
-			Command:  builtinName,
-			Args:     append([]string(nil), args[1:]...),
-			ExitCode: code,
-			Message:  strings.TrimSpace(flattenExecOutput(result)),
-		})
-		return enforceOutputLimit(ctx, result, ops.Policy)
+	commandRef, err := normalizeCommandReferenceForOps(ops, rawCmd)
+	if err != nil {
+		return execOutput{stdout: err.Error(), code: contract.ExitCodeGeneral}
 	}
-	result := e.runExternalCommand(ctx, rawCmd, args[1:], input, hasInput, ops)
+	commandName := commandRef.Name
+	if commandRef.Namespace != contract.CommandNamespaceExternal {
+		if spec, ok := e.registry.Lookup(commandName); ok {
+			if !isCommandAllowedByProfile(spec, ops.Profile) {
+				return execOutput{stdout: fmt.Sprintf("%s: not supported in profile %s", commandName, ops.Profile), code: contract.ExitCodeUnsupported}
+			}
+			emitAudit(ctx, ops, contract.AuditEvent{
+				Time:    time.Now(),
+				Phase:   contract.AuditPhaseCommandStart,
+				Command: commandName,
+				Args:    append([]string(nil), args[1:]...),
+			})
+			runtime := CommandRuntime{Ctx: ctx, Ops: ops, Stdin: input, HasStdin: hasInput}
+			runtime.Dispatch = func(dispatchArgs []string, dispatchInput string, dispatchHasInput bool) (string, int) {
+				depth, _ := ctx.Value(dispatchDepthKey).(int)
+				if depth >= maxDispatchDepth {
+					return fmt.Sprintf("execute: dispatch recursion depth exceeds limit (%d)", maxDispatchDepth), contract.ExitCodeGeneral
+				}
+				childCtx := context.WithValue(ctx, dispatchDepthKey, depth+1)
+				result := e.runCommand(childCtx, dispatchArgs, dispatchInput, dispatchHasInput, ops)
+				return flattenExecOutput(result), result.code
+			}
+			runtime.LookupManual = func(name string) (string, bool) {
+				return e.registry.BuiltinManual(name)
+			}
+			runtime.LookupDetailedManual = func(name string) (string, bool) {
+				return e.registry.BuiltinDetailedManual(name)
+			}
+			runtime.ListBuiltinNames = func() []string {
+				return e.registry.ListNames()
+			}
+			out, code := spec.Run(runtime, args[1:])
+			result := execOutput{stdout: out, code: code}
+			phase := contract.AuditPhaseCommandEnd
+			if code != 0 {
+				phase = contract.AuditPhaseCommandError
+			}
+			emitAudit(ctx, ops, contract.AuditEvent{
+				Time:     time.Now(),
+				Phase:    phase,
+				Command:  commandName,
+				Args:     append([]string(nil), args[1:]...),
+				ExitCode: code,
+				Message:  strings.TrimSpace(flattenExecOutput(result)),
+			})
+			return enforceOutputLimit(ctx, result, ops.Policy)
+		}
+	}
+	if commandRef.Namespace == contract.CommandNamespaceBuiltin {
+		return execOutput{stdout: fmt.Sprintf("%s: not found", commandRef.Raw), code: contract.ExitCodeGeneral}
+	}
+	result := e.runExternalCommand(ctx, commandRef, args[1:], input, hasInput, ops)
 	return enforceOutputLimit(ctx, result, ops.Policy)
 }
 
-func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
+func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandReference, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
 	if err := executionContextErr(ctx); err != nil {
 		return contextExecOutput(err)
+	}
+	cmd := strings.TrimSpace(ref.Name)
+	display := strings.TrimSpace(ref.Raw)
+	if display == "" {
+		display = cmd
 	}
 	emitAudit(ctx, ops, contract.AuditEvent{
 		Time:    time.Now(),
@@ -729,13 +739,13 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 		Args:    append([]string(nil), args...),
 	})
 	if ops.RunExternalCommand == nil {
-		out := fmt.Sprintf("%s: Not supported", cmd)
+		out := fmt.Sprintf("%s: Not supported", display)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
 		return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
 	}
 	request := contract.ExternalCommandRequest{
 		Command:  normalizeExternalCommandName(cmd),
-		RawPath:  strings.TrimSpace(cmd),
+		RawPath:  ref.ResolvedPath,
 		Args:     append([]string(nil), args...),
 		Stdin:    input,
 		HasStdin: hasInput,
@@ -743,14 +753,22 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 	if request.Command == "" {
 		request.Command = strings.TrimSpace(cmd)
 	}
+	if strings.TrimSpace(request.RawPath) == "" {
+		request.RawPath = display
+	}
 	result, err := ops.RunExternalCommand(ctx, request)
 	if err != nil {
 		if errors.Is(err, contract.ErrUnsupported) {
-			out := fmt.Sprintf("%s: Not supported", cmd)
+			if ref.PathLike || ref.Namespace == contract.CommandNamespaceExternal {
+				out := fmt.Sprintf("%s: not found", display)
+				emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
+				return execOutput{stdout: out, code: contract.ExitCodeGeneral}
+			}
+			out := fmt.Sprintf("%s: Not supported", display)
 			emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
 			return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
 		}
-		out := fmt.Sprintf("%s: %v", cmd, err)
+		out := fmt.Sprintf("%s: %v", display, err)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
 		return execOutput{stdout: out, code: contract.ExitCodeGeneral}
 	}
@@ -763,7 +781,7 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 		output.code = contract.ExitCodeGeneral
 	}
 	if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
-		output.stderr = fmt.Sprintf("%s: command failed", cmd)
+		output.stderr = fmt.Sprintf("%s: command failed", display)
 	}
 	emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: output.code, Message: strings.TrimSpace(flattenExecOutput(output))})
 	return output
@@ -788,6 +806,21 @@ func flattenExecOutput(out execOutput) string {
 	default:
 		return out.stdout + "\n" + out.stderr
 	}
+}
+
+func normalizeCommandReferenceForOps(ops contract.Ops, raw string) (contract.CommandReference, error) {
+	resolve := ops.ResolvePath
+	if resolve == nil {
+		resolve = ops.RequireAbsolutePath
+	}
+	ref, err := contract.NormalizeCommandReference(raw, resolve)
+	if err != nil {
+		return contract.CommandReference{}, err
+	}
+	if ref.Namespace == "" && strings.TrimSpace(ref.Name) == "" {
+		return contract.CommandReference{}, fmt.Errorf("%s: command reference is empty", strings.TrimSpace(raw))
+	}
+	return ref, nil
 }
 
 func emitAudit(ctx context.Context, ops contract.Ops, event contract.AuditEvent) {

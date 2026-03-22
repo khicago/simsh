@@ -33,7 +33,7 @@ Resolve multiple commands:
 ## NOTES
 
 - Does not support flags.
-- Accepts command names or `/sys/bin/...` and `/bin/...` absolute command paths.
+- Accepts command names, absolute command paths, or relative command paths that resolve under `/sys/bin` or `/bin`.
 - Alias results are rendered as `alias name='expanded command ...'`.
 - Returns non-zero when any requested command is not found.
 

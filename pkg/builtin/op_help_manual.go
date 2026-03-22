@@ -55,9 +55,11 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "man: expected command name (use --list to see all commands)", contract.ExitCodeUsage
 	}
 
-	target = strings.TrimSpace(target)
-	target = strings.TrimPrefix(target, contract.VirtualSystemBinDir+"/")
-	target = strings.TrimPrefix(target, contract.VirtualExternalBinDir+"/")
+	ref, err := normalizeCommandReferenceForRuntime(runtime, target)
+	if err != nil {
+		return fmt.Sprintf("man: %v", err), contract.ExitCodeGeneral
+	}
+	target = strings.TrimSpace(ref.Name)
 
 	// Verbose mode: try detailed manual first.
 	if verbose {

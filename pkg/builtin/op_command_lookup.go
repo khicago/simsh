@@ -197,7 +197,11 @@ func resolveCommandLookups(runtime engine.CommandRuntime, args []string, command
 		if strings.HasPrefix(trimmed, "-") {
 			return nil, nil, commandUsageError{msg: fmt.Sprintf("%s: unsupported flag %s", commandName, trimmed)}
 		}
-		if match, ok := resolveOneCommandLookup(trimmed, builtins, externals, aliases); ok {
+		ref, err := normalizeCommandReferenceForRuntime(runtime, trimmed)
+		if err != nil {
+			return nil, nil, fmt.Errorf("%s: %v", commandName, err)
+		}
+		if match, ok := resolveOneCommandLookup(ref, builtins, externals, aliases); ok {
 			resolved = append(resolved, match)
 			continue
 		}
@@ -206,22 +210,36 @@ func resolveCommandLookups(runtime engine.CommandRuntime, args []string, command
 	return resolved, missing, nil
 }
 
-func resolveOneCommandLookup(query string, builtins map[string]struct{}, externals map[string]struct{}, aliases map[string][]string) (commandLookup, bool) {
-	normalized := strings.TrimSpace(query)
+func resolveOneCommandLookup(ref contract.CommandReference, builtins map[string]struct{}, externals map[string]struct{}, aliases map[string][]string) (commandLookup, bool) {
+	normalized := strings.TrimSpace(ref.Name)
 	if normalized == "" {
 		return commandLookup{}, false
 	}
 
-	if candidate, ok := resolveAliasLookup(normalized, aliases); ok {
-		return candidate, true
+	if !ref.PathLike {
+		if candidate, ok := resolveAliasLookup(normalized, aliases); ok {
+			return candidate, true
+		}
 	}
-	if candidate, ok := resolveBuiltinLookup(normalized, builtins); ok {
-		return candidate, true
+	if ref.Namespace != contract.CommandNamespaceExternal {
+		if candidate, ok := resolveBuiltinLookup(normalized, builtins); ok {
+			return candidate, true
+		}
 	}
-	if candidate, ok := resolveExternalLookup(normalized, externals); ok {
-		return candidate, true
+	if ref.Namespace != contract.CommandNamespaceBuiltin {
+		if candidate, ok := resolveExternalLookup(normalized, externals); ok {
+			return candidate, true
+		}
 	}
 	return commandLookup{}, false
+}
+
+func normalizeCommandReferenceForRuntime(runtime engine.CommandRuntime, raw string) (contract.CommandReference, error) {
+	resolve := runtime.Ops.ResolvePath
+	if resolve == nil {
+		resolve = runtime.Ops.RequireAbsolutePath
+	}
+	return contract.NormalizeCommandReference(raw, resolve)
 }
 
 func resolveAliasLookup(query string, aliases map[string][]string) (commandLookup, bool) {

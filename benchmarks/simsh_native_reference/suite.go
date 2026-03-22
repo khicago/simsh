@@ -11,6 +11,7 @@ import (
 
 	"github.com/khicago/simsh/pkg/contract"
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
+	"github.com/khicago/simsh/pkg/fs"
 )
 
 type GateThresholds struct {
@@ -82,6 +83,7 @@ func runSuite() (SuiteReport, error) {
 		runRelativeNavigationScenario,
 		runInspectEditWriteScenario,
 		runMountBoundaryScenario,
+		runCommandNamespaceScenario,
 		runTracePlanningScenario,
 		runCancelTimeoutScenario,
 	}
@@ -322,6 +324,76 @@ func runMountBoundaryScenario() (ScenarioReport, error) {
 		TraceChecksPassed: tracePassed,
 		TraceChecksTotal:  traceTotal,
 		TraceCompleteness: ratio(tracePassed, traceTotal),
+		Notes:             notes,
+	}, nil
+}
+
+func runCommandNamespaceScenario() (ScenarioReport, error) {
+	root := mustTempHostRoot()
+	defer os.RemoveAll(root)
+
+	stack, err := runtimeengine.New(runtimeengine.Options{
+		HostRoot: root,
+		Profile:  contract.ProfileBashPlus,
+		Policy:   fullPolicy(),
+		ExternalCallbacks: fs.ExternalCallbacks{
+			ListExternalCommands: func(ctx context.Context) ([]contract.ExternalCommand, error) {
+				return []contract.ExternalCommand{{Name: "report_tool", Summary: "report tool manual"}}, nil
+			},
+			RunExternalCommand: func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				if req.Command == "report_tool" {
+					return contract.ExternalCommandResult{Stdout: "report ok", Stderr: "report warning", ExitCode: 0}, nil
+				}
+				return contract.ExternalCommandResult{}, contract.ErrUnsupported
+			},
+			ReadExternalManual: func(ctx context.Context, command string) (string, error) {
+				if command == "report_tool" {
+					return "report tool manual", nil
+				}
+				return "", contract.ErrUnsupported
+			},
+		},
+	})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	start := time.Now()
+	whichResult := stack.ExecuteResult(context.Background(), "cd /sys/bin; which ./cat")
+	manResult := stack.ExecuteResult(context.Background(), "cd /sys/bin; man ./cat")
+	dispatchResult := stack.ExecuteResult(context.Background(), "cd /bin; ./report_tool")
+	actionableError := stack.ExecuteResult(context.Background(), "cd /task_outputs; man ./missing.txt")
+
+	passed, total := 0, 4
+	if whichResult.ExitCode == 0 && strings.TrimSpace(whichResult.Stdout) == "/sys/bin/cat" {
+		passed++
+	}
+	if manResult.ExitCode == 0 && strings.Contains(manResult.Stdout, "cat [-n] PATH") {
+		passed++
+	}
+	if dispatchResult.ExitCode == 0 && strings.Contains(dispatchResult.Stdout, "report ok") {
+		passed++
+	}
+	if actionableError.ExitCode != 0 && strings.Contains(actionableError.Stdout, "not a command path") {
+		passed++
+	}
+
+	notes := []string{}
+	success := passed == total
+	if !success {
+		notes = append(notes, "command namespace normalization or actionable path-like error handling regressed")
+	}
+	return ScenarioReport{
+		Name:              "command_namespace_consistency",
+		Category:          "command_namespace_consistency",
+		Success:           success,
+		SessionScoped:     false,
+		AsyncCandidate:    true,
+		PatchWorkflow:     false,
+		DurationMS:        time.Since(start).Milliseconds(),
+		TraceChecksPassed: passed,
+		TraceChecksTotal:  total,
+		TraceCompleteness: ratio(passed, total),
 		Notes:             notes,
 	}, nil
 }
