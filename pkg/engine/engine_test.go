@@ -311,6 +311,11 @@ func TestEngineBuiltinAndExternalMounts(t *testing.T) {
 		t.Fatalf("unexpected which output: %q", out)
 	}
 
+	out, code = eng.Execute(context.Background(), "which --fmt json ls missing_cmd", ops)
+	if code == 0 || !strings.Contains(out, `"resolved_path":"/sys/bin/ls"`) || !strings.Contains(out, `"error":"which: missing_cmd: not found"`) {
+		t.Fatalf("unexpected which --fmt json output: code=%d out=%q", code, out)
+	}
+
 	out, code = eng.Execute(context.Background(), "type ls report_tool", ops)
 	if code != 0 {
 		t.Fatalf("type ls report_tool failed: code=%d out=%q", code, out)
@@ -676,6 +681,11 @@ func TestEngineCommandReferenceNormalization(t *testing.T) {
 		out, code := eng.Execute(context.Background(), "cd /sys/bin; which ./cat", ops)
 		if code != 0 || strings.TrimSpace(out) != "/sys/bin/cat" {
 			t.Fatalf("which ./cat failed: code=%d out=%q", code, out)
+		}
+
+		out, code = eng.Execute(context.Background(), "cd /sys/bin; which --fmt json ./cat", ops)
+		if code != 0 || !strings.Contains(out, `"resolved_path":"/sys/bin/cat"`) {
+			t.Fatalf("which --fmt json ./cat failed: code=%d out=%q", code, out)
 		}
 
 		out, code = eng.Execute(context.Background(), "cd /sys/bin; type ./cat", ops)

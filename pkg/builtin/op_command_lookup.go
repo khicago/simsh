@@ -84,18 +84,25 @@ func runPwd(runtime engine.CommandRuntime, args []string) (string, int) {
 func specWhich() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandWhich,
-		Manual: "which COMMAND...",
+		Manual: "which [--fmt json] COMMAND...",
 		Tips: []string{
 			"Search order is alias -> /sys/bin (system builtin) -> /bin (custom external).",
+			"Use --fmt json when you want machine-readable lookup results without changing the default text output.",
 		},
-		Examples:       ExamplesFor("which"),
-		DetailedManual: LoadEmbeddedManual("which"),
-		Run:            runWhich,
+		StructuredOutput: "lookup summary",
+		StructuredFlags:  []string{"--fmt json"},
+		Examples:         ExamplesFor("which"),
+		DetailedManual:   LoadEmbeddedManual("which"),
+		Run:              runWhich,
 	}
 }
 
 func runWhich(runtime engine.CommandRuntime, args []string) (string, int) {
-	resolved, missing, err := resolveCommandLookups(runtime, args, "which")
+	jsonOutput, filteredArgs, out, code, ok := parseLookupFormatFlag(args, "which")
+	if !ok {
+		return out, code
+	}
+	resolved, missing, err := resolveCommandLookups(runtime, filteredArgs, "which")
 	if err != nil {
 		var usageErr commandUsageError
 		if errors.As(err, &usageErr) {
@@ -103,17 +110,49 @@ func runWhich(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 		return err.Error(), contract.ExitCodeGeneral
 	}
-	out := make([]string, 0, len(resolved)+len(missing))
+	if jsonOutput {
+		payload := struct {
+			Entries []lookupRecord `json:"entries"`
+		}{
+			Entries: make([]lookupRecord, 0, len(resolved)+len(missing)),
+		}
+		for _, entry := range resolved {
+			payload.Entries = append(payload.Entries, lookupRecord{
+				Query:        entry.name,
+				Name:         entry.name,
+				Kind:         entry.kind,
+				ResolvedPath: entry.path,
+				Found:        true,
+			})
+		}
+		for _, name := range missing {
+			payload.Entries = append(payload.Entries, lookupRecord{
+				Query: name,
+				Name:  name,
+				Found: false,
+				Error: fmt.Sprintf("which: %s: not found", name),
+			})
+		}
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return fmt.Sprintf("which: %v", err), contract.ExitCodeGeneral
+		}
+		if len(missing) > 0 {
+			return string(raw), contract.ExitCodeGeneral
+		}
+		return string(raw), 0
+	}
+	lines := make([]string, 0, len(resolved)+len(missing))
 	for _, entry := range resolved {
-		out = append(out, entry.path)
+		lines = append(lines, entry.path)
 	}
 	for _, name := range missing {
-		out = append(out, fmt.Sprintf("which: %s: not found", name))
+		lines = append(lines, fmt.Sprintf("which: %s: not found", name))
 	}
 	if len(missing) > 0 {
-		return strings.Join(out, "\n"), contract.ExitCodeGeneral
+		return strings.Join(lines, "\n"), contract.ExitCodeGeneral
 	}
-	return strings.Join(out, "\n"), 0
+	return strings.Join(lines, "\n"), 0
 }
 
 func specType() engine.CommandSpec {

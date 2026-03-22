@@ -353,6 +353,15 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "which-json",
+			cmd:  "which --fmt json ls missing_cmd",
+			want: func(t *testing.T, out string, code int) {
+				if code == 0 || !strings.Contains(out, "\"resolved_path\":\"/sys/bin/ls\"") || !strings.Contains(out, "\"error\":\"which: missing_cmd: not found\"") {
+					t.Fatalf("which --fmt json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "type",
 			cmd:  "type ls",
 			want: func(t *testing.T, out string, code int) {
