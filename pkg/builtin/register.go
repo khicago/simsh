@@ -12,6 +12,7 @@ func RegisterDefaults(reg *engine.Registry) {
 	reg.MustRegister(applyCommandDocContract(specPwd()))
 	reg.MustRegister(applyCommandDocContract(specEnv()))
 	reg.MustRegister(applyCommandDocContract(specFrontmatter()))
+	reg.MustRegister(applyCommandDocContract(specJSON()))
 	reg.MustRegister(applyCommandDocContract(specCat()))
 	reg.MustRegister(applyCommandDocContract(specHead()))
 	reg.MustRegister(applyCommandDocContract(specTail()))

@@ -72,6 +72,16 @@ var builtinDocContracts = map[string]builtinDocContract{
 		SuccessOutput:    contract.BuiltinSuccessContent,
 		PipeBehavior:     contract.BuiltinPipeGood,
 	},
+	CommandJSON: {
+		StdinMode:        contract.BuiltinStdinNone,
+		Operands:         "subcommand plus PATH operands",
+		DefaultOutput:    "json stat rows or extracted JSON subtree",
+		StructuredOutput: "JSON shape or subtree result",
+		StructuredFlags:  []string{"stat --fmt json", "stat --fmt md", "get --raw"},
+		MutationKind:     contract.BuiltinMutationReadOnly,
+		SuccessOutput:    contract.BuiltinSuccessContent,
+		PipeBehavior:     contract.BuiltinPipeGood,
+	},
 	CommandCat: {
 		StdinMode:     contract.BuiltinStdinOptional,
 		Operands:      "zero or one PATH",

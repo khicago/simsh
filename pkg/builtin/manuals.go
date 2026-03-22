@@ -54,6 +54,11 @@ var commandExamples = map[string][]string{
 		"frontmatter get --key title /knowledge_base/notes.md",
 		"frontmatter print --key sop -C 2 docs/must-sop.md",
 	},
+	"json": {
+		"json stat /task_outputs/data.json",
+		"json stat -r --fmt json /workspace",
+		"json get --path items[0].name /task_outputs/data.json",
+	},
 	"cat":   {"cat /knowledge_base/readme.md", "cat -n /knowledge_base/readme.md", "echo hello | cat"},
 	"head":  {"head /task_outputs/report.md", "head -n 5 /task_outputs/report.md"},
 	"tail":  {"tail /task_outputs/report.md", "tail -n 5 /task_outputs/report.md"},

@@ -19,7 +19,7 @@ JSON SSOT: `tasks.json`
 - [x] T-014 Optimize rm
 - [x] T-015 Optimize rmdir
 - [x] T-016 Optimize tee
-- [ ] T-017 Optimize sed
+- [x] T-017 Optimize sed
 - [ ] T-018 Add JSON query tooling
 - [ ] T-019 Refresh README and aggregate docs after tool rollout
 - [x] T-020 Reframe README and architecture around kernel and default workspace

@@ -9,6 +9,7 @@ const (
 	CommandFrontmatter = "frontmatter"
 	CommandGrep        = "grep"
 	CommandHead        = "head"
+	CommandJSON        = "json"
 	CommandLS          = "ls"
 	CommandTree        = "tree"
 	CommandMan         = "man"

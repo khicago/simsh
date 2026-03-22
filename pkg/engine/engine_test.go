@@ -28,6 +28,7 @@ func newTestFS() *testFS {
 	fs := &testFS{root: "/", files: map[string]string{}, dirs: map[string]struct{}{"/": {}}}
 	fs.mustWrite("/workspace/readme.md", "hello\nworld\n")
 	fs.mustWrite("/workspace/todo.txt", "todo item\n")
+	fs.mustWrite("/workspace/data.json", "{\n  \"title\": \"Coverage Fixture\",\n  \"meta\": {\"author\": \"simsh\"},\n  \"items\": [{\"name\": \"first\"}, {\"name\": \"second\"}]\n}\n")
 	fs.external = []contract.ExternalCommand{{Name: "report_tool", Summary: "report tool manual"}}
 	return fs
 }
@@ -857,6 +858,11 @@ func TestEngineEnvAndManuals(t *testing.T) {
 	out, code = eng.Execute(context.Background(), "man report_tool", ops)
 	if code != 0 || !strings.Contains(out, "report tool manual") {
 		t.Fatalf("man external failed: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "json get --path items[0].name /workspace/data.json", ops)
+	if code != 0 || strings.TrimSpace(out) != "first" {
+		t.Fatalf("json get failed: code=%d out=%q", code, out)
 	}
 }
 

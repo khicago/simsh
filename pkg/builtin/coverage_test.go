@@ -56,6 +56,7 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	logs := rt.abs("workspace", "logs.txt")
 	other := rt.abs("workspace", "other.txt")
 	fmDoc := rt.abs("workspace", "frontmatter.md")
+	jsonDoc := rt.abs("workspace", "data.json")
 	copyTarget := rt.abs("workspace", "copy.md")
 	mvTarget := rt.abs("workspace", "moved.txt")
 	newFile := rt.abs("workspace", "new.txt")
@@ -96,6 +97,9 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	}
 	if err := rt.ops.WriteFile(context.Background(), fmDoc, "---\ntitle: Coverage Fixture\ntags:\n  - a\n  - b\n---\nbody\n"); err != nil {
 		t.Fatalf("setup write frontmatter fixture failed: %v", err)
+	}
+	if err := rt.ops.WriteFile(context.Background(), jsonDoc, "{\n  \"title\": \"Coverage Fixture\",\n  \"meta\": {\"author\": \"simsh\"},\n  \"items\": [{\"name\": \"first\"}, {\"name\": \"second\"}]\n}\n"); err != nil {
+		t.Fatalf("setup write json fixture failed: %v", err)
 	}
 	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", ".hidden.txt"), "hidden\n"); err != nil {
 		t.Fatalf("setup write hidden file failed: %v", err)
@@ -268,6 +272,42 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, "3:tags:") || !strings.Contains(out, "5:  - b") {
 					t.Fatalf("frontmatter print failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-stat",
+			cmd:  "json stat " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "y object 3") || !strings.Contains(out, jsonDoc) {
+					t.Fatalf("json stat failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-stat-json",
+			cmd:  "json stat --fmt json " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"entries\"") || !strings.Contains(out, "\"kind\":\"object\"") {
+					t.Fatalf("json stat --fmt json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-path",
+			cmd:  "json get --path items[0].name " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "first" {
+					t.Fatalf("json get failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-raw",
+			cmd:  "json get --raw --path meta " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "{\"author\":\"simsh\"}" {
+					t.Fatalf("json get --raw failed: code=%d out=%q", code, out)
 				}
 			},
 		},
