@@ -7,7 +7,7 @@ JSON SSOT: `tasks.json`
 - [x] T-002 Add builtin contract metadata and man/manual plumbing
 - [x] T-003 Optimize tree
 - [x] T-004 Optimize grep
-- [ ] T-005 Optimize find
+- [x] T-005 Optimize find
 - [ ] T-006 Optimize wc
 - [ ] T-007 Optimize env
 - [ ] T-008 Optimize type

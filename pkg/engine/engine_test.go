@@ -1688,6 +1688,30 @@ func TestPipelineIntegration(t *testing.T) {
 			t.Fatalf("expected chain to stop on grep no-match")
 		}
 	})
+
+	t.Run("wc default uses labeled multi-metric output", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		out, code := eng.Execute(context.Background(), "wc /workspace/readme.md", ops)
+		if code != 0 {
+			t.Fatalf("wc default failed: code=%d out=%q", code, out)
+		}
+		if !strings.Contains(out, "lines=2") || !strings.Contains(out, "words=2") || !strings.Contains(out, "bytes=12") {
+			t.Fatalf("expected labeled wc output: %q", out)
+		}
+	})
+
+	t.Run("wc json output", func(t *testing.T) {
+		fs := newTestFS()
+		ops := readOnlyOps(fs)
+		out, code := eng.Execute(context.Background(), "wc --json /workspace/readme.md", ops)
+		if code != 0 {
+			t.Fatalf("wc --json failed: code=%d out=%q", code, out)
+		}
+		if !strings.Contains(out, `"lines":2`) || !strings.Contains(out, `"words":2`) || !strings.Contains(out, `"bytes":12`) {
+			t.Fatalf("expected wc json output: %q", out)
+		}
+	})
 }
 
 // ==================== Embed Manual Tests ====================

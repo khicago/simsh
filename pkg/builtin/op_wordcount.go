@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -8,16 +9,25 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
+type wcResult struct {
+	Lines *int `json:"lines,omitempty"`
+	Words *int `json:"words,omitempty"`
+	Bytes *int `json:"bytes,omitempty"`
+}
+
 func specWc() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandWc,
-		Manual: "wc [-l] [-w] [-c] [PATH]",
+		Manual: "wc [--json] [-l] [-w] [-c] [PATH]",
 		Tips: []string{
-			"Counts lines, words, and bytes. Use stdin when no file is given.",
+			"Single-metric modes keep bare numeric output for pipeline composability.",
+			"Default multi-metric output uses compact labels, and --json provides an explicit structured mode.",
 		},
-		Examples:       ExamplesFor("wc"),
-		DetailedManual: LoadEmbeddedManual("wc"),
-		Run:            runWc,
+		StructuredOutput: "count summary object",
+		StructuredFlags:  []string{"--json"},
+		Examples:         ExamplesFor("wc"),
+		DetailedManual:   LoadEmbeddedManual("wc"),
+		Run:              runWc,
 	}
 }
 
@@ -25,9 +35,15 @@ func runWc(runtime engine.CommandRuntime, args []string) (string, int) {
 	showLines := false
 	showWords := false
 	showBytes := false
+	jsonOutput := false
 	filePath := ""
 
 	for _, arg := range args {
+		switch arg {
+		case "--json":
+			jsonOutput = true
+			continue
+		}
 		if strings.HasPrefix(arg, "-") && arg != "-" {
 			for _, ch := range arg[1:] {
 				switch ch {
@@ -74,15 +90,47 @@ func runWc(runtime engine.CommandRuntime, args []string) (string, int) {
 	words := len(strings.Fields(raw))
 	bytes := len(raw)
 
-	parts := make([]string, 0, 3)
+	result := wcResult{}
+	enabled := 0
 	if showLines {
-		parts = append(parts, fmt.Sprintf("%d", lines))
+		result.Lines = &lines
+		enabled++
 	}
 	if showWords {
-		parts = append(parts, fmt.Sprintf("%d", words))
+		result.Words = &words
+		enabled++
 	}
 	if showBytes {
-		parts = append(parts, fmt.Sprintf("%d", bytes))
+		result.Bytes = &bytes
+		enabled++
+	}
+	if jsonOutput {
+		rawJSON, err := json.Marshal(result)
+		if err != nil {
+			return fmt.Sprintf("wc: %v", err), contract.ExitCodeGeneral
+		}
+		return string(rawJSON), 0
+	}
+	if enabled == 1 {
+		switch {
+		case result.Lines != nil:
+			return fmt.Sprintf("%d", *result.Lines), 0
+		case result.Words != nil:
+			return fmt.Sprintf("%d", *result.Words), 0
+		default:
+			return fmt.Sprintf("%d", *result.Bytes), 0
+		}
+	}
+
+	parts := make([]string, 0, 3)
+	if result.Lines != nil {
+		parts = append(parts, fmt.Sprintf("lines=%d", *result.Lines))
+	}
+	if result.Words != nil {
+		parts = append(parts, fmt.Sprintf("words=%d", *result.Words))
+	}
+	if result.Bytes != nil {
+		parts = append(parts, fmt.Sprintf("bytes=%d", *result.Bytes))
 	}
 	return strings.Join(parts, " "), 0
 }

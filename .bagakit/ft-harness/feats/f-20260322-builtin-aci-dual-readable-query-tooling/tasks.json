@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T12:16:07Z",
+  "updated_at": "2026-03-22T12:24:25Z",
   "tasks": [
     {
       "id": "T-001",
@@ -86,7 +86,7 @@
     {
       "id": "T-005",
       "title": "Optimize find",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Preserve path-per-line default behavior for composition while adding an explicit structured result mode and clearer command contract.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T12:16:07Z",
@@ -99,22 +99,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T12:12:26Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T12:16:07Z",
+      "finished_at": "2026-03-22T12:17:06Z",
+      "updated_at": "2026-03-22T12:17:06Z",
       "notes": []
     },
     {
       "id": "T-006",
       "title": "Optimize wc",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Replace weak positional default output with a more readable compact form and add an explicit structured mode.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T12:24:25Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T12:19:01Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "updated_at": "2026-03-22T12:24:25Z",
       "notes": []
     },
     {

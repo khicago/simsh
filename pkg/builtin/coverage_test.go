@@ -443,8 +443,44 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "wc",
 			cmd:  "wc -l " + readme,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 || strings.TrimSpace(out) == "" {
+				if code != 0 || strings.TrimSpace(out) != "2" {
 					t.Fatalf("wc failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "wc-default",
+			cmd:  "wc " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "lines=2") || !strings.Contains(out, "words=2") || !strings.Contains(out, "bytes=9") {
+					t.Fatalf("wc default failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "wc-multi-flags",
+			cmd:  "wc -lw " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "lines=2 words=2" {
+					t.Fatalf("wc -lw failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "wc-json",
+			cmd:  "wc --json " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"lines\":2") || !strings.Contains(out, "\"words\":2") || !strings.Contains(out, "\"bytes\":9") {
+					t.Fatalf("wc --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "wc-stdin-bytes",
+			cmd:  "echo hello | wc -c",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "5" {
+					t.Fatalf("wc -c stdin failed: code=%d out=%q", code, out)
 				}
 			},
 		},
