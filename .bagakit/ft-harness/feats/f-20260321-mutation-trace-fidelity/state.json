@@ -4,24 +4,24 @@
   "title": "Mutation trace fidelity",
   "slug": "mutation-trace-fidelity",
   "goal": "Make ExecutionTrace and related resource summaries faithful enough for planners and reviewers to trust mutation-heavy operations without hidden heuristics.",
-  "status": "ready",
+  "status": "in_progress",
   "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:03Z",
-  "updated_at": "2026-03-22T04:47:44Z",
-  "current_task_id": null,
+  "updated_at": "2026-03-22T06:44:54Z",
+  "current_task_id": "T-002",
   "counters": {
     "gate_fail_streak": 0,
-    "no_progress_rounds": 0,
-    "round_count": 1
+    "no_progress_rounds": 1,
+    "round_count": 2
   },
   "gate": {
     "last_result": "pass",
-    "last_task_id": "T-001",
-    "last_checked_at": "2026-03-22T04:43:43Z",
+    "last_task_id": "T-002",
+    "last_checked_at": "2026-03-22T06:44:54Z",
     "last_check_commands": [
       {
         "command": "go test ./...",
@@ -29,7 +29,7 @@
         "status": "pass"
       }
     ],
-    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-mutation-trace-fidelity/artifacts/gate-20260322T044343Z.log"
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-mutation-trace-fidelity/artifacts/gate-20260322T064454Z.log"
   },
   "history": [
     {
@@ -56,6 +56,16 @@
       "at": "2026-03-22T04:47:44Z",
       "action": "task_finished",
       "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-03-22T06:31:47Z",
+      "action": "task_started",
+      "detail": "T-002"
+    },
+    {
+      "at": "2026-03-22T06:44:54Z",
+      "action": "task_gate",
+      "detail": "T-002 => pass"
     }
   ]
 }

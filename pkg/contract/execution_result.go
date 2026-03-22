@@ -20,25 +20,27 @@ type ExecutionResult struct {
 
 // ExecutionTrace is the machine-consumable execution summary attached to results.
 type ExecutionTrace struct {
-	CommandLine      string               `json:"command_line,omitempty"`
-	Command          string               `json:"command,omitempty"`
-	Argv             []string             `json:"argv,omitempty"`
-	Pipeline         []ExecutionTraceStep `json:"pipeline,omitempty"`
-	EffectiveProfile CompatibilityProfile `json:"effective_profile,omitempty"`
-	EffectivePolicy  ExecutionPolicy      `json:"effective_policy"`
-	TimedOut         bool                 `json:"timed_out,omitempty"`
-	Canceled         bool                 `json:"canceled,omitempty"`
-	RequestedPaths   []string             `json:"requested_paths,omitempty"`
-	ReadPaths        []string             `json:"read_paths,omitempty"`
-	WrittenPaths     []string             `json:"written_paths,omitempty"`
-	AppendedPaths    []string             `json:"appended_paths,omitempty"`
-	EditedPaths      []string             `json:"edited_paths,omitempty"`
-	CreatedDirs      []string             `json:"created_dirs,omitempty"`
-	RemovedPaths     []string             `json:"removed_paths,omitempty"`
-	DeniedPaths      []string             `json:"denied_paths,omitempty"`
-	BytesRead        int                  `json:"bytes_read,omitempty"`
-	BytesWritten     int                  `json:"bytes_written,omitempty"`
-	OutputTruncated  bool                 `json:"output_truncated,omitempty"`
+	CommandLine         string               `json:"command_line,omitempty"`
+	Command             string               `json:"command,omitempty"`
+	Argv                []string             `json:"argv,omitempty"`
+	Pipeline            []ExecutionTraceStep `json:"pipeline,omitempty"`
+	EffectiveProfile    CompatibilityProfile `json:"effective_profile,omitempty"`
+	EffectivePolicy     ExecutionPolicy      `json:"effective_policy"`
+	TimedOut            bool                 `json:"timed_out,omitempty"`
+	Canceled            bool                 `json:"canceled,omitempty"`
+	RequestedPaths      []string             `json:"requested_paths,omitempty"`
+	ReadPaths           []string             `json:"read_paths,omitempty"`
+	WrittenPaths        []string             `json:"written_paths,omitempty"`
+	AppendedPaths       []string             `json:"appended_paths,omitempty"`
+	EditedPaths         []string             `json:"edited_paths,omitempty"`
+	CreatedDirs         []string             `json:"created_dirs,omitempty"`
+	RemovedPaths        []string             `json:"removed_paths,omitempty"`
+	DeniedPaths         []string             `json:"denied_paths,omitempty"`
+	BytesRead           int                  `json:"bytes_read,omitempty"`
+	BytesWritten        int                  `json:"bytes_written,omitempty"`
+	ExternalStdoutBytes int                  `json:"external_stdout_bytes,omitempty"`
+	ExternalStderrBytes int                  `json:"external_stderr_bytes,omitempty"`
+	OutputTruncated     bool                 `json:"output_truncated,omitempty"`
 }
 
 type ExecutionTraceStep struct {

@@ -105,7 +105,7 @@ Optional but recommended:
 
 ### K-003: Improve mutation trace fidelity
 - Feat: `f-20260321-mutation-trace-fidelity`
-- Status: in_progress
+- Status: done
 - Why now: Once path semantics are trustworthy, the next highest leverage is making `ExecutionTrace` accurate enough for planners and reviewers to consume without heuristics.
 - Kernel invariant: traces must faithfully describe file mutations, denials, and resource summaries for core file operations.
 - Files to touch:
@@ -118,8 +118,9 @@ Optional but recommended:
   - Bytes-written accounting for edit-heavy operations matches actual mutation behavior closely enough to be trustworthy.
   - Mutation-related trace tests cover write, append, edit, remove, and denial cases.
 - Notes:
-  - `T-001` is focused on truthful edit-byte accounting and mutation-denial regression coverage.
-  - `T-002` remains for the larger external-command seam cleanup so stdout-only collapse can be addressed separately from file-mutation truthfulness.
+  - `T-001` fixed edit-byte accounting so full-file rewrite semantics are reflected in trace resource summaries.
+  - `T-002` preserved external-command `stderr` in `ExecutionResult` and added dedicated external stdout/stderr byte counters to `ExecutionTrace`, instead of collapsing everything into stdout or file-read counters.
+  - Validated with `go test ./pkg/engine ./pkg/builtin`, `go test ./pkg/engine ./pkg/service/httpapi`, and `go test ./...`.
 - Rollback note:
   - If precise accounting requires broader interface changes than expected, ship the smallest truthful improvement first and document any remaining approximation explicitly.
 

@@ -140,6 +140,40 @@ func TestEngineExecuteResultTraceMutationDenials(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+
+	warn := eng.ExecuteResult(context.Background(), "report_tool --warn", ops)
+	if warn.ExitCode != 0 {
+		t.Fatalf("unexpected exit_code=%d result=%+v", warn.ExitCode, warn)
+	}
+	if warn.Stdout != "report ok" || warn.Stderr != "report warning" {
+		t.Fatalf("unexpected external stdout/stderr: %+v", warn)
+	}
+	if warn.Trace.ExternalStdoutBytes != len("report ok") || warn.Trace.ExternalStderrBytes != len("report warning") {
+		t.Fatalf("unexpected external trace bytes: %+v", warn.Trace)
+	}
+
+	fail := eng.ExecuteResult(context.Background(), "report_tool --fail", ops)
+	if fail.ExitCode != 17 {
+		t.Fatalf("unexpected exit_code=%d result=%+v", fail.ExitCode, fail)
+	}
+	if fail.Stdout != "" || fail.Stderr != "report failed" {
+		t.Fatalf("unexpected failing external stdout/stderr: %+v", fail)
+	}
+	if fail.FlattenOutput() != "report failed" {
+		t.Fatalf("unexpected flattened external failure output: %q", fail.FlattenOutput())
+	}
+	if fail.Trace.ExternalStdoutBytes != 0 || fail.Trace.ExternalStderrBytes != len("report failed") {
+		t.Fatalf("unexpected failing external trace bytes: %+v", fail.Trace)
+	}
+}
+
 func containsTracePath(paths []string, target string) bool {
 	for _, pathValue := range paths {
 		if pathValue == target {

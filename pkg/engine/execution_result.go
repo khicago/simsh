@@ -55,9 +55,10 @@ func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prep
 	execCtx = collector.WithContext(execCtx)
 	tracedOps := collector.WrapOps(normalized)
 
-	stdout, code := e.runScript(execCtx, cmdline, tracedOps)
-	result.ExitCode = code
-	result.Stdout = stdout
+	output := e.runScript(execCtx, cmdline, tracedOps)
+	result.ExitCode = output.code
+	result.Stdout = output.stdout
+	result.Stderr = output.stderr
 	result.FinishedAt = time.Now().UTC()
 	result.DurationMS = result.FinishedAt.Sub(result.StartedAt).Milliseconds()
 	result.Trace = collector.Snapshot()

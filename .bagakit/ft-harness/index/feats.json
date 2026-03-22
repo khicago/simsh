@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-22T04:47:44Z",
+  "updated_at": "2026-03-22T06:44:54Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -104,11 +104,11 @@
     {
       "feat_id": "f-20260321-mutation-trace-fidelity",
       "title": "Mutation trace fidelity",
-      "status": "ready",
+      "status": "in_progress",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-22T04:47:44Z"
+      "updated_at": "2026-03-22T06:44:54Z"
     },
     {
       "feat_id": "f-20260321-virtual-cwd-path-resolution",

@@ -179,6 +179,14 @@ func (f *testFS) ReadExternalManual(ctx context.Context, command string) (string
 func (f *testFS) RunExternalCommand(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
 	_ = ctx
 	if req.Command == "report_tool" {
+		if len(req.Args) > 0 {
+			switch strings.TrimSpace(req.Args[0]) {
+			case "--warn":
+				return contract.ExternalCommandResult{Stdout: "report ok", Stderr: "report warning", ExitCode: 0}, nil
+			case "--fail":
+				return contract.ExternalCommandResult{Stderr: "report failed", ExitCode: 17}, nil
+			}
+		}
 		return contract.ExternalCommandResult{Stdout: "report ok", ExitCode: 0}, nil
 	}
 	return contract.ExternalCommandResult{}, contract.ErrUnsupported

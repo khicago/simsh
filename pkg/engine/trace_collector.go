@@ -222,7 +222,7 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 			}
 			result, err := orig(ctx, req)
 			if err == nil {
-				c.recordExternalStdout(len(result.Stdout))
+				c.recordExternalOutput(len(result.Stdout), len(result.Stderr))
 			}
 			return result, err
 		}
@@ -313,10 +313,11 @@ func (c *executionTraceCollector) recordDenied(pathValue string) {
 	c.recordPath(&c.trace.DeniedPaths, pathValue)
 }
 
-func (c *executionTraceCollector) recordExternalStdout(bytes int) {
+func (c *executionTraceCollector) recordExternalOutput(stdoutBytes int, stderrBytes int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.trace.BytesRead += bytes
+	c.trace.ExternalStdoutBytes += stdoutBytes
+	c.trace.ExternalStderrBytes += stderrBytes
 }
 
 func (c *executionTraceCollector) recordPath(target *[]string, pathValue string) {

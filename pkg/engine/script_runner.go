@@ -4,34 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/khicago/simsh/pkg/contract"
 )
 
 const maxExecuteStatements = 64
 
-func (e *Engine) runScript(ctx context.Context, cmdline string, ops contract.Ops) (string, int) {
+type execOutput struct {
+	stdout string
+	stderr string
+	code   int
+}
+
+func (e *Engine) runScript(ctx context.Context, cmdline string, ops contract.Ops) execOutput {
 	statements, err := parseScript(cmdline)
 	if err != nil {
-		return fmt.Sprintf("execute: %v", err), contract.ExitCodeUsage
+		return execOutput{stdout: fmt.Sprintf("execute: %v", err), code: contract.ExitCodeUsage}
 	}
 	if len(statements) == 0 {
-		return "", 0
+		return execOutput{}
 	}
 	return e.executeStatements(ctx, statements, ops)
 }
 
-func (e *Engine) executeStatements(ctx context.Context, statements []parsedStatement, ops contract.Ops) (string, int) {
+func (e *Engine) executeStatements(ctx context.Context, statements []parsedStatement, ops contract.Ops) execOutput {
 	if len(statements) > maxExecuteStatements {
-		return fmt.Sprintf("execute: statement count exceeds limit (%d)", maxExecuteStatements), contract.ExitCodeGeneral
+		return execOutput{stdout: fmt.Sprintf("execute: statement count exceeds limit (%d)", maxExecuteStatements), code: contract.ExitCodeGeneral}
 	}
-	lastOutput := ""
-	lastCode := 0
+	lastResult := execOutput{}
 	executed := false
 
 	for _, statement := range statements {
-		statementOutput := ""
-		statementCode := 0
+		statementResult := execOutput{}
 		statementExecuted := false
 
 		for idx, node := range statement.pipelines {
@@ -39,40 +44,38 @@ func (e *Engine) executeStatements(ctx context.Context, statements []parsedState
 			if idx > 0 {
 				switch node.op {
 				case "&&":
-					shouldRun = statementCode == 0
+					shouldRun = statementResult.code == 0
 				case "||":
-					shouldRun = statementCode != 0
+					shouldRun = statementResult.code != 0
 				}
 			}
 			if !shouldRun {
 				continue
 			}
 
-			out, code := e.executePipeline(ctx, node.pipeline, ops)
-			statementOutput = out
-			statementCode = code
+			statementResult = e.executePipeline(ctx, node.pipeline, ops)
 			statementExecuted = true
 		}
 
 		if statementExecuted {
-			lastOutput = statementOutput
-			lastCode = statementCode
+			lastResult = statementResult
 			executed = true
 		}
 	}
 
 	if !executed {
-		return "", 0
+		return execOutput{}
 	}
-	return lastOutput, lastCode
+	return lastResult
 }
 
-func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, ops contract.Ops) (string, int) {
+func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, ops contract.Ops) execOutput {
 	if ops.Policy.MaxPipelineDepth > 0 && len(pipeline.commands) > ops.Policy.MaxPipelineDepth {
-		return fmt.Sprintf("execute: pipeline depth exceeds limit (%d)", ops.Policy.MaxPipelineDepth), contract.ExitCodeGeneral
+		return execOutput{stdout: fmt.Sprintf("execute: pipeline depth exceeds limit (%d)", ops.Policy.MaxPipelineDepth), code: contract.ExitCodeGeneral}
 	}
 	current := ""
 	hasInput := false
+	pipelineStderr := ""
 	for _, command := range pipeline.commands {
 		input := current
 		inputAvailable := hasInput
@@ -81,27 +84,34 @@ func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, o
 		var code int
 		input, inputAvailable, errMsg, code = applyInputRedirections(ctx, command.args[0], command.redirs, input, inputAvailable, ops)
 		if code != 0 {
-			return errMsg, code
+			return execOutput{stdout: errMsg, stderr: pipelineStderr, code: code}
 		}
 
-		out, execCode := e.runCommand(ctx, command.args, input, inputAvailable, ops)
-		if execCode != 0 {
-			return out, execCode
+		result := e.runCommand(ctx, command.args, input, inputAvailable, ops)
+		pipelineStderr = appendOutputText(pipelineStderr, result.stderr)
+		if result.code != 0 {
+			result.stderr = pipelineStderr
+			return result
 		}
 
-		out, errMsg, code = applyOutputRedirections(ctx, command.args[0], command.redirs, out, ops)
+		var out string
+		out, errMsg, code = applyOutputRedirections(ctx, command.args[0], command.redirs, result.stdout, ops)
 		if code != 0 {
-			return errMsg, code
+			return execOutput{stdout: errMsg, stderr: pipelineStderr, code: code}
 		}
 		current = out
 		hasInput = true
 
 		if ops.Policy.MaxOutputBytes > 0 && len(current) > ops.Policy.MaxOutputBytes {
 			markTraceOutputTruncated(ctx)
-			return fmt.Sprintf("execute: pipeline intermediate result exceeds limit (%d bytes)", ops.Policy.MaxOutputBytes), contract.ExitCodeGeneral
+			return execOutput{
+				stdout: fmt.Sprintf("execute: pipeline intermediate result exceeds limit (%d bytes)", ops.Policy.MaxOutputBytes),
+				stderr: pipelineStderr,
+				code:   contract.ExitCodeGeneral,
+			}
 		}
 	}
-	return current, 0
+	return execOutput{stdout: current, stderr: pipelineStderr, code: 0}
 }
 
 func applyInputRedirections(ctx context.Context, commandName string, redirs []commandRedirect, input string, hasInput bool, ops contract.Ops) (string, bool, string, int) {
@@ -183,4 +193,17 @@ func applyOutputRedirections(ctx context.Context, commandName string, redirs []c
 		}
 	}
 	return "", "", 0
+}
+
+func appendOutputText(base string, addition string) string {
+	switch {
+	case strings.TrimSpace(base) == "":
+		return addition
+	case strings.TrimSpace(addition) == "":
+		return base
+	case strings.HasSuffix(base, "\n"):
+		return base + addition
+	default:
+		return base + "\n" + addition
+	}
 }

@@ -655,20 +655,20 @@ func isNullDevice(pathValue string) bool {
 	return path.Clean(strings.TrimSpace(pathValue)) == "/dev/null"
 }
 
-func (e *Engine) runCommand(ctx context.Context, args []string, input string, hasInput bool, ops contract.Ops) (string, int) {
+func (e *Engine) runCommand(ctx context.Context, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
 	if len(args) == 0 {
-		return "execute: missing command", contract.ExitCodeUsage
+		return execOutput{stdout: "execute: missing command", code: contract.ExitCodeUsage}
 	}
 	expandedArgs, err := expandCommandAlias(args, ops.CommandAliases)
 	if err != nil {
-		return fmt.Sprintf("execute: %v", err), contract.ExitCodeUsage
+		return execOutput{stdout: fmt.Sprintf("execute: %v", err), code: contract.ExitCodeUsage}
 	}
 	args = expandedArgs
 	rawCmd := strings.TrimSpace(args[0])
 	builtinName := normalizeBuiltinCommandName(rawCmd)
 	if spec, ok := e.registry.Lookup(builtinName); ok {
 		if !isCommandAllowedByProfile(spec, ops.Profile) {
-			return fmt.Sprintf("%s: not supported in profile %s", builtinName, ops.Profile), contract.ExitCodeUnsupported
+			return execOutput{stdout: fmt.Sprintf("%s: not supported in profile %s", builtinName, ops.Profile), code: contract.ExitCodeUnsupported}
 		}
 		emitAudit(ctx, ops, contract.AuditEvent{
 			Time:    time.Now(),
@@ -683,7 +683,8 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 				return fmt.Sprintf("execute: dispatch recursion depth exceeds limit (%d)", maxDispatchDepth), contract.ExitCodeGeneral
 			}
 			childCtx := context.WithValue(ctx, dispatchDepthKey, depth+1)
-			return e.runCommand(childCtx, dispatchArgs, dispatchInput, dispatchHasInput, ops)
+			result := e.runCommand(childCtx, dispatchArgs, dispatchInput, dispatchHasInput, ops)
+			return flattenExecOutput(result), result.code
 		}
 		runtime.LookupManual = func(name string) (string, bool) {
 			return e.registry.BuiltinManual(name)
@@ -695,6 +696,7 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 			return e.registry.ListNames()
 		}
 		out, code := spec.Run(runtime, args[1:])
+		result := execOutput{stdout: out, code: code}
 		phase := contract.AuditPhaseCommandEnd
 		if code != 0 {
 			phase = contract.AuditPhaseCommandError
@@ -705,15 +707,15 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 			Command:  builtinName,
 			Args:     append([]string(nil), args[1:]...),
 			ExitCode: code,
-			Message:  strings.TrimSpace(out),
+			Message:  strings.TrimSpace(flattenExecOutput(result)),
 		})
-		return enforceOutputLimit(ctx, out, code, ops.Policy)
+		return enforceOutputLimit(ctx, result, ops.Policy)
 	}
-	out, code := e.runExternalCommand(ctx, rawCmd, args[1:], input, hasInput, ops)
-	return enforceOutputLimit(ctx, out, code, ops.Policy)
+	result := e.runExternalCommand(ctx, rawCmd, args[1:], input, hasInput, ops)
+	return enforceOutputLimit(ctx, result, ops.Policy)
 }
 
-func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) (string, int) {
+func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
 	emitAudit(ctx, ops, contract.AuditEvent{
 		Time:    time.Now(),
 		Phase:   contract.AuditPhaseCommandStart,
@@ -723,7 +725,7 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 	if ops.RunExternalCommand == nil {
 		out := fmt.Sprintf("%s: Not supported", cmd)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
-		return out, contract.ExitCodeUnsupported
+		return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
 	}
 	request := contract.ExternalCommandRequest{
 		Command:  normalizeExternalCommandName(cmd),
@@ -740,32 +742,46 @@ func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []stri
 		if errors.Is(err, contract.ErrUnsupported) {
 			out := fmt.Sprintf("%s: Not supported", cmd)
 			emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
-			return out, contract.ExitCodeUnsupported
+			return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
 		}
 		out := fmt.Sprintf("%s: %v", cmd, err)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
-		return out, contract.ExitCodeGeneral
+		return execOutput{stdout: out, code: contract.ExitCodeGeneral}
 	}
+	output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: result.ExitCode}
 	if result.ExitCode == 0 {
-		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandEnd, Command: cmd, Args: append([]string(nil), args...), ExitCode: 0})
-		return result.Stdout, 0
+		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandEnd, Command: cmd, Args: append([]string(nil), args...), ExitCode: 0, Message: strings.TrimSpace(flattenExecOutput(output))})
+		return output
 	}
 	if result.ExitCode < 0 {
-		result.ExitCode = contract.ExitCodeGeneral
+		output.code = contract.ExitCodeGeneral
 	}
-	if strings.TrimSpace(result.Stdout) == "" {
-		result.Stdout = fmt.Sprintf("%s: command failed", cmd)
+	if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
+		output.stderr = fmt.Sprintf("%s: command failed", cmd)
 	}
-	emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: result.ExitCode, Message: strings.TrimSpace(result.Stdout)})
-	return result.Stdout, result.ExitCode
+	emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: output.code, Message: strings.TrimSpace(flattenExecOutput(output))})
+	return output
 }
 
-func enforceOutputLimit(ctx context.Context, out string, code int, policy contract.ExecutionPolicy) (string, int) {
-	if policy.MaxOutputBytes > 0 && len(out) > policy.MaxOutputBytes {
+func enforceOutputLimit(ctx context.Context, out execOutput, policy contract.ExecutionPolicy) execOutput {
+	if policy.MaxOutputBytes > 0 && len(flattenExecOutput(out)) > policy.MaxOutputBytes {
 		markTraceOutputTruncated(ctx)
-		return fmt.Sprintf("execute: output exceeds limit (%d bytes)", policy.MaxOutputBytes), contract.ExitCodeGeneral
+		return execOutput{stdout: fmt.Sprintf("execute: output exceeds limit (%d bytes)", policy.MaxOutputBytes), code: contract.ExitCodeGeneral}
 	}
-	return out, code
+	return out
+}
+
+func flattenExecOutput(out execOutput) string {
+	switch {
+	case out.stdout == "":
+		return out.stderr
+	case out.stderr == "":
+		return out.stdout
+	case strings.HasSuffix(out.stdout, "\n"):
+		return out.stdout + out.stderr
+	default:
+		return out.stdout + "\n" + out.stderr
+	}
 }
 
 func emitAudit(ctx context.Context, ops contract.Ops, event contract.AuditEvent) {
