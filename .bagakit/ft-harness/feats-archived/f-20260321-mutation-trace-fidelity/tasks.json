@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260321-mutation-trace-fidelity",
-  "updated_at": "2026-03-22T06:44:54Z",
+  "updated_at": "2026-03-22T06:48:40Z",
   "tasks": [
     {
       "id": "T-001",
@@ -26,7 +26,7 @@
     {
       "id": "T-002",
       "title": "Preserve more structure across the external command seam",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Reduce stdout-only collapse in the /bin external seam so ExecutionResult and ExecutionTrace preserve more truthful machine-readable signal.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T06:44:54Z",
@@ -39,8 +39,8 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T06:31:47Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T06:44:54Z",
+      "finished_at": "2026-03-22T06:48:40Z",
+      "updated_at": "2026-03-22T06:48:40Z",
       "notes": []
     }
   ]

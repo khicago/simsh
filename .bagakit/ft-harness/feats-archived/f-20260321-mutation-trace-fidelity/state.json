@@ -4,18 +4,18 @@
   "title": "Mutation trace fidelity",
   "slug": "mutation-trace-fidelity",
   "goal": "Make ExecutionTrace and related resource summaries faithful enough for planners and reviewers to trust mutation-heavy operations without hidden heuristics.",
-  "status": "in_progress",
+  "status": "archived",
   "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:03Z",
-  "updated_at": "2026-03-22T06:44:54Z",
-  "current_task_id": "T-002",
+  "updated_at": "2026-03-22T06:48:40Z",
+  "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
-    "no_progress_rounds": 1,
+    "no_progress_rounds": 0,
     "round_count": 2
   },
   "gate": {
@@ -66,6 +66,27 @@
       "at": "2026-03-22T06:44:54Z",
       "action": "task_gate",
       "detail": "T-002 => pass"
+    },
+    {
+      "at": "2026-03-22T06:48:40Z",
+      "action": "task_finished",
+      "detail": "T-002 => done"
+    },
+    {
+      "at": "2026-03-22T06:48:40Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
     }
-  ]
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-03-22T06:48:40Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
 }
