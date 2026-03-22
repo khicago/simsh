@@ -179,6 +179,33 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "env-json",
+			cmd:  "env --json",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"vars\"") || !strings.Contains(out, "\"key\":\"PATH\"") {
+					t.Fatalf("env --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "env-json-key",
+			cmd:  "env --json PATH",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"key\":\"PATH\"") || !strings.Contains(out, "\"parts\":[\"/sys/bin\",\"/bin\"]") {
+					t.Fatalf("env --json PATH failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "env-split",
+			cmd:  "env --split PATH",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "/sys/bin\n/bin" {
+					t.Fatalf("env --split PATH failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "frontmatter-stat",
 			cmd:  "frontmatter stat " + fmDoc,
 			want: func(t *testing.T, out string, code int) {

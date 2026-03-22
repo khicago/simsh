@@ -377,6 +377,16 @@ func TestEngineRCBootstrapFromMountedFile(t *testing.T) {
 		t.Fatalf("expected env PATH override from rc: code=%d out=%q", code, out)
 	}
 
+	out, code = eng.Execute(context.Background(), "env --split PATH", ops)
+	if code != 0 || strings.TrimSpace(out) != "/sys/bin\n/bin\n/custom/bin" {
+		t.Fatalf("expected env --split PATH override from rc: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "env --json PATH", ops)
+	if code != 0 || !strings.Contains(out, `"key":"PATH"`) || !strings.Contains(out, `"/custom/bin"`) {
+		t.Fatalf("expected env --json PATH override from rc: code=%d out=%q", code, out)
+	}
+
 	out, code = eng.Execute(context.Background(), "fmget /workspace/frontmatter.md", ops)
 	if code != 0 || strings.TrimSpace(out) != "RC Loaded" {
 		t.Fatalf("expected alias from rc to execute: code=%d out=%q", code, out)
@@ -807,6 +817,21 @@ func TestEngineEnvAndManuals(t *testing.T) {
 	out, code := eng.Execute(context.Background(), "env PATH", ops)
 	if code != 0 || !strings.Contains(out, "PATH=/sys/bin:/bin") {
 		t.Fatalf("env PATH failed: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "env --json PATH", ops)
+	if code != 0 || !strings.Contains(out, `"key":"PATH"`) || !strings.Contains(out, `"/sys/bin"`) {
+		t.Fatalf("env --json PATH failed: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "env --split PATH", ops)
+	if code != 0 || strings.TrimSpace(out) != "/sys/bin\n/bin" {
+		t.Fatalf("env --split PATH failed: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "env MISSING_KEY", ops)
+	if code != 0 || strings.TrimSpace(out) != "" {
+		t.Fatalf("env missing key should stay empty: code=%d out=%q", code, out)
 	}
 
 	out, code = eng.Execute(context.Background(), "man ls", ops)

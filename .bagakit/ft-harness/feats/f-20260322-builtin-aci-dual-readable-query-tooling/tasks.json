@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T12:24:25Z",
+  "updated_at": "2026-03-22T15:48:13Z",
   "tasks": [
     {
       "id": "T-001",
@@ -106,7 +106,7 @@
     {
       "id": "T-006",
       "title": "Optimize wc",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Replace weak positional default output with a more readable compact form and add an explicit structured mode.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T12:24:25Z",
@@ -119,22 +119,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T12:19:01Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T12:24:25Z",
+      "finished_at": "2026-03-22T12:25:10Z",
+      "updated_at": "2026-03-22T12:25:10Z",
       "notes": []
     },
     {
       "id": "T-007",
       "title": "Optimize env",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Improve env readability for list-like values such as PATH and add an explicit structured mode without hurting terminal use.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T15:48:13Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T15:44:53Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "updated_at": "2026-03-22T15:48:13Z",
       "notes": []
     },
     {
