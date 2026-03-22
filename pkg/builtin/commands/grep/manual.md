@@ -1,6 +1,6 @@
 ---
 name: grep
-synopsis: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]"
+synopsis: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH]"
 category: search
 ---
 
@@ -8,8 +8,8 @@ category: search
 
 ## SYNOPSIS
 
-    grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]
-    COMMAND | grep [-E|-F] [-l] [-A N] [-B N] [-C N] PATTERN
+    grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH]
+    COMMAND | grep [-E|-F] [-l] [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN
 
 ## DESCRIPTION
 
@@ -30,6 +30,7 @@ When searching stdin, output is: `lineno:line` for matches.
 - `-A N` -- Print N lines after each match.
 - `-B N` -- Print N lines before each match.
 - `-C N` -- Print N lines before and after each match (combines -A and -B).
+- `--fmt jsonl` -- Emit flat JSONL records instead of text lines. Records use `kind=match|context|file`.
 
 ## EXAMPLES
 
@@ -53,12 +54,22 @@ Search stdin from a pipeline:
 
     cat /task_outputs/log.txt | grep "WARN"
 
+Machine-readable JSONL output:
+
+    grep --fmt jsonl "TODO" /task_outputs/notes.md
+
+List matching files as JSONL:
+
+    grep -l --fmt jsonl "error" -r /task_outputs
+
 ## NOTES
 
 - Paths may be absolute or relative to the current virtual working directory.
 - Exit code is 1 when no matches are found.
 - Only one path argument is accepted.
 - Use `-r` when the path is a directory.
+- Default text output remains pipe-friendly by design.
+- `--fmt jsonl` is the explicit structured mode for agent parsing and downstream tooling.
 
 ## SEE ALSO
 

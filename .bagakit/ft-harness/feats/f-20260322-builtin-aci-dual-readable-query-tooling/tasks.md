@@ -5,7 +5,7 @@ JSON SSOT: `tasks.json`
 ## Task Checklist
 - [x] T-001 Lock feat plan, tool inventory, and requirements baseline
 - [x] T-002 Add builtin contract metadata and man/manual plumbing
-- [ ] T-003 Optimize tree
+- [x] T-003 Optimize tree
 - [ ] T-004 Optimize grep
 - [ ] T-005 Optimize find
 - [ ] T-006 Optimize wc

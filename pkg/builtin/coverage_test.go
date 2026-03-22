@@ -263,6 +263,33 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "grep-jsonl",
+			cmd:  "grep --fmt jsonl hello " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"kind\":\"match\"") || !strings.Contains(out, "\"path\":\""+readme+"\"") {
+					t.Fatalf("grep --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "grep-jsonl-stdin",
+			cmd:  "echo hello | grep --fmt jsonl hello",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"stdin\":true") || !strings.Contains(out, "\"kind\":\"match\"") {
+					t.Fatalf("grep --fmt jsonl stdin failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "grep-jsonl-list",
+			cmd:  "grep -l --fmt jsonl hello " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"kind\":\"file\"") || !strings.Contains(out, "\"path\":\""+readme+"\"") {
+					t.Fatalf("grep -l --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "find",
 			cmd:  "find " + rt.abs("workspace") + " -name \"*.md\"",
 			want: func(t *testing.T, out string, code int) {

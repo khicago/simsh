@@ -1532,6 +1532,13 @@ func TestGrepExitCodeNoMatch(t *testing.T) {
 			t.Fatalf("expected exit 1 for no match: code=%d", code)
 		}
 	})
+
+	t.Run("jsonl no match still returns 1", func(t *testing.T) {
+		out, code := eng.Execute(context.Background(), "grep --fmt jsonl zzzznotfound /workspace/readme.md", ops)
+		if code != 1 {
+			t.Fatalf("expected exit 1 for jsonl no match: code=%d out=%q", code, out)
+		}
+	})
 }
 
 func TestCatLineNumbers(t *testing.T) {

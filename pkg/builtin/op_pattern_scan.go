@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -15,21 +16,33 @@ type grepArgs struct {
 	regex     bool
 	recursive bool
 	listFiles bool
+	jsonl     bool
 	before    int
 	after     int
+}
+
+type grepRecord struct {
+	Path  string `json:"path,omitempty"`
+	Stdin bool   `json:"stdin,omitempty"`
+	Line  int    `json:"line"`
+	Kind  string `json:"kind"`
+	Text  string `json:"text,omitempty"`
 }
 
 func specGrep() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandGrep,
-		Manual: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] PATTERN [PATH]",
+		Manual: "grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH]",
 		Tips: []string{
 			"Use -r for directory search and -l to list matched files only.",
+			"Use --fmt jsonl when you want flat machine-readable records without changing the default text output.",
 			"Context flags -A/-B/-C include neighboring lines around each match.",
 		},
-		Examples:       ExamplesFor("grep"),
-		DetailedManual: LoadEmbeddedManual("grep"),
-		Run:            runGrep,
+		StructuredOutput: "flat search records",
+		StructuredFlags:  []string{"--fmt jsonl"},
+		Examples:         ExamplesFor("grep"),
+		DetailedManual:   LoadEmbeddedManual("grep"),
+		Run:              runGrep,
 	}
 }
 
@@ -44,16 +57,28 @@ func runGrep(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	if runtime.HasStdin && opts.path == "" {
 		if opts.listFiles {
-			if grepHasMatch(runtime.Stdin, match) {
-				return "(stdin)", 0
+			found := grepHasMatch(runtime.Stdin, match)
+			if !opts.jsonl {
+				if found {
+					return "(stdin)", 0
+				}
+				return "", contract.ExitCodeGeneral
 			}
-			return "", contract.ExitCodeGeneral
+			records := []grepRecord{}
+			if found {
+				records = append(records, grepRecord{Stdin: true, Line: 0, Kind: "file"})
+			}
+			return renderGrepJSONL(records), grepExitCode(found)
 		}
-		out := grepTextWithContext(runtime.Stdin, match, opts.before, opts.after, "")
-		if len(out) == 0 {
-			return "", contract.ExitCodeGeneral
+		if !opts.jsonl {
+			out := grepTextWithContext(runtime.Stdin, match, opts.before, opts.after, "")
+			if len(out) == 0 {
+				return "", contract.ExitCodeGeneral
+			}
+			return strings.Join(out, "\n"), 0
 		}
-		return strings.Join(out, "\n"), 0
+		records := grepRecordsWithContext(runtime.Stdin, match, opts.before, opts.after, "", true)
+		return renderGrepJSONL(records), grepExitCode(len(records) > 0)
 	}
 	if !runtime.HasStdin && opts.path == "" {
 		return "grep: expected stdin input or one file/directory path", contract.ExitCodeUsage
@@ -63,24 +88,56 @@ func runGrep(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
 	}
-	lines := make([]string, 0)
+
+	if opts.listFiles {
+		matchedPaths := make([]string, 0)
+		records := make([]grepRecord, 0)
+		for _, filePath := range paths {
+			raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
+			if err != nil {
+				return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
+			}
+			if !grepHasMatch(raw, match) {
+				continue
+			}
+			matchedPaths = append(matchedPaths, filePath)
+			if opts.jsonl {
+				records = append(records, grepRecord{Path: filePath, Line: 0, Kind: "file"})
+			}
+		}
+		if !opts.jsonl {
+			if len(matchedPaths) == 0 {
+				return "", contract.ExitCodeGeneral
+			}
+			return strings.Join(matchedPaths, "\n"), 0
+		}
+		return renderGrepJSONL(records), grepExitCode(len(records) > 0)
+	}
+
+	if !opts.jsonl {
+		lines := make([]string, 0)
+		for _, filePath := range paths {
+			raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
+			if err != nil {
+				return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
+			}
+			lines = append(lines, grepTextWithContext(raw, match, opts.before, opts.after, filePath)...)
+		}
+		if len(lines) == 0 {
+			return "", contract.ExitCodeGeneral
+		}
+		return strings.Join(lines, "\n"), 0
+	}
+
+	records := make([]grepRecord, 0)
 	for _, filePath := range paths {
 		raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
 		if err != nil {
 			return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
 		}
-		if opts.listFiles {
-			if grepHasMatch(raw, match) {
-				lines = append(lines, filePath)
-			}
-			continue
-		}
-		lines = append(lines, grepTextWithContext(raw, match, opts.before, opts.after, filePath)...)
+		records = append(records, grepRecordsWithContext(raw, match, opts.before, opts.after, filePath, false)...)
 	}
-	if len(lines) == 0 {
-		return "", contract.ExitCodeGeneral
-	}
-	return strings.Join(lines, "\n"), 0
+	return renderGrepJSONL(records), grepExitCode(len(records) > 0)
 }
 
 func parseGrepArgs(args []string, requireAbsolutePath func(string) (string, error)) (grepArgs, string) {
@@ -92,6 +149,20 @@ func parseGrepArgs(args []string, requireAbsolutePath func(string) (string, erro
 			break
 		}
 		switch {
+		case arg == "--fmt":
+			if idx+1 >= len(args) {
+				return opts, "grep: --fmt requires one value: jsonl"
+			}
+			idx++
+			if strings.TrimSpace(args[idx]) != "jsonl" {
+				return opts, fmt.Sprintf("grep: unsupported --fmt value %q", args[idx])
+			}
+			opts.jsonl = true
+		case strings.HasPrefix(arg, "--fmt="):
+			if strings.TrimSpace(strings.TrimPrefix(arg, "--fmt=")) != "jsonl" {
+				return opts, fmt.Sprintf("grep: unsupported --fmt value %q", strings.TrimPrefix(arg, "--fmt="))
+			}
+			opts.jsonl = true
 		case arg == "-E":
 			opts.regex = true
 		case arg == "-F":
@@ -155,6 +226,72 @@ func grepHasMatch(raw string, match func(string) bool) bool {
 	return false
 }
 
+func renderGrepJSONL(records []grepRecord) string {
+	if len(records) == 0 {
+		return ""
+	}
+	lines := make([]string, 0, len(records))
+	for _, record := range records {
+		raw, err := json.Marshal(record)
+		if err != nil {
+			return fmt.Sprintf(`{"kind":"error","text":%q}`, err.Error())
+		}
+		lines = append(lines, string(raw))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func grepExitCode(found bool) int {
+	if found {
+		return 0
+	}
+	return contract.ExitCodeGeneral
+}
+
+func grepRecordsWithContext(raw string, match func(string) bool, before int, after int, filePath string, stdin bool) []grepRecord {
+	lines := splitRawLines(raw)
+	if len(lines) == 0 {
+		return nil
+	}
+	matched := make([]bool, len(lines))
+	include := make([]bool, len(lines))
+	for i, line := range lines {
+		if !match(line) {
+			continue
+		}
+		matched[i] = true
+		start := i - before
+		if start < 0 {
+			start = 0
+		}
+		end := i + after
+		if end >= len(lines) {
+			end = len(lines) - 1
+		}
+		for j := start; j <= end; j++ {
+			include[j] = true
+		}
+	}
+	out := make([]grepRecord, 0)
+	for i, line := range lines {
+		if !include[i] {
+			continue
+		}
+		record := grepRecord{
+			Path:  filePath,
+			Stdin: stdin,
+			Line:  i + 1,
+			Kind:  "context",
+			Text:  line,
+		}
+		if matched[i] {
+			record.Kind = "match"
+		}
+		out = append(out, record)
+	}
+	return out
+}
+
 func parseGrepContextArg(arg string, idx int, args []string) (int, int, error) {
 	if len(arg) < 2 {
 		return 0, 0, fmt.Errorf("invalid context flag")
@@ -191,47 +328,21 @@ func buildMatcher(pattern string, regex bool) (func(string) bool, error) {
 }
 
 func grepTextWithContext(raw string, match func(string) bool, before int, after int, filePath string) []string {
-	lines := splitRawLines(raw)
-	if len(lines) == 0 {
-		return nil
-	}
-	matched := make([]bool, len(lines))
-	include := make([]bool, len(lines))
-	for i, line := range lines {
-		if !match(line) {
-			continue
-		}
-		matched[i] = true
-		start := i - before
-		if start < 0 {
-			start = 0
-		}
-		end := i + after
-		if end >= len(lines) {
-			end = len(lines) - 1
-		}
-		for j := start; j <= end; j++ {
-			include[j] = true
-		}
-	}
-	out := make([]string, 0)
-	for i, line := range lines {
-		if !include[i] {
-			continue
-		}
-		lineNo := i + 1
-		if filePath != "" {
+	records := grepRecordsWithContext(raw, match, before, after, filePath, false)
+	out := make([]string, 0, len(records))
+	for _, record := range records {
+		if record.Path != "" {
 			sep := '-'
-			if matched[i] {
+			if record.Kind == "match" {
 				sep = ':'
 			}
-			out = append(out, fmt.Sprintf("%s%c%d:%s", filePath, sep, lineNo, line))
+			out = append(out, fmt.Sprintf("%s%c%d:%s", record.Path, sep, record.Line, record.Text))
 			continue
 		}
-		if matched[i] {
-			out = append(out, fmt.Sprintf("%d:%s", lineNo, line))
+		if record.Kind == "match" {
+			out = append(out, fmt.Sprintf("%d:%s", record.Line, record.Text))
 		} else {
-			out = append(out, fmt.Sprintf("%d-%s", lineNo, line))
+			out = append(out, fmt.Sprintf("%d-%s", record.Line, record.Text))
 		}
 	}
 	return out
