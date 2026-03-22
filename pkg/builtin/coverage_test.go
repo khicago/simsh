@@ -131,6 +131,12 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 				if code != 0 || !strings.Contains(out, "readme.md") {
 					t.Fatalf("tree failed: code=%d out=%q", code, out)
 				}
+				if !strings.Contains(out, rt.abs("workspace")+"/") {
+					t.Fatalf("tree should show the root directory in outline format: %q", out)
+				}
+				if strings.Contains(out, "|--") || strings.Contains(out, "`--") {
+					t.Fatalf("tree default should no longer use ASCII branch art: %q", out)
+				}
 				if strings.Contains(out, ".hidden.txt") {
 					t.Fatalf("tree should hide dot files by default: %q", out)
 				}
@@ -142,6 +148,24 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, ".hidden.txt") {
 					t.Fatalf("tree -a failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "tree-ascii",
+			cmd:  "tree --fmt ascii " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "|--") {
+					t.Fatalf("tree --fmt ascii failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "tree-json",
+			cmd:  "tree --fmt json " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"entries\"") || !strings.Contains(out, "\"kind\": \"dir\"") {
+					t.Fatalf("tree --fmt json failed: code=%d out=%q", code, out)
 				}
 			},
 		},
