@@ -144,3 +144,44 @@ func TestNewRuntimeOpsIsDirPathReturnsEscapeError(t *testing.T) {
 		t.Fatalf("unexpected IsDirPath error: %v", err)
 	}
 }
+
+func TestNewRuntimeOpsWriteFileHonorsCanceledContext(t *testing.T) {
+	ops, err := NewRuntimeOps(EnvironmentOptions{
+		HostRoot: t.TempDir(),
+		Policy: contract.ExecutionPolicy{
+			WriteMode: contract.WriteModeFull,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntimeOps failed: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := ops.WriteFile(ctx, "/task_outputs/out.txt", "x"); err == nil {
+		t.Fatalf("expected canceled context write to fail")
+	}
+}
+
+func TestNewRuntimeOpsCollectFilesUnderHonorsCanceledContext(t *testing.T) {
+	hostRoot := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(hostRoot, "knowledge_base"), 0o755); err != nil {
+		t.Fatalf("mkdir knowledge_base failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(hostRoot, "knowledge_base", "a.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	ops, err := NewRuntimeOps(EnvironmentOptions{
+		HostRoot: hostRoot,
+		Policy: contract.ExecutionPolicy{
+			WriteMode: contract.WriteModeFull,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewRuntimeOps failed: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ops.CollectFilesUnder(ctx, "/knowledge_base"); err == nil {
+		t.Fatalf("expected canceled context collect to fail")
+	}
+}

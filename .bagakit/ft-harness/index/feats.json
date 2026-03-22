@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-22T06:48:40Z",
+  "updated_at": "2026-03-22T07:05:17Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -86,11 +86,11 @@
     {
       "feat_id": "f-20260321-cancel-timeout-effectiveness",
       "title": "Cancel and timeout effectiveness",
-      "status": "proposal",
-      "workspace_mode": "proposal_only",
+      "status": "in_progress",
+      "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-21T17:13:04Z"
+      "updated_at": "2026-03-22T07:05:17Z"
     },
     {
       "feat_id": "f-20260321-default-filesystem-boundary-enforcement",

@@ -159,7 +159,9 @@ func (f *aiFilesystem) RequireAbsolutePath(raw string) (string, error) {
 }
 
 func (f *aiFilesystem) ListChildren(ctx context.Context, dir string) ([]string, error) {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return nil, err
+	}
 	dir = normalizeVirtualPath(dir)
 	if dir == "/" {
 		roots := make([]string, 0, len(f.zones))
@@ -191,7 +193,9 @@ func (f *aiFilesystem) ListChildren(ctx context.Context, dir string) ([]string, 
 }
 
 func (f *aiFilesystem) IsDirPath(ctx context.Context, pathValue string) (bool, error) {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return false, err
+	}
 	pathValue = normalizeVirtualPath(pathValue)
 	if pathValue == "/" {
 		return true, nil
@@ -217,7 +221,9 @@ func (f *aiFilesystem) IsDirPath(ctx context.Context, pathValue string) (bool, e
 }
 
 func (f *aiFilesystem) ReadRawContent(ctx context.Context, pathValue string) (string, error) {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return "", err
+	}
 	_, hostPath, err := f.resolvePath(pathValue)
 	if err != nil {
 		return "", err
@@ -230,7 +236,9 @@ func (f *aiFilesystem) ReadRawContent(ctx context.Context, pathValue string) (st
 }
 
 func (f *aiFilesystem) ResolveSearchPaths(ctx context.Context, target string, recursive bool) ([]string, error) {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return nil, err
+	}
 	isDir, err := f.IsDirPath(ctx, target)
 	if err != nil {
 		return nil, err
@@ -248,12 +256,14 @@ func (f *aiFilesystem) ResolveSearchPaths(ctx context.Context, target string, re
 }
 
 func (f *aiFilesystem) CollectFilesUnder(ctx context.Context, target string) ([]string, error) {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return nil, err
+	}
 	target = normalizeVirtualPath(target)
 	if target == "/" {
 		out := make([]string, 0)
 		for _, z := range f.zones {
-			zoneFiles, err := f.collectZoneFiles(z, z.virtualRoot)
+			zoneFiles, err := f.collectZoneFiles(ctx, z, z.virtualRoot)
 			if err != nil {
 				return nil, err
 			}
@@ -266,10 +276,10 @@ func (f *aiFilesystem) CollectFilesUnder(ctx context.Context, target string) ([]
 	if err != nil {
 		return nil, err
 	}
-	return f.collectZoneFiles(z, target)
+	return f.collectZoneFiles(ctx, z, target)
 }
 
-func (f *aiFilesystem) collectZoneFiles(z zone, target string) ([]string, error) {
+func (f *aiFilesystem) collectZoneFiles(ctx context.Context, z zone, target string) ([]string, error) {
 	target = normalizeVirtualPath(target)
 	hostTarget, err := f.toHostPath(z, target)
 	if err != nil {
@@ -284,6 +294,9 @@ func (f *aiFilesystem) collectZoneFiles(z zone, target string) ([]string, error)
 	}
 	files := make([]string, 0)
 	err = filepath.WalkDir(hostTarget, func(p string, d os.DirEntry, walkErr error) error {
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if walkErr != nil {
 			return walkErr
 		}
@@ -305,7 +318,9 @@ func (f *aiFilesystem) collectZoneFiles(z zone, target string) ([]string, error)
 }
 
 func (f *aiFilesystem) WriteFile(ctx context.Context, filePath string, contentValue string) error {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, hostPath, err := f.resolvePath(filePath)
 	if err != nil {
 		return err
@@ -323,7 +338,9 @@ func (f *aiFilesystem) WriteFile(ctx context.Context, filePath string, contentVa
 }
 
 func (f *aiFilesystem) AppendFile(ctx context.Context, filePath string, contentValue string) error {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, hostPath, err := f.resolvePath(filePath)
 	if err != nil {
 		return err
@@ -347,7 +364,9 @@ func (f *aiFilesystem) AppendFile(ctx context.Context, filePath string, contentV
 }
 
 func (f *aiFilesystem) EditFile(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, hostPath, err := f.resolvePath(filePath)
 	if err != nil {
 		return err
@@ -379,6 +398,9 @@ func (f *aiFilesystem) EditFile(ctx context.Context, filePath string, oldString 
 }
 
 func (f *aiFilesystem) MakeDir(ctx context.Context, dirPath string) error {
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, hostPath, err := f.resolvePath(dirPath)
 	if err != nil {
 		return err
@@ -390,6 +412,9 @@ func (f *aiFilesystem) MakeDir(ctx context.Context, dirPath string) error {
 }
 
 func (f *aiFilesystem) RemoveFile(ctx context.Context, filePath string) error {
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, hostPath, err := f.resolvePath(filePath)
 	if err != nil {
 		return err
@@ -408,7 +433,9 @@ func (f *aiFilesystem) RemoveFile(ctx context.Context, filePath string) error {
 }
 
 func (f *aiFilesystem) CheckPathOp(ctx context.Context, op contract.PathOp, pathValue string) error {
-	_ = ctx
+	if err := checkContext(ctx); err != nil {
+		return err
+	}
 	z, _, err := f.resolvePath(pathValue)
 	if err != nil {
 		return err
@@ -423,6 +450,9 @@ func (f *aiFilesystem) CheckPathOp(ctx context.Context, op contract.PathOp, path
 }
 
 func (f *aiFilesystem) DescribePath(ctx context.Context, pathValue string) (contract.PathMeta, error) {
+	if err := checkContext(ctx); err != nil {
+		return contract.PathMeta{}, err
+	}
 	isDir, err := f.IsDirPath(ctx, pathValue)
 	if err != nil {
 		return contract.PathMeta{}, err
@@ -654,4 +684,11 @@ func nonEmpty(v string, fallback string) string {
 		return fallback
 	}
 	return v
+}
+
+func checkContext(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
 }

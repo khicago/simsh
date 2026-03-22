@@ -167,6 +167,43 @@ func TestCheckPathOpRejectsNestedSymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestWriteFileHonorsCanceledContext(t *testing.T) {
+	root := t.TempDir()
+	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})
+	if err != nil {
+		t.Fatalf("new ops failed: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	target := filepath.ToSlash(filepath.Join(root, "out.txt"))
+	if err := ops.WriteFile(ctx, target, "x"); err == nil {
+		t.Fatalf("expected canceled context write to fail")
+	}
+	if _, err := os.Stat(filepath.Join(root, "out.txt")); !os.IsNotExist(err) {
+		t.Fatalf("file should not be created after canceled context: err=%v", err)
+	}
+}
+
+func TestCollectFilesUnderHonorsCanceledContext(t *testing.T) {
+	root := t.TempDir()
+	targetDir := filepath.Join(root, "docs")
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(targetDir, "a.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatalf("write file failed: %v", err)
+	}
+	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})
+	if err != nil {
+		t.Fatalf("new ops failed: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := ops.CollectFilesUnder(ctx, filepath.ToSlash(targetDir)); err == nil {
+		t.Fatalf("expected canceled context collect to fail")
+	}
+}
+
 func TestRemoveDirRejectsRootDir(t *testing.T) {
 	root := t.TempDir()
 	ops, err := NewOps(Options{RootDir: root, Policy: mustFullPolicy(t)})

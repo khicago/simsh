@@ -656,6 +656,9 @@ func isNullDevice(pathValue string) bool {
 }
 
 func (e *Engine) runCommand(ctx context.Context, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
+	if err := executionContextErr(ctx); err != nil {
+		return contextExecOutput(err)
+	}
 	if len(args) == 0 {
 		return execOutput{stdout: "execute: missing command", code: contract.ExitCodeUsage}
 	}
@@ -716,6 +719,9 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 }
 
 func (e *Engine) runExternalCommand(ctx context.Context, cmd string, args []string, input string, hasInput bool, ops contract.Ops) execOutput {
+	if err := executionContextErr(ctx); err != nil {
+		return contextExecOutput(err)
+	}
 	emitAudit(ctx, ops, contract.AuditEvent{
 		Time:    time.Now(),
 		Phase:   contract.AuditPhaseCommandStart,

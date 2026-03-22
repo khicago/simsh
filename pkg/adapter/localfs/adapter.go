@@ -91,7 +91,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	checkPathOp := func(ctx context.Context, op contract.PathOp, pathValue string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		switch op {
 		case contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
 			if !policy.AllowWrite() {
@@ -107,7 +109,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	readRawContent := func(ctx context.Context, pathValue string) (string, error) {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return "", err
+		}
 		native := toNativePath(pathValue)
 		if _, err := resolveAndCheckPath(root, pathValue); err != nil {
 			return "", err
@@ -120,7 +124,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	isDirPath := func(ctx context.Context, pathValue string) (bool, error) {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return false, err
+		}
 		if _, err := resolveAndCheckPath(root, pathValue); err != nil {
 			if os.IsNotExist(err) {
 				return false, nil
@@ -138,7 +144,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	listChildren := func(ctx context.Context, dir string) ([]string, error) {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return nil, err
+		}
 		if _, err := resolveAndCheckPath(root, dir); err != nil {
 			return nil, err
 		}
@@ -155,7 +163,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	collectFilesUnder := func(ctx context.Context, target string) ([]string, error) {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return nil, err
+		}
 		if _, err := resolveAndCheckPath(root, target); err != nil {
 			return nil, err
 		}
@@ -168,6 +178,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 		}
 		files := make([]string, 0)
 		err = filepath.WalkDir(toNativePath(target), func(p string, d os.DirEntry, walkErr error) error {
+			if err := checkContext(ctx); err != nil {
+				return err
+			}
 			if walkErr != nil {
 				return walkErr
 			}
@@ -188,7 +201,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	resolveSearchPaths := func(ctx context.Context, target string, recursive bool) ([]string, error) {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return nil, err
+		}
 		if _, err := resolveAndCheckPath(root, target); err != nil {
 			return nil, err
 		}
@@ -248,7 +263,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	writeFile := func(ctx context.Context, filePath string, content string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -266,7 +283,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	appendFile := func(ctx context.Context, filePath string, content string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -290,7 +309,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	editFile := func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -322,7 +343,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	makeDir := func(ctx context.Context, dirPath string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -334,7 +357,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	removeFile := func(ctx context.Context, filePath string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -353,7 +378,9 @@ func NewOps(opts Options) (contract.Ops, error) {
 	}
 
 	removeDir := func(ctx context.Context, dirPath string) error {
-		_ = ctx
+		if err := checkContext(ctx); err != nil {
+			return err
+		}
 		if !policy.AllowWrite() {
 			return contract.ErrUnsupported
 		}
@@ -430,4 +457,11 @@ func pathWithinRoot(root string, candidate string) bool {
 		return strings.HasPrefix(candidate, "/")
 	}
 	return candidate == root || strings.HasPrefix(candidate, root+"/")
+}
+
+func checkContext(ctx context.Context) error {
+	if ctx == nil {
+		return nil
+	}
+	return ctx.Err()
 }

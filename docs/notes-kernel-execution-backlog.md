@@ -126,7 +126,7 @@ Optional but recommended:
 
 ### K-004: Audit cancel/timeout effectiveness across execution and filesystem paths
 - Feat: `f-20260321-cancel-timeout-effectiveness`
-- Status: todo
+- Status: done
 - Why now: Policy timeout exists in contracts today, but many filesystem paths still ignore `ctx`, which means timeout/cancel semantics may not yet be operationally meaningful.
 - Kernel invariant: runtime interruption controls must have real effect on long-running execution paths.
 - Files to touch:
@@ -139,6 +139,10 @@ Optional but recommended:
 - Done gate:
   - Long-running filesystem/execution paths honor context cancellation where practical.
   - Timeout/cancel behavior is observable in tests and reflected in trace fields where appropriate.
+- Notes:
+  - Default filesystem operations now short-circuit on canceled contexts instead of ignoring `ctx`.
+  - Engine statement/pipeline/redirection loops now stop promptly when `ctx` is already canceled or timed out, and `ExecutionTrace` exposes `canceled/timed_out` in regression tests.
+  - Validated with `go test ./pkg/adapter/localfs ./pkg/fs ./pkg/engine` and `go test ./...`.
 - Rollback note:
   - If full context propagation is too invasive for one iteration, land the highest-risk path checks first and document remaining blind spots explicitly.
 

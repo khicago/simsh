@@ -4,32 +4,53 @@
   "title": "Cancel and timeout effectiveness",
   "slug": "cancel-timeout-effectiveness",
   "goal": "Audit and improve cancellation and timeout effectiveness across execution and filesystem paths so policy interruption controls have real operational effect.",
-  "status": "proposal",
-  "workspace_mode": "proposal_only",
+  "status": "in_progress",
+  "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-21T17:13:04Z",
-  "updated_at": "2026-03-21T17:13:04Z",
-  "current_task_id": null,
+  "updated_at": "2026-03-22T07:05:17Z",
+  "current_task_id": "T-001",
   "counters": {
     "gate_fail_streak": 0,
-    "no_progress_rounds": 0,
-    "round_count": 0
+    "no_progress_rounds": 1,
+    "round_count": 1
   },
   "gate": {
-    "last_result": null,
-    "last_task_id": null,
-    "last_checked_at": null,
-    "last_check_commands": [],
-    "last_log_path": null
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-22T07:05:17Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260321-cancel-timeout-effectiveness/artifacts/gate-20260322T070517Z.log"
   },
   "history": [
     {
       "at": "2026-03-21T17:13:04Z",
       "action": "feat_created",
       "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-03-22T06:59:33Z",
+      "action": "workspace_assigned",
+      "detail": "proposal_only -> current_tree; root_branch=main"
+    },
+    {
+      "at": "2026-03-22T06:59:51Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-22T07:05:17Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
     }
   ]
 }

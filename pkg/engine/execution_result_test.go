@@ -3,6 +3,7 @@ package engine_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/khicago/simsh/pkg/builtin"
 	"github.com/khicago/simsh/pkg/contract"
@@ -171,6 +172,44 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	}
 	if fail.Trace.ExternalStdoutBytes != 0 || fail.Trace.ExternalStderrBytes != len("report failed") {
 		t.Fatalf("unexpected failing external trace bytes: %+v", fail.Trace)
+	}
+}
+
+func TestEngineExecuteResultMarksCanceledContext(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileCoreStrict
+	ops.Policy = contract.DefaultPolicy()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	result := eng.ExecuteResult(ctx, "cat /workspace/readme.md", ops)
+	if result.ExitCode == 0 {
+		t.Fatalf("expected canceled execution to fail: %+v", result)
+	}
+	if !result.Trace.Canceled {
+		t.Fatalf("expected canceled trace flag: %+v", result.Trace)
+	}
+}
+
+func TestEngineExecuteResultMarksTimedOutContext(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileCoreStrict
+	ops.Policy = contract.DefaultPolicy()
+
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancel()
+	result := eng.ExecuteResult(ctx, "cat /workspace/readme.md", ops)
+	if result.ExitCode == 0 {
+		t.Fatalf("expected timed out execution to fail: %+v", result)
+	}
+	if !result.Trace.TimedOut {
+		t.Fatalf("expected timed_out trace flag: %+v", result.Trace)
 	}
 }
 
