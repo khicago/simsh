@@ -24,6 +24,8 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
 - Link to the most authoritative spec or README.
 - Project charter:
   - `docs/notes-project-charter.md`
+- Requirements baseline:
+  - `docs/notes-requirements.md`
 - If this repo already has many docs and you're adopting Bagakit: consider adding/reading `docs/notes-adopting-living-docs.md` (adoption playbook).
 - Project architecture:
   - `docs/architecture.md`
@@ -42,6 +44,8 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/notes-kernel-optimization-plan.md`
 - Kernel execution backlog:
   - `docs/notes-kernel-execution-backlog.md`
+- Builtin ACI review:
+  - `docs/notes-builtin-aci-review.md`
 
 4) Build/run entrypoints
 - Link to the primary entrypoints and scripts.

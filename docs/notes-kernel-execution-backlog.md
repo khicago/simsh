@@ -168,6 +168,45 @@ Optional but recommended:
 - Rollback note:
   - If the first benchmark cut is too broad, keep the thresholds and scoring schema stable, then narrow the workload set rather than weakening the gates.
 
+### K-006: Harden builtin ACI contracts and machine-friendly output modes
+- Feat: `f-20260322-builtin-aci-dual-readable-query-tooling`
+- Status: in_progress
+- Why now: The kernel now has stronger path semantics, trace fidelity, and a baseline reference benchmark. The next agent-leverage gap is the builtin surface itself: many default commands are still text-first and syntax-first even though `simsh` is meant to be an agent-native runtime.
+- Kernel invariant: builtin commands and manuals should minimize parse cost, confirmation cost, failure-attribution cost, and token cost for agent callers; command summaries should be derived from explicit contracts rather than prose inference.
+- Design bias:
+  - default outputs should stay readable by humans and agents at the same time;
+  - optimize for signal-to-noise, not for machine-only serialization;
+  - preserve efficient pipeline composition where a command is already naturally pipe-friendly;
+  - strengthen structure-aware query tools so agents can read only the needed part of structured files instead of repeatedly dumping whole files.
+- Design input:
+  - `docs/notes-requirements.md`
+  - `docs/notes-builtin-aci-review.md`
+- Files to touch:
+  - `pkg/engine/builtin_catalog.go`
+  - `pkg/contract/runtime_types.go`
+  - `pkg/builtin/op_help_manual.go`
+  - `pkg/builtin/commands/*/manual.md`
+  - selected builtin implementations under `pkg/builtin/`
+- Validation command:
+  - `go test ./pkg/builtin ./pkg/engine`
+- Done gate:
+  - Builtin metadata exposes explicit ACI contract fields for summary rendering.
+  - `man` and `man --list` can surface machine-relevant command facts without relying on prose-only hints.
+  - High-value inspection commands gain machine-friendly output modes where the review identified clear parse-cost wins (`tree`, `grep`, `find`, `wc`, `type`, `env`).
+  - Default text outputs remain dual-readable and token-efficient instead of collapsing into machine-only JSON by default.
+  - Commands that naturally expose structured records support an explicit structured mode such as `--json` or an existing `--fmt json` family.
+  - Structured modes are additive and documented, rather than silently replacing pipe-friendly default text behavior.
+  - The builtin surface includes at least one stronger structure-aware query step beyond generic text dumping, using `frontmatter` as the design reference for future structure parsers.
+  - The first structure-aware follow-up includes stronger JSON processing and narrower local search/query flows.
+  - Mutation commands provide an explicit low-noise confirmation mode instead of forcing post-hoc verification in text-only harnesses.
+- Notes:
+  - The design review recommends treating `ls -l` and `frontmatter stat` as the reusable pattern for future output contracts: compact default text plus explicit `--fmt` machine formats.
+  - The same review also recommends investing in structure-aware query tools, not only more serialized output modes, so agents can write structured files and then query just the relevant subset.
+  - The requirements baseline sharpens this further: default outputs stay dual-readable, structured output is explicit and opt-in, pipe-friendly commands keep their composition value, and JSON/local-search tooling should improve in the same wave.
+  - The first implementation wave should prioritize contract metadata, the worst current parse-cost offenders, and the first JSON/local-search query upgrades before broader command polish.
+- Rollback note:
+  - If a default-format change causes excessive compatibility risk, keep the new machine formats and metadata while leaving the old text form behind a compatibility mode; do not roll back the explicit contract layer.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

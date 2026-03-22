@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
+  "title": "Builtin ACI dual-readable output and query tooling",
+  "slug": "builtin-aci-dual-readable-query-tooling",
+  "goal": "Turn the default builtin surface into a dual-readable, high-signal, pipe-aware ACI with explicit structured modes and stronger JSON/local query tools.",
+  "status": "in_progress",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-03-22T10:39:53Z",
+  "updated_at": "2026-03-22T10:43:30Z",
+  "current_task_id": "T-001",
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 1,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-22T10:43:30Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260322-builtin-aci-dual-readable-query-tooling/artifacts/gate-20260322T104330Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-03-22T10:39:53Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-03-22T10:43:00Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-22T10:43:30Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    }
+  ]
+}

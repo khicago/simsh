@@ -1,0 +1,30 @@
+# Feat Tasks: f-20260322-builtin-aci-dual-readable-query-tooling
+
+JSON SSOT: `tasks.json`
+
+## Task Checklist
+- [ ] T-001 Lock feat plan, tool inventory, and requirements baseline
+- [ ] T-002 Add builtin contract metadata and man/manual plumbing
+- [ ] T-003 Optimize tree
+- [ ] T-004 Optimize grep
+- [ ] T-005 Optimize find
+- [ ] T-006 Optimize wc
+- [ ] T-007 Optimize env
+- [ ] T-008 Optimize type
+- [ ] T-009 Optimize which
+- [ ] T-010 Optimize mkdir
+- [ ] T-011 Optimize touch
+- [ ] T-012 Optimize cp
+- [ ] T-013 Optimize mv
+- [ ] T-014 Optimize rm
+- [ ] T-015 Optimize rmdir
+- [ ] T-016 Optimize tee
+- [ ] T-017 Optimize sed
+- [ ] T-018 Add JSON query tooling
+- [ ] T-019 Refresh README and aggregate docs after tool rollout
+
+## Status Legend
+- todo
+- in_progress
+- done
+- blocked

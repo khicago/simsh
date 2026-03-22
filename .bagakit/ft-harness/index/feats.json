@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-22T09:17:52Z",
+  "updated_at": "2026-03-22T10:43:30Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -125,13 +125,13 @@
       "updated_at": "2026-03-21T19:04:22Z"
     },
     {
-      "feat_id": "f-20260322-simsh-native-reference-validation-metric-gates",
-      "title": "simsh-native reference validation and metric gates",
-      "status": "archived",
+      "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
+      "title": "Builtin ACI dual-readable output and query tooling",
+      "status": "in_progress",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-03-22T09:08:50Z"
+      "updated_at": "2026-03-22T10:43:30Z"
     },
     {
       "feat_id": "f-20260322-harness-legacy-feat-cleanup",
@@ -141,6 +141,15 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-03-22T09:17:52Z"
+    },
+    {
+      "feat_id": "f-20260322-simsh-native-reference-validation-metric-gates",
+      "title": "simsh-native reference validation and metric gates",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-22T09:08:50Z"
     }
   ]
 }

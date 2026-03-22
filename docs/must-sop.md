@@ -59,6 +59,12 @@ Source: `docs/notes-adopting-living-docs.md`
 - Update this doc when the repo's adoption/migration strategy changes (e.g., naming rules, CI gating, or legacy-doc handling).
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Builtin ACI Review
+Source: `docs/notes-builtin-aci-review.md`
+- Read this doc when reviewing builtin command UX, manuals, or output contracts for agent use.
+- Update this doc when builtin default formats, command metadata, or manual-summary strategy changes.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Continuous Learning (Default)
 Source: `docs/notes-continuous-learning.md`
 - At the end of a Bagakit Agent work session, capture a draft learning note into `docs/.bagakit/inbox/` (manual or via `sh "$BAGAKIT_LIVING_DOCS_SKILL_DIR/scripts/bagakit_learning.sh" extract --root . --last`). The default extractor upserts into a daily file to avoid fragmentation.
@@ -87,6 +93,12 @@ Source: `docs/notes-kernel-optimization-plan.md`
 Source: `docs/notes-project-charter.md`
 - Read this doc before major architecture or product-boundary changes.
 - Update this doc when project goals, scope, or non-goals change.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Requirements Baseline
+Source: `docs/notes-requirements.md`
+- Read this doc before changing current kernel-facing product requirements or implementation priorities.
+- Update this doc when new cross-cutting requirements become the source of truth for ongoing workstreams.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Reusable Items - Coding (Catalog)
