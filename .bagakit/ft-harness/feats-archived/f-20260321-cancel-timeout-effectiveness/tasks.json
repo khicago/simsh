@@ -1,12 +1,12 @@
 {
   "version": 1,
   "feat_id": "f-20260321-cancel-timeout-effectiveness",
-  "updated_at": "2026-03-22T07:05:17Z",
+  "updated_at": "2026-03-22T07:06:08Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Honor canceled contexts in default filesystem and execution loops",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Make default filesystem operations and engine execution loops fail fast on canceled or timed-out contexts, and expose the effect through regression tests and trace flags.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T07:05:17Z",
@@ -19,8 +19,8 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T06:59:51Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T07:05:17Z",
+      "finished_at": "2026-03-22T07:06:08Z",
+      "updated_at": "2026-03-22T07:06:08Z",
       "notes": []
     }
   ]

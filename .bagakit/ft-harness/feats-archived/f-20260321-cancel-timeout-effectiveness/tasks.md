@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Honor canceled contexts in default filesystem and execution loops
+- [x] T-001 Honor canceled contexts in default filesystem and execution loops
 
 ## Status Legend
 - todo
