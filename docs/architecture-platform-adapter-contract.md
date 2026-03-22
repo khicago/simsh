@@ -12,6 +12,8 @@ sop:
 ## Context
 Kernel contracts alone are not enough for a working agent harness. The platform layer is where external systems, domain memory, and runtime results meet.
 
+In AgentOS-style systems, this is also the seam where the execution kernel stops and product/runtime orchestration begins.
+
 If that seam stays implicit, two failure modes appear quickly:
 - each adapter reinvents lifecycle and projection rules;
 - kernel contracts look clean on paper but fail under real workloads because the consumption side is underspecified.

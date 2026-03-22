@@ -1,61 +1,74 @@
 # simsh
 
-> Deterministic command runtime for agent systems.
+> Agentic sandbox kernel for harnesses, memory-aware runtimes, and AgentOS-style systems.
 
-`simsh` is a lightweight sandbox for agent execution. It combines a constrained shell runtime, an AI-friendly virtual filesystem, and embeddable policy/audit hooks into one reusable core.
+`simsh` is a lightweight runtime kernel for agent work. It gives an agent a constrained shell, a purpose-oriented virtual filesystem, explicit policy boundaries, and structured execution feedback without forcing you to boot a VM or hand an unconstrained host shell to the model.
 
-It is designed for higher-level agent platforms that need a predictable execution surface. It is not trying to be a full POSIX shell, a container runtime, or a product-specific workflow engine.
+The project is designed for higher-level systems such as:
+- agent harnesses that need a predictable execution substrate
+- agentic sandboxes that need explicit write boundaries and low-noise feedback
+- memory-aware runtimes that project knowledge and skills through filesystem paths
+- AgentOS-style stacks that need a reusable execution kernel beneath orchestration, planning, and product UI
 
-## Status
+It is not trying to be a full POSIX shell, a container runtime, or a product-specific workflow engine.
 
-`simsh` is experimental, but the current baseline already includes:
+## Why This Project Exists
 
+General-purpose shells are powerful, but they are bad default environments for many agent loops:
+- too much ambient state
+- weak path intent signaling
+- unclear mutation boundaries
+- results that are easy for humans to read but awkward for planners, reviewers, and harnesses to consume
+
+`simsh` narrows the runtime on purpose:
+- deterministic shell subset instead of shell completeness
+- explicit workspace zones instead of ad hoc directories
+- policy/profile contracts instead of implicit host behavior
+- structured result and trace contracts instead of stdout-only heuristics
+- generic kernel plus adapter boundary instead of hard-coded product semantics
+
+## Where simsh Fits
+
+`simsh` is easiest to understand by role:
+
+| Role | What simsh provides |
+| --- | --- |
+| Agent harness | a predictable execution substrate with explicit policy, session, and trace semantics |
+| Agentic sandbox | a lightweight working environment with constrained commands, bounded filesystem writes, and visible capabilities |
+| Memory-aware runtime | adapter and mount boundaries for `/knowledge_base`, `/memory`, `/skills`, or other projected trees |
+| AgentOS component | a reusable kernel beneath orchestration, planning, review, and UI layers |
+| CLI / TUI / HTTP surface | operator and integration entrypoints over the same runtime model |
+
+This framing matters because `simsh` is a kernel-first project. CLI and HTTP are useful entry surfaces, but they are not the product soul.
+
+## Status and Use Cases
+
+`simsh` is still experimental, but the current baseline already includes:
 - local CLI and interactive TUI execution
 - an HTTP `/v1/execute` runtime service
 - policy/profile-gated builtin commands
 - AI-friendly virtual filesystem zones
 - path metadata via `ls -l` and opt-in API metadata
-- a documented extension boundary for adapter-driven mounts
 - structured execution result contracts
 - execution tracing with side-effect tracking
-- adapter lifecycle and memory protocol hooks
 - first-class session lifecycle management
-
-Project boundaries and non-goals live in [`docs/notes-project-charter.md`](docs/notes-project-charter.md).
-
-## When to use simsh
+- an adapter boundary for memory, skills, and other projected trees
+- a default builtin ACI optimized for dual readability plus explicit structured modes
 
 Use `simsh` when you need:
-
 - a smaller and more inspectable execution model than a general-purpose shell
-- explicit filesystem zones for source material, scratch work, and durable outputs
-- policy/profile enforcement that can be surfaced to agents, adapters, and APIs
-- a reusable runtime core that stays separate from product-specific orchestration
+- an agentic sandbox with explicit filesystem zones for references, scratch work, and durable outputs
+- policy/profile enforcement that can be surfaced to agents, harnesses, adapters, and APIs
+- a reusable kernel that stays separate from orchestration, memory curation, and product-facing workflows
 
 Choose something else if you need:
-
 - broad POSIX compatibility
 - container- or VM-style isolation guarantees
 - a workflow engine with built-in domain semantics
 
-## Why simsh
+Project boundaries and non-goals live in [`docs/notes-project-charter.md`](docs/notes-project-charter.md).
 
-General-purpose shells are powerful, but they are noisy execution environments for agents:
-
-- too much ambient state
-- weak path intent signaling
-- unclear write boundaries
-- hard-to-consume results for planning loops
-
-`simsh` narrows the runtime on purpose:
-
-- **deterministic shell subset** for predictable execution
-- **purpose-oriented virtual paths** so agents can infer intent from names
-- **explicit policy and profile controls** instead of implicit host behavior
-- **filesystem metadata and mount semantics** that make capabilities visible
-- **generic core + adapter boundary** so business logic stays out of the runtime kernel
-
-## Architecture At A Glance
+## Architecture
 
 ```mermaid
 flowchart TB
@@ -72,7 +85,7 @@ flowchart TB
   entry["CLI / TUI / HTTP"] --> runtime
 ```
 
-## Kernel Model
+### Kernel Model
 
 `simsh` should be read first as a runtime kernel, not as a CLI or HTTP product.
 
@@ -92,7 +105,7 @@ Core packages:
 
 The target property is not shell completeness. The target property is a lightweight execution kernel that agents can trust.
 
-## Default Agent Workspace
+### Default Agent Workspace
 
 What matters to an agent is not the repository package order. It is the default working environment it sees when execution begins.
 
@@ -139,6 +152,11 @@ Examples:
 - `json stat --fmt json ...` for one structured JSON-shape report
 - `json get --path items[0].name ...` for one targeted JSON subtree extraction
 
+The design rule is simple:
+- if a command is naturally a pipeline primitive, keep the default text shape strong and add structured output explicitly
+- if a command is mostly an inspection surface, spend the default output budget on higher signal-to-noise
+- if the data is structured, add query tools so the agent can read only the part it needs instead of dumping whole files
+
 ### Result and trace contract
 
 The default workspace is not just files and commands. It also includes a machine-consumable execution contract:
@@ -148,24 +166,31 @@ The default workspace is not just files and commands. It also includes a machine
 
 That is part of the default ACI, because it shapes how an agent verifies what happened after each step.
 
-## Adapter Boundary
+### Harness and Memory Boundary
 
-Adapters matter more than entry surfaces because they define how the kernel reaches the real world.
+The next layer above the default workspace is the harness and adapter boundary.
 
-`simsh` keeps domain logic out of core packages. Memory systems, resource projections, skill-like trees, and RPC-backed views are expected to live behind adapter-driven `VirtualMount` integrations rather than being hard-coded into the kernel.
+`simsh` keeps domain logic out of core packages. Memory systems, resource projections, skill trees, and RPC-backed views are expected to live behind adapter-driven `VirtualMount` integrations rather than being hard-coded into the kernel.
 
 That means:
-- generic core
+- generic kernel
 - opinionated adapters
-- explicit projection boundaries
+- explicit memory and projection boundaries
+- higher-level harnesses decide how sessions, memory, and planning loops compose around the runtime
+
+Typical shape:
+- the kernel provides execution, path semantics, trace, and session primitives
+- the harness coordinates planning, retries, review, and long-running workflows
+- memory systems project curated context into virtual paths rather than leaking product semantics into core packages
+- an AgentOS-like platform can treat `simsh` as its execution substrate instead of its control plane
 
 See:
 - [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md)
 - [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md)
 
-## Entry Surfaces
+### Entry Surfaces
 
-CLI, TUI, and HTTP are important integration surfaces, but they are not the product soul of `simsh`.
+CLI, TUI, and HTTP are important integration surfaces, but they are intentionally downstream from the kernel model.
 
 Entry surfaces:
 - `pkg/cmd`: CLI/TUI-facing runtime helpers
@@ -175,6 +200,11 @@ Entry surfaces:
 - `cmd/simsh-doc`: generator for `simsh.md`
 
 They should stay thin wrappers over the same runtime kernel rather than becoming a second architecture center.
+
+In practice:
+- CLI/TUI are operator surfaces for local iteration and debugging
+- HTTP is the integration surface for harnesses and higher-level platforms
+- none of these should become the place where kernel semantics are redefined first
 
 ## Quick Start
 
@@ -219,8 +249,6 @@ make cli-c CMD='ls -l /'
 make cli-serve PORT=18080
 make simshd
 ```
-
-## Examples
 
 ### Inspect the virtual root
 
@@ -272,18 +300,6 @@ Example response:
 }
 ```
 
-## What simsh is not
-
-`simsh` intentionally does not try to solve everything inside the runtime kernel.
-
-Non-goals include:
-
-- full POSIX shell compatibility
-- container or VM-style isolation
-- hard-coded product workflows
-- domain-specific memory or orchestration semantics in core packages
-- treating one reference workload as the source of truth for all abstractions
-
 ## Documentation
 
 Start here:
@@ -308,7 +324,7 @@ Historical context:
 
 ## Development
 
-Common commands:
+### Common commands
 
 ```bash
 make test
@@ -320,7 +336,7 @@ make doc
 
 `make doc` regenerates [`simsh.md`](simsh.md) from the current runtime description.
 
-## Contributing
+### Contributing
 
 The runtime is still experimental, so boundary discipline matters more than feature count.
 
@@ -332,9 +348,9 @@ Before changing core behavior:
 
 If a change updates SOP/frontmatter-driven docs under `docs/`, regenerate [`docs/must-sop.md`](docs/must-sop.md).
 
-## Roadmap
+### Roadmap
 
-The current baseline focuses on deterministic execution, virtual filesystem semantics, and policy/profile controls.
+The current baseline focuses on deterministic execution, virtual filesystem semantics, policy/profile controls, and a higher-signal builtin ACI.
 
 Planned next-stage work is documented and split into implementation feats around:
 

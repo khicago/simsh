@@ -9,8 +9,6 @@ sop:
 
 # simsh Architecture
 
-## Framing
-
 `simsh` should be explained in agent-facing dependency order, not in package-directory order.
 
 The right narrative is:
@@ -21,7 +19,24 @@ The right narrative is:
 
 That order is more faithful to the project than starting with CLI or HTTP entrypoints.
 
-## 1. Kernel
+This also aligns with where `simsh` sits conceptually:
+- as a runtime kernel inside a harness
+- as an agentic sandbox rather than a container replacement
+- as an execution substrate inside an AgentOS-style stack
+- as a reusable core beneath memory, planning, and UI layers
+
+```mermaid
+flowchart TB
+  harness["Harness / AgentOS Layer"] --> runtime["simsh Kernel"]
+  runtime --> workspace["Default Agent Workspace"]
+  runtime --> contracts["Policy / Trace / Session Contracts"]
+  workspace --> zones["/knowledge_base / /task_outputs / /temp_work / /sys"]
+  adapters["Adapter Layer"] --> workspace
+  adapters --> memory["Memory / Skills / External Projections"]
+  entry["CLI / TUI / HTTP"] --> runtime
+```
+
+## Kernel
 
 The kernel is the product core.
 
@@ -40,8 +55,9 @@ Core package model:
 - `pkg/engine/runtime`: runtime composition (`sh + fs + policy/profile`)
 
 The kernel is the place where trust, determinism, and default agent leverage should be judged first.
+It is also the piece a harness or AgentOS layer should depend on, rather than reimplement.
 
-## 2. Default Agent Workspace
+## Default Agent Workspace
 
 For an agent, architecture is experienced first as a working environment.
 
@@ -90,9 +106,11 @@ The default workspace also includes machine-visible execution semantics:
 
 This matters because agents do not only need files and commands; they also need low-noise feedback about what actually happened.
 
-## 3. Adapter Boundary
+In other words, the default workspace is the kernel's default ACI, not just its builtin list.
 
-Adapters define how the kernel reaches the real world.
+## Adapter Boundary
+
+Adapters define how the kernel reaches the real world and how harness-level systems project memory, skills, and external state into the sandbox.
 
 They are more important than CLI/HTTP entry surfaces, but still conceptually later than the kernel and the default workspace.
 
@@ -102,11 +120,13 @@ Adapter responsibilities include:
 - consuming trace/result fields that matter for platform behavior
 - validating the seam with at least one adapter-backed workload
 
+This is the layer where memory and AgentOS-style integration should live.
+
 Recommended references:
 - `docs/architecture-platform-adapter-contract.md`
 - `docs/architecture-memory-skills-extension.md`
 
-## 4. Entry Surfaces
+## Entry Surfaces
 
 Entry surfaces are how external callers reach the runtime. They are not the architecture center.
 
@@ -120,12 +140,9 @@ Design rule:
 - keep entry surfaces thin over the unified runtime stack
 - do not invent product semantics or trust-boundary rules in entry adapters first
 
-## 5. Supporting Layers
+CLI/TUI are operator surfaces. HTTP is the integration surface for harnesses and higher-level systems. Both should stay downstream from kernel and adapter contracts.
 
-Supporting layers are useful, but not core architecture anchors:
-- `cmd/simsh-doc`: generated runtime profile tooling
-
-## Prioritization Rule
+## Design Rules
 
 When architecture tradeoffs are discussed, prefer this order:
 1. kernel correctness and trust
@@ -134,6 +151,9 @@ When architecture tradeoffs are discussed, prefer this order:
 4. entry-surface ergonomics
 
 This keeps the project aligned with its charter as a lightweight agent runtime kernel rather than drifting into a CLI-first or HTTP-first product narrative.
+
+Supporting but non-anchor layers:
+- `cmd/simsh-doc`: generated runtime profile tooling
 
 ## Current Status
 

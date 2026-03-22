@@ -15,6 +15,11 @@ simsh core stays focused on deterministic execution and virtual filesystem routi
 
 Instead, core provides a stable extension boundary, and business layers build domain features on top.
 
+This is the intended layering for harnesses and AgentOS-style systems:
+- `simsh` owns execution and virtual path semantics
+- adapters own memory and skill projection
+- higher-level systems own retrieval, curation, planning, and orchestration
+
 ## Core Extension Surface (already available)
 
 Use these as the only required integration surface:
@@ -44,6 +49,12 @@ Implement domain-specific capabilities outside core:
 - memory indexing + semantic retrieval
 - skill discovery + eligibility filtering + precedence
 - evolution lifecycle (versioning, deprecation, migration, curation)
+
+This is the layer where an AgentOS or harness should decide:
+- what counts as memory
+- how memory is ranked or surfaced
+- when new observations become durable memory
+- how skills are selected or gated for a given run
 
 This layer may use DB/vector/search sidecars, but should expose a filesystem-friendly projection via driver layer.
 

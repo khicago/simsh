@@ -14,6 +14,7 @@ This document defines what `simsh` is, what it is not, and the design principles
 
 ## Goals
 - Provide a deterministic command runtime for agent systems.
+- Act as a lightweight agentic sandbox kernel that higher-level harnesses and AgentOS-style systems can embed.
 - Expose an AI-friendly filesystem model with explicit path semantics and safety boundaries.
 - Offer embeddable policy, audit, and extension hooks without coupling core runtime behavior to a single product domain.
 - Keep the runtime small enough to serve as a reusable lightweight sandbox for higher-level agent platforms.
@@ -27,6 +28,7 @@ This document defines what `simsh` is, what it is not, and the design principles
 ## Scope and Boundaries
 - Core runtime owns command execution semantics, filesystem projection boundaries, policy/profile enforcement, path metadata, structured execution contracts, and session primitives.
 - Business/platform layers own domain adapters, RPC-to-file projections, memory curation logic, indexing/retrieval systems, and product-facing workflows.
+- Harness and AgentOS layers may compose planning, review, retries, and memory policies around the runtime, but those orchestration concerns stay outside core packages.
 - Reference workloads may pressure-test abstractions, but they do not justify hard-coding domain-specific namespaces or behavior into core runtime contracts.
 
 ## Principles
