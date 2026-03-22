@@ -160,9 +160,15 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 		orig := ops.EditFile
 		wrapped.EditFile = func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
 			c.recordRequested(filePath)
+			bytesWritten := len(newString)
 			err := orig(ctx, filePath, oldString, newString, replaceAll)
 			if err == nil {
-				c.recordEdit(filePath, len(newString))
+				if ops.ReadRawContent != nil {
+					if raw, readErr := ops.ReadRawContent(ctx, filePath); readErr == nil {
+						bytesWritten = len(raw)
+					}
+				}
+				c.recordEdit(filePath, bytesWritten)
 			} else if isDeniedPathError(err) {
 				c.recordDenied(filePath)
 			}

@@ -72,6 +72,31 @@ func TestEngineExecuteResultTracePaths(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultTraceEditWritesFinalFileBytes(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.ExecutionPolicy{
+		WriteMode:        contract.WriteModeFull,
+		MaxPipelineDepth: 16,
+		MaxOutputBytes:   4 << 20,
+		Timeout:          contract.DefaultPolicy().Timeout,
+	}
+
+	result := eng.ExecuteResult(context.Background(), "sed -i 's/hello/hi/' /workspace/readme.md", ops)
+	if result.ExitCode != 0 {
+		t.Fatalf("unexpected exit_code=%d stdout=%q", result.ExitCode, result.Stdout)
+	}
+	if !containsTracePath(result.Trace.EditedPaths, "/workspace/readme.md") {
+		t.Fatalf("expected edited path in trace: %+v", result.Trace)
+	}
+	if result.Trace.BytesWritten != len("hi\nworld\n") {
+		t.Fatalf("bytes_written=%d, want %d trace=%+v", result.Trace.BytesWritten, len("hi\nworld\n"), result.Trace)
+	}
+}
+
 func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)
@@ -89,6 +114,29 @@ func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
 	truncated := eng.ExecuteResult(context.Background(), "echo hello", ops)
 	if !truncated.Trace.OutputTruncated {
 		t.Fatalf("expected output_truncated trace flag: %+v", truncated.Trace)
+	}
+}
+
+func TestEngineExecuteResultTraceMutationDenials(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.ExecutionPolicy{
+		WriteMode:        contract.WriteModeFull,
+		MaxPipelineDepth: 16,
+		MaxOutputBytes:   4 << 20,
+		Timeout:          contract.DefaultPolicy().Timeout,
+	}
+
+	deniedEdit := eng.ExecuteResult(context.Background(), "sed -i 's/ls/echo/' /sys/bin/ls", ops)
+	if !containsTracePath(deniedEdit.Trace.DeniedPaths, "/sys/bin/ls") {
+		t.Fatalf("expected edit denial path in trace: %+v", deniedEdit.Trace)
+	}
+	deniedMount := eng.ExecuteResult(context.Background(), "touch /sys/bin/new.txt", ops)
+	if !containsTracePath(deniedMount.Trace.DeniedPaths, "/sys/bin/new.txt") {
+		t.Fatalf("expected mounted path denial in trace: %+v", deniedMount.Trace)
 	}
 }
 

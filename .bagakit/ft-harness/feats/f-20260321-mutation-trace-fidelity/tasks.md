@@ -3,7 +3,8 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement first scoped change for this feat
+- [ ] T-001 Make edit trace bytes and mutation denials more truthful
+- [ ] T-002 Preserve more structure across the external command seam
 
 ## Status Legend
 - todo

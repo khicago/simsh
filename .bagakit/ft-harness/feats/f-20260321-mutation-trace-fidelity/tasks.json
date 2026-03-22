@@ -1,20 +1,40 @@
 {
   "version": 1,
   "feat_id": "f-20260321-mutation-trace-fidelity",
-  "updated_at": "2026-03-21T17:13:03Z",
+  "updated_at": "2026-03-22T04:43:43Z",
   "tasks": [
     {
       "id": "T-001",
-      "title": "Implement first scoped change for this feat",
+      "title": "Make edit trace bytes and mutation denials more truthful",
+      "status": "in_progress",
+      "summary": "Fix edit-byte accounting to reflect final rewritten file size and add regression coverage for mutation denial trace paths.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T04:43:43Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-22T04:40:51Z",
+      "finished_at": null,
+      "updated_at": "2026-03-22T04:43:43Z",
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Preserve more structure across the external command seam",
       "status": "todo",
-      "summary": "Replace this placeholder with actual task detail.",
+      "summary": "Reduce stdout-only collapse in the /bin external seam so ExecutionResult and ExecutionTrace preserve more truthful machine-readable signal.",
       "gate_result": null,
       "last_gate_at": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
       "started_at": null,
       "finished_at": null,
-      "updated_at": "2026-03-21T17:13:03Z",
+      "updated_at": "2026-03-22T00:00:00Z",
       "notes": []
     }
   ]
