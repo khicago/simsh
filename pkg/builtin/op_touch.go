@@ -23,9 +23,6 @@ func specTouch() engine.CommandSpec {
 }
 
 func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "touch: write is not supported", contract.ExitCodeUnsupported
-	}
 	paths := make([]string, 0, len(args))
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
@@ -39,6 +36,10 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	if len(paths) == 0 {
 		return "touch: missing operand", contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, paths...)
+		return "touch: write is not supported", contract.ExitCodeUnsupported
 	}
 	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {

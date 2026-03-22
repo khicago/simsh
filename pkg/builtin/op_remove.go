@@ -24,9 +24,6 @@ func specRm() engine.CommandSpec {
 }
 
 func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "rm: write is not supported", contract.ExitCodeUnsupported
-	}
 	paths := make([]string, 0, len(args))
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "-") {
@@ -40,6 +37,10 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	if len(paths) == 0 {
 		return "rm: missing operand", contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, paths...)
+		return "rm: write is not supported", contract.ExitCodeUnsupported
 	}
 	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {

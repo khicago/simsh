@@ -24,9 +24,6 @@ func specMkdir() engine.CommandSpec {
 }
 
 func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "mkdir: write is not supported", contract.ExitCodeUnsupported
-	}
 	paths := make([]string, 0, len(args))
 	for _, arg := range args {
 		if arg == "-p" {
@@ -43,6 +40,10 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	if len(paths) == 0 {
 		return "mkdir: missing operand", contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, paths...)
+		return "mkdir: write is not supported", contract.ExitCodeUnsupported
 	}
 	checks := make([]pathCheck, 0, len(paths))
 	for _, p := range paths {

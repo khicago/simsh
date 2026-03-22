@@ -23,9 +23,6 @@ func specMv() engine.CommandSpec {
 }
 
 func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "mv: write is not supported", contract.ExitCodeUnsupported
-	}
 	if len(args) != 2 {
 		return "mv: expected exactly two arguments: SRC DEST", contract.ExitCodeUsage
 	}
@@ -36,6 +33,10 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, src, dest)
+		return "mv: write is not supported", contract.ExitCodeUnsupported
 	}
 	if out, code, ok := preflightPathChecks(runtime, "mv", []pathCheck{
 		{path: src, op: contract.PathOpRead, unsupportedMessage: "mv: source path is not supported"},

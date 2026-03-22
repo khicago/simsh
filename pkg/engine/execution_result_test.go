@@ -73,6 +73,39 @@ func TestEngineExecuteResultTracePaths(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultTraceAppendAndRemove(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.ExecutionPolicy{
+		WriteMode:        contract.WriteModeFull,
+		MaxPipelineDepth: 16,
+		MaxOutputBytes:   4 << 20,
+		Timeout:          contract.DefaultPolicy().Timeout,
+	}
+
+	appended := eng.ExecuteResult(context.Background(), "echo hello | tee -a /workspace/todo.txt", ops)
+	if appended.ExitCode != 0 {
+		t.Fatalf("unexpected append exit_code=%d stdout=%q", appended.ExitCode, appended.Stdout)
+	}
+	if !containsTracePath(appended.Trace.AppendedPaths, "/workspace/todo.txt") {
+		t.Fatalf("expected appended path in trace: %+v", appended.Trace)
+	}
+	if appended.Trace.BytesWritten != len("hello") {
+		t.Fatalf("append bytes_written=%d, want %d trace=%+v", appended.Trace.BytesWritten, len("hello"), appended.Trace)
+	}
+
+	removed := eng.ExecuteResult(context.Background(), "rm /workspace/todo.txt", ops)
+	if removed.ExitCode != 0 {
+		t.Fatalf("unexpected remove exit_code=%d stdout=%q", removed.ExitCode, removed.Stdout)
+	}
+	if !containsTracePath(removed.Trace.RemovedPaths, "/workspace/todo.txt") {
+		t.Fatalf("expected removed path in trace: %+v", removed.Trace)
+	}
+}
+
 func TestEngineExecuteResultTraceEditWritesFinalFileBytes(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)
@@ -124,6 +157,21 @@ func TestEngineExecuteResultTraceMutationDenials(t *testing.T) {
 	eng := engine.New(registry)
 	ops := contract.OpsFromFilesystem(newTestFS())
 	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+
+	deniedEditByPolicy := eng.ExecuteResult(context.Background(), "sed -i 's/hello/bye/' /workspace/readme.md", ops)
+	if !containsTracePath(deniedEditByPolicy.Trace.DeniedPaths, "/workspace/readme.md") {
+		t.Fatalf("expected edit policy denial path in trace: %+v", deniedEditByPolicy.Trace)
+	}
+	deniedRemoveByPolicy := eng.ExecuteResult(context.Background(), "rm /workspace/todo.txt", ops)
+	if !containsTracePath(deniedRemoveByPolicy.Trace.DeniedPaths, "/workspace/todo.txt") {
+		t.Fatalf("expected remove policy denial path in trace: %+v", deniedRemoveByPolicy.Trace)
+	}
+	deniedWriteByPolicy := eng.ExecuteResult(context.Background(), "echo hello | tee /workspace/out.txt", ops)
+	if !containsTracePath(deniedWriteByPolicy.Trace.DeniedPaths, "/workspace/out.txt") {
+		t.Fatalf("expected write policy denial path in trace: %+v", deniedWriteByPolicy.Trace)
+	}
+
 	ops.Policy = contract.ExecutionPolicy{
 		WriteMode:        contract.WriteModeFull,
 		MaxPipelineDepth: 16,

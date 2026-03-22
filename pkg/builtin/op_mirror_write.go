@@ -24,9 +24,6 @@ func specTee() engine.CommandSpec {
 }
 
 func runTee(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "tee: write is not allowed by policy", contract.ExitCodeUnsupported
-	}
 	appendMode := false
 	target := ""
 	for _, arg := range args {
@@ -51,6 +48,10 @@ func runTee(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	if !runtime.HasStdin {
 		return "tee: missing stdin input (use pipeline, e.g. echo \"x\" | tee /task_outputs/a.md)", contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, target)
+		return "tee: write is not allowed by policy", contract.ExitCodeUnsupported
 	}
 	if err := runtime.Ops.Policy.CheckWriteSize(len(runtime.Stdin)); err != nil {
 		return fmt.Sprintf("tee: content exceeds write limit (%d bytes)", runtime.Ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral

@@ -23,9 +23,6 @@ func specCp() engine.CommandSpec {
 }
 
 func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "cp: write is not supported", contract.ExitCodeUnsupported
-	}
 	if len(args) != 2 {
 		return "cp: expected exactly two arguments: SRC DEST", contract.ExitCodeUsage
 	}
@@ -36,6 +33,10 @@ func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
 	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, dest)
+		return "cp: write is not supported", contract.ExitCodeUnsupported
 	}
 	if out, code, ok := preflightPathChecks(runtime, "cp", []pathCheck{
 		{path: src, op: contract.PathOpRead, unsupportedMessage: "cp: source path is not supported"},

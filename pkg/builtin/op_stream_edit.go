@@ -42,9 +42,6 @@ func runSed(runtime engine.CommandRuntime, args []string) (string, int) {
 }
 
 func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "sed: write is not allowed by policy", contract.ExitCodeUnsupported
-	}
 	if len(args) != 3 {
 		return "sed: only supports -i 's/old/new/[g]' PATH", contract.ExitCodeUsage
 	}
@@ -55,6 +52,10 @@ func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
 	pathValue, err := runtime.Ops.RequireAbsolutePath(args[2])
 	if err != nil {
 		return fmt.Sprintf("sed: %v", err), contract.ExitCodeUsage
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, pathValue)
+		return "sed: write is not allowed by policy", contract.ExitCodeUnsupported
 	}
 	if err := runtime.Ops.EditFile(runtime.Ctx, pathValue, oldValue, newValue, replaceAll); err != nil {
 		if errors.Is(err, contract.ErrUnsupported) {

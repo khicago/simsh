@@ -380,6 +380,14 @@ func markTraceDeniedPath(ctx context.Context, pathValue string) {
 	}
 }
 
+func MarkTraceRequestedPath(ctx context.Context, pathValue string) {
+	markTraceRequestedPath(ctx, pathValue)
+}
+
+func MarkTraceDeniedPath(ctx context.Context, pathValue string) {
+	markTraceDeniedPath(ctx, pathValue)
+}
+
 func isDeniedPathError(err error) bool {
 	if err == nil {
 		return false

@@ -24,9 +24,6 @@ func specRmdir() engine.CommandSpec {
 }
 
 func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
-	if !runtime.Ops.Policy.AllowWrite() {
-		return "rmdir: write is not supported", contract.ExitCodeUnsupported
-	}
 	if len(args) == 0 {
 		return "rmdir: missing operand", contract.ExitCodeUsage
 	}
@@ -44,6 +41,10 @@ func runRmdir(runtime engine.CommandRuntime, args []string) (string, int) {
 			return fmt.Sprintf("rmdir: %v", err), contract.ExitCodeUsage
 		}
 		dirs = append(dirs, pathValue)
+	}
+	if !runtime.Ops.Policy.AllowWrite() {
+		traceDeniedPaths(runtime, dirs...)
+		return "rmdir: write is not supported", contract.ExitCodeUnsupported
 	}
 
 	checks := make([]pathCheck, 0, len(dirs))
