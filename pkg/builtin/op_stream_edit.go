@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -16,14 +17,17 @@ var sedPrintExprRe = regexp.MustCompile(`^(\d+)(?:,(\d+))?p$`)
 func specSed() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandSed,
-		Manual: "sed -i 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]",
+		Manual: "sed -i [--json] 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]",
 		Tips: []string{
 			"Only a focused subset of sed is supported for deterministic behavior.",
+			"Print mode stays text-first; use --json only with -i when you want a machine-readable mutation summary.",
 			"Use -n with Np or M,Np to print line ranges.",
 		},
-		Examples:       ExamplesFor("sed"),
-		DetailedManual: LoadEmbeddedManual("sed"),
-		Run:            runSed,
+		StructuredOutput: "in-place edit summary",
+		StructuredFlags:  []string{"-i --json"},
+		Examples:         ExamplesFor("sed"),
+		DetailedManual:   LoadEmbeddedManual("sed"),
+		Run:              runSed,
 	}
 }
 
@@ -35,6 +39,11 @@ func runSed(runtime engine.CommandRuntime, args []string) (string, int) {
 	case "-i":
 		return runSedInPlace(runtime, args)
 	case "-n":
+		for _, arg := range args[1:] {
+			if arg == "--json" {
+				return "sed: --json is only supported with -i", contract.ExitCodeUsage
+			}
+		}
 		return runSedPrint(runtime, args)
 	default:
 		return fmt.Sprintf("sed: unsupported flag %s", args[0]), contract.ExitCodeUsage
@@ -42,14 +51,18 @@ func runSed(runtime engine.CommandRuntime, args []string) (string, int) {
 }
 
 func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
-	if len(args) != 3 {
+	filteredArgs, _, jsonOutput, out, code, ok := extractMutationOutputFlags("sed", args[1:])
+	if !ok {
+		return out, code
+	}
+	if len(filteredArgs) != 2 {
 		return "sed: only supports -i 's/old/new/[g]' PATH", contract.ExitCodeUsage
 	}
-	oldValue, newValue, replaceAll, err := parseSedSubstituteExpr(args[1])
+	oldValue, newValue, replaceAll, err := parseSedSubstituteExpr(filteredArgs[0])
 	if err != nil {
 		return fmt.Sprintf("sed: %v", err), contract.ExitCodeUsage
 	}
-	pathValue, err := runtime.Ops.RequireAbsolutePath(args[2])
+	pathValue, err := runtime.Ops.RequireAbsolutePath(filteredArgs[1])
 	if err != nil {
 		return fmt.Sprintf("sed: %v", err), contract.ExitCodeUsage
 	}
@@ -62,6 +75,25 @@ func runSedInPlace(runtime engine.CommandRuntime, args []string) (string, int) {
 			return "sed: in-place edit is not supported", contract.ExitCodeUnsupported
 		}
 		return fmt.Sprintf("sed: %v", err), contract.ExitCodeGeneral
+	}
+	if jsonOutput {
+		raw, err := json.Marshal(struct {
+			Path       string `json:"path"`
+			Mode       string `json:"mode"`
+			Old        string `json:"old"`
+			New        string `json:"new"`
+			ReplaceAll bool   `json:"replace_all"`
+		}{
+			Path:       pathValue,
+			Mode:       "in_place_edit",
+			Old:        oldValue,
+			New:        newValue,
+			ReplaceAll: replaceAll,
+		})
+		if err != nil {
+			return fmt.Sprintf("sed: %v", err), contract.ExitCodeGeneral
+		}
+		return string(raw), 0
 	}
 	return "", 0
 }

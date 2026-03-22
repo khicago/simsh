@@ -1103,7 +1103,7 @@ func TestSecuritySedWritePolicy(t *testing.T) {
 	t.Run("read-only rejects sed -i", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		out, code := eng.Execute(context.Background(), "sed -i 's/hello/bye/' /workspace/readme.md", ops)
+		out, code := eng.Execute(context.Background(), "sed -i --json 's/hello/bye/' /workspace/readme.md", ops)
 		if code == 0 {
 			t.Fatalf("expected sed -i to fail in read-only: out=%q", out)
 		}
@@ -1118,6 +1118,15 @@ func TestSecuritySedWritePolicy(t *testing.T) {
 		out, code := eng.Execute(context.Background(), "sed -i 's/hello/bye/' /workspace/readme.md", ops)
 		if code != 0 {
 			t.Fatalf("expected sed -i to succeed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("writable allows sed -i --json", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "sed -i --json 's/hello/bye/' /workspace/readme.md", ops)
+		if code != 0 || !strings.Contains(out, `"mode":"in_place_edit"`) || !strings.Contains(out, `"path":"/workspace/readme.md"`) {
+			t.Fatalf("expected sed -i --json to succeed: code=%d out=%q", code, out)
 		}
 	})
 }

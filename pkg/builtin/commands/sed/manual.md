@@ -1,6 +1,6 @@
 ---
 name: sed
-synopsis: "sed -i 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]"
+synopsis: "sed -i [--json] 's/old/new/[g]' PATH | sed -n 'Np'|'M,Np' [PATH]"
 category: text-processing
 ---
 
@@ -8,7 +8,7 @@ category: text-processing
 
 ## SYNOPSIS
 
-    sed -i 's/old/new/[g]' PATH
+    sed -i [--json] 's/old/new/[g]' PATH
     sed -n 'Np' [PATH]
     sed -n 'M,Np' [PATH]
     COMMAND | sed -n 'Np'
@@ -24,6 +24,7 @@ A focused subset of sed for deterministic text operations. Supports two modes:
 ## FLAGS
 
 - `-i` -- In-place edit mode. Requires a substitution expression and a file path.
+- `--json` -- Emit a machine-readable summary for `-i` mode instead of silent success.
 - `-n` -- Suppress default output. Used with print expressions (`Np` or `M,Np`).
 
 ## EXPRESSIONS
@@ -46,6 +47,10 @@ Replace all occurrences:
 
     sed -i 's/TODO/DONE/g' /task_outputs/notes.md
 
+Emit JSON summary for an in-place edit:
+
+    sed -i --json 's/draft/final/' /task_outputs/report.md
+
 Print line 5:
 
     sed -n '5p' /knowledge_base/data.txt
@@ -64,6 +69,8 @@ Print lines from stdin:
 - In-place edit requires exactly one file path.
 - Line numbers are 1-based and must be positive integers.
 - Paths may be absolute or relative to the current virtual working directory.
+- `sed -n` keeps its existing text-first pipeline behavior.
+- `--json` is only for `-i` mode and replaces the default silent success path.
 
 ## SEE ALSO
 

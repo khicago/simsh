@@ -444,6 +444,15 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "sed-json",
+			cmd:  "sed -i --json 's/body/text/' " + fmDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"path\":\""+fmDoc+"\"") || !strings.Contains(out, "\"mode\":\"in_place_edit\"") || !strings.Contains(out, "\"old\":\"body\"") || !strings.Contains(out, "\"new\":\"text\"") {
+					t.Fatalf("sed --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "man",
 			cmd:  "man -v ls",
 			want: func(t *testing.T, out string, code int) {

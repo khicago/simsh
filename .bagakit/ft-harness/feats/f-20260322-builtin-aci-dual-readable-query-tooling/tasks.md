@@ -18,7 +18,7 @@ JSON SSOT: `tasks.json`
 - [x] T-013 Optimize mv
 - [x] T-014 Optimize rm
 - [x] T-015 Optimize rmdir
-- [ ] T-016 Optimize tee
+- [x] T-016 Optimize tee
 - [ ] T-017 Optimize sed
 - [ ] T-018 Add JSON query tooling
 - [ ] T-019 Refresh README and aggregate docs after tool rollout
