@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Migrate legacy feat schema and archive policy safely
+- [x] T-001 Migrate legacy feat schema and archive policy safely
 
 ## Status Legend
 - todo
