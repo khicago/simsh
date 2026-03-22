@@ -12,20 +12,27 @@ import (
 func specMkdir() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandMkdir,
-		Manual: "mkdir [-p] PATH...",
+		Manual: "mkdir [--confirm] [--json] [-p] PATH...",
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
+			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
 			"Mount-backed virtual paths are immutable and cannot be created.",
 		},
-		Examples:       ExamplesFor("mkdir"),
-		DetailedManual: LoadEmbeddedManual("mkdir"),
-		Run:            runMkdir,
+		StructuredOutput: "path status entries",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("mkdir"),
+		DetailedManual:   LoadEmbeddedManual("mkdir"),
+		Run:              runMkdir,
 	}
 }
 
 func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
-	paths := make([]string, 0, len(args))
-	for _, arg := range args {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("mkdir", args)
+	if !ok {
+		return out, code
+	}
+	paths := make([]string, 0, len(filteredArgs))
+	for _, arg := range filteredArgs {
 		if arg == "-p" {
 			continue
 		}
@@ -52,13 +59,27 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "mkdir", checks); !ok {
 		return out, code
 	}
+	results := make([]mutationPathStatus, 0, len(paths))
 	for _, p := range paths {
+		exists := false
+		if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, p); err == nil && isDir {
+			exists = true
+		}
 		if err := runtime.Ops.MakeDir(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
 				return "mkdir: not supported", contract.ExitCodeUnsupported
 			}
 			return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
 		}
+		status := "created"
+		if exists {
+			status = "exists"
+		}
+		results = append(results, mutationPathStatus{Path: p, Status: status})
 	}
-	return "", 0
+	rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
+	if err != nil {
+		return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }

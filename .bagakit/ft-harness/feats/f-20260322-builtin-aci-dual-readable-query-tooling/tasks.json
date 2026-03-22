@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260322-builtin-aci-dual-readable-query-tooling",
-  "updated_at": "2026-03-22T15:58:24Z",
+  "updated_at": "2026-03-22T16:04:36Z",
   "tasks": [
     {
       "id": "T-001",
@@ -166,7 +166,7 @@
     {
       "id": "T-009",
       "title": "Optimize which",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Keep simple path output for shell use while adding an explicit structured mode and clearer lookup contract.",
       "gate_result": "pass",
       "last_gate_at": "2026-03-22T15:58:24Z",
@@ -179,22 +179,28 @@
       ],
       "last_commit_hash": null,
       "started_at": "2026-03-22T15:55:14Z",
-      "finished_at": null,
-      "updated_at": "2026-03-22T15:58:24Z",
+      "finished_at": "2026-03-22T15:59:09Z",
+      "updated_at": "2026-03-22T15:59:09Z",
       "notes": []
     },
     {
       "id": "T-010",
       "title": "Optimize mkdir",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Preserve low-noise mutation behavior while adding an explicit confirmation mode and documenting its contract.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-22T16:04:36Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
-      "started_at": null,
+      "started_at": "2026-03-22T16:01:26Z",
       "finished_at": null,
-      "updated_at": "2026-03-22T10:39:53Z",
+      "updated_at": "2026-03-22T16:04:36Z",
       "notes": []
     },
     {

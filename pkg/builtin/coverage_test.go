@@ -452,8 +452,35 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "mkdir",
 			cmd:  "mkdir -p " + rt.abs("workspace", "a", "b"),
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("mkdir failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "mkdir-confirm",
+			cmd:  "mkdir --confirm " + rt.abs("workspace", "confirm-dir"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "created "+rt.abs("workspace", "confirm-dir") {
+					t.Fatalf("mkdir --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "mkdir-json",
+			cmd:  "mkdir --json -p " + rt.abs("workspace", "cache"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"status\":\"created\"") || !strings.Contains(out, "\"path\":\""+rt.abs("workspace", "cache")+"\"") {
+					t.Fatalf("mkdir --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "mkdir-confirm-exists",
+			cmd:  "mkdir --confirm -p " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || strings.TrimSpace(out) != "exists "+rt.abs("workspace") {
+					t.Fatalf("mkdir --confirm existing failed: code=%d out=%q", code, out)
 				}
 			},
 		},

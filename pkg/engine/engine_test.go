@@ -1190,12 +1190,30 @@ func TestCommandMkdir(t *testing.T) {
 		}
 	})
 
+	t.Run("mkdir --confirm existing", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "mkdir --confirm -p /workspace", ops)
+		if code != 0 || strings.TrimSpace(out) != "exists /workspace" {
+			t.Fatalf("mkdir --confirm existing failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("mkdir --json created", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "mkdir --json /workspace/confirmed", ops)
+		if code != 0 || !strings.Contains(out, `"status":"created"`) || !strings.Contains(out, `"/workspace/confirmed"`) {
+			t.Fatalf("mkdir --json failed: code=%d out=%q", code, out)
+		}
+	})
+
 	t.Run("mkdir read-only rejected", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		_, code := eng.Execute(context.Background(), "mkdir /workspace/nope", ops)
+		out, code := eng.Execute(context.Background(), "mkdir --json /workspace/nope", ops)
 		if code == 0 {
-			t.Fatalf("expected mkdir to fail in read-only")
+			t.Fatalf("expected mkdir to fail in read-only: out=%q", out)
 		}
 	})
 
