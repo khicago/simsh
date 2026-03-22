@@ -146,6 +146,24 @@ Optional but recommended:
 - Rollback note:
   - If full context propagation is too invasive for one iteration, land the highest-risk path checks first and document remaining blind spots explicitly.
 
+### K-005: Build simsh-native reference validation and metric gates
+- Feat: `f-20260322-simsh-native-reference-validation-metric-gates`
+- Status: todo
+- Why now: The kernel core has now crossed the boundary from contract-hardening into proof-of-usefulness. The next question is not whether the primitives exist, but whether they make real agent file workflows measurably better than heavier alternatives.
+- Kernel invariant: reference validation must prove real agent leverage, not only interface cleanliness; benchmark output must report explicit pass/fail against metric gates.
+- Files to touch:
+  - `docs/notes-kernel-optimization-plan.md`
+  - benchmark or validation artifacts under a project-local non-product path
+  - any metric gate definitions or benchmark runners needed for repeatable evaluation
+- Validation command:
+  - benchmark command(s) added by the feat, plus `go test ./...`
+- Done gate:
+  - A small `simsh`-native benchmark covers relative navigation, inspect/edit/write loops, mount/synthetic boundaries, trace-consumable planning, and cancel/timeout scenarios.
+  - First-pass metric gates are encoded with explicit thresholds for trace completeness, session success, reviewable patch latency, and async completion success.
+  - At least one reference workload produces a baseline report with threshold pass/fail output rather than raw numbers only.
+- Rollback note:
+  - If the first benchmark cut is too broad, keep the thresholds and scoring schema stable, then narrow the workload set rather than weakening the gates.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

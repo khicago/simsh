@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260322-simsh-native-reference-validation-metric-gates",
+  "updated_at": "2026-03-22T08:55:02Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Define the benchmark pack and metric-gate schema",
+      "status": "todo",
+      "summary": "Create the first simsh-native reference workload set, scoring schema, and explicit threshold gates for trace completeness, session success, latency, and async completion.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": null,
+      "finished_at": null,
+      "updated_at": "2026-03-22T08:55:02Z",
+      "notes": []
+    }
+  ]
+}

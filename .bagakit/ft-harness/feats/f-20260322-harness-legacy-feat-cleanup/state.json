@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "feat_id": "f-20260322-harness-legacy-feat-cleanup",
+  "title": "Harness legacy feat cleanup",
+  "slug": "harness-legacy-feat-cleanup",
+  "goal": "Migrate legacy feat metadata to the current harness schema and define a safe archive cleanup path for pre-workspace_mode feats without mixing that work into the kernel mainline.",
+  "status": "proposal",
+  "workspace_mode": "proposal_only",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-03-22T08:55:02Z",
+  "updated_at": "2026-03-22T08:55:02Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_checked_at": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "at": "2026-03-22T08:55:02Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    }
+  ]
+}

@@ -184,16 +184,24 @@ Key actions:
 - Build a small `simsh`-native benchmark focused on file-workflow tasks.
 - Add contract tests for adapter-backed validation where needed.
 - Track outcome metrics that matter to agent users.
+- Encode first-pass metric gates as explicit pass/fail thresholds rather than leaving them as advisory signals.
 
-Suggested metrics:
-- time to reviewable patch
-- trace completeness for file operations
-- patch correction loop count
-- session success rate for well-scoped tasks
-- number of tasks completed asynchronously without step-by-step supervision
+First-pass benchmark task classes:
+- relative path navigation
+- inspect/edit/write file loops
+- mount and synthetic capability boundaries
+- trace-consumable planning scenarios
+- cancel and timeout interruption scenarios
+
+First-pass metric gates:
+- trace completeness threshold: `>= 0.90` for benchmarked file-mutation scenarios
+- session success threshold: `>= 0.80` across well-scoped reference tasks
+- reviewable patch latency target: median `<= 15m` on the reference patch tasks
+- async completion success target: `>= 0.60` for tasks designed to finish without step-by-step supervision
 
 Exit criteria:
 - At least one reference workload demonstrates that the kernel abstractions improve real agent work rather than only unit-test cleanliness.
+- Benchmark reports include threshold-based pass/fail judgments, not only raw metric output.
 
 ## Sequencing
 
@@ -229,11 +237,10 @@ When choosing whether to defer something:
 ## Immediate Next Actions
 
 The next kernel-focused loop should start with:
-- hardening default filesystem boundary enforcement;
-- defining the virtual `cwd` and path-resolution model after that boundary hardening is in place;
-- tightening trace fidelity for mutation-heavy operations;
-- reviewing cancellation/context handling across filesystem and execution paths;
-- converting current review findings into explicit work items with validation commands.
+- building `K-005` as a `simsh`-native reference validation and metric-gates feat;
+- encoding the first-pass P4 thresholds into runnable benchmark output;
+- validating the current kernel against relative-path, file-loop, boundary, trace, and cancellation scenarios;
+- keeping legacy feat schema and archive cleanup in a separate non-kernel maintenance feat.
 
 ## Supporting Material
 
