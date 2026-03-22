@@ -1475,6 +1475,27 @@ func TestManListMode(t *testing.T) {
 			t.Fatalf("expected %q in man --list output: %q", cmd, out)
 		}
 	}
+	for _, header := range []string{"stdin", "pipe", "structured"} {
+		if !strings.Contains(out, header) {
+			t.Fatalf("expected list header %q in man --list output: %q", header, out)
+		}
+	}
+}
+
+func TestManListJSONMode(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := readOnlyOps(fs)
+
+	out, code := eng.Execute(context.Background(), "man --list --fmt json", ops)
+	if code != 0 {
+		t.Fatalf("man --list --fmt json failed: code=%d out=%q", code, out)
+	}
+	for _, expected := range []string{`"builtins"`, `"name": "ls"`, `"stdin_mode": "none"`} {
+		if !strings.Contains(out, expected) {
+			t.Fatalf("expected %q in man --list --fmt json output: %q", expected, out)
+		}
+	}
 }
 
 func TestManNotFound(t *testing.T) {

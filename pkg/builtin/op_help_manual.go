@@ -1,6 +1,7 @@
 package builtin
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
@@ -13,30 +14,52 @@ import (
 func specMan() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandMan,
-		Manual: "man [-v] [-l|--list] <command>",
+		Manual: "man [-v] [-l|--list] [--fmt text|json] <command>",
 		Tips: []string{
 			"man CMD shows summary with tips and examples.",
-			"man -v CMD shows full documentation.",
-			"man --list shows all available commands.",
+			"man -v CMD shows full documentation with command-specific details.",
+			"man --list shows the builtin and external command catalog; add --fmt json for a machine-readable view.",
 		},
-		Examples:       ExamplesFor("man"),
-		DetailedManual: LoadEmbeddedManual("man"),
-		Run:            runMan,
+		StructuredOutput: "machine-readable command catalog",
+		StructuredFlags:  []string{"--list --fmt json"},
+		Examples:         ExamplesFor("man"),
+		DetailedManual:   LoadEmbeddedManual("man"),
+		Run:              runMan,
 	}
 }
 
 func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 	verbose := false
 	listMode := false
+	listFormat := "text"
 	target := ""
 
-	for _, arg := range args {
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
 		switch arg {
 		case "-v":
 			verbose = true
 		case "-l", "--list":
 			listMode = true
+		case "--fmt":
+			if idx+1 >= len(args) {
+				return "man: --fmt requires one value: text|json", contract.ExitCodeUsage
+			}
+			idx++
+			parsed, ok := parseManListFormat(args[idx])
+			if !ok {
+				return fmt.Sprintf("man: unsupported --fmt value %q", args[idx]), contract.ExitCodeUsage
+			}
+			listFormat = parsed
 		default:
+			if strings.HasPrefix(arg, "--fmt=") {
+				parsed, ok := parseManListFormat(strings.TrimPrefix(arg, "--fmt="))
+				if !ok {
+					return fmt.Sprintf("man: unsupported --fmt value %q", strings.TrimPrefix(arg, "--fmt=")), contract.ExitCodeUsage
+				}
+				listFormat = parsed
+				continue
+			}
 			if strings.HasPrefix(arg, "-") {
 				return fmt.Sprintf("man: unsupported flag %s", arg), contract.ExitCodeUsage
 			}
@@ -47,8 +70,12 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 	}
 
+	if !listMode && listFormat != "text" {
+		return "man: --fmt is only supported with --list", contract.ExitCodeUsage
+	}
+
 	if listMode {
-		return runManList(runtime)
+		return runManList(runtime, listFormat)
 	}
 
 	if target == "" {
@@ -131,6 +158,17 @@ func runMan(runtime engine.CommandRuntime, args []string) (string, int) {
 	return fmt.Sprintf("man: %s: not found", target), contract.ExitCodeGeneral
 }
 
+func parseManListFormat(raw string) (string, bool) {
+	switch strings.TrimSpace(raw) {
+	case "text", "":
+		return "text", true
+	case "json":
+		return "json", true
+	default:
+		return "", false
+	}
+}
+
 func ensureSummaryGuidance(command string, manual string) string {
 	manual = strings.TrimSpace(manual)
 	if manual == "" {
@@ -149,44 +187,141 @@ func ensureSummaryGuidance(command string, manual string) string {
 	return sb.String()
 }
 
-func runManList(runtime engine.CommandRuntime) (string, int) {
+func runManList(runtime engine.CommandRuntime, format string) (string, int) {
+	builtins := collectBuiltinDocs(runtime)
+	externals := collectExternalCommands(runtime)
+	if format == "json" {
+		payload := struct {
+			Builtins []manListBuiltinRow  `json:"builtins"`
+			External []manListExternalRow `json:"external,omitempty"`
+		}{
+			Builtins: make([]manListBuiltinRow, 0, len(builtins)),
+			External: make([]manListExternalRow, 0, len(externals)),
+		}
+		for _, doc := range builtins {
+			payload.Builtins = append(payload.Builtins, manListBuiltinRowFromDoc(doc))
+		}
+		for _, cmd := range externals {
+			payload.External = append(payload.External, manListExternalRow{
+				Name:    strings.TrimSpace(cmd.Name),
+				Summary: externalSummary(cmd),
+			})
+		}
+		raw, err := json.MarshalIndent(payload, "", "  ")
+		if err != nil {
+			return fmt.Sprintf("man: %v", err), contract.ExitCodeGeneral
+		}
+		return string(raw), 0
+	}
+
 	var sb strings.Builder
-	sb.WriteString("Available commands:\n\n")
-
-	// Builtin commands.
-	if runtime.ListBuiltinNames != nil {
-		names := runtime.ListBuiltinNames()
-		sort.Strings(names)
-		if len(names) > 0 {
-			sb.WriteString("Builtins:\n")
-			for _, name := range names {
-				synopsis := name
-				if runtime.LookupManual != nil {
-					// Extract just the first line (the synopsis) from the manual.
-					if manual, ok := runtime.LookupManual(name); ok {
-						firstLine := strings.SplitN(strings.TrimSpace(manual), "\n", 2)[0]
-						synopsis = firstLine
-					}
-				}
-				sb.WriteString(fmt.Sprintf("  %-12s %s\n", name, synopsis))
-			}
+	sb.WriteString("Builtins:\n")
+	sb.WriteString(fmt.Sprintf("  %-12s %-8s %-9s %-16s %s\n", "name", "stdin", "pipe", "structured", "summary"))
+	for _, doc := range builtins {
+		sb.WriteString(fmt.Sprintf(
+			"  %-12s %-8s %-9s %-16s %s\n",
+			doc.Name,
+			renderListValue(doc.StdinMode),
+			renderListValue(doc.PipeBehavior),
+			renderListValue(strings.Join(doc.StructuredFlags, ",")),
+			renderListValue(doc.Summary),
+		))
+	}
+	if len(externals) > 0 {
+		sb.WriteString("\nExternal:\n")
+		sb.WriteString(fmt.Sprintf("  %-12s %s\n", "name", "summary"))
+		for _, cmd := range externals {
+			sb.WriteString(fmt.Sprintf("  %-12s %s\n", strings.TrimSpace(cmd.Name), externalSummary(cmd)))
 		}
 	}
-
-	// External commands.
-	if runtime.Ops.ListExternalCommands != nil {
-		cmds, err := runtime.Ops.ListExternalCommands(runtime.Ctx)
-		if err == nil && len(cmds) > 0 {
-			sb.WriteString("\nExternal:\n")
-			for _, c := range cmds {
-				summary := strings.TrimSpace(c.Summary)
-				if summary == "" {
-					summary = "(no description)"
-				}
-				sb.WriteString(fmt.Sprintf("  %-12s %s\n", c.Name, summary))
-			}
-		}
-	}
-
 	return strings.TrimRight(sb.String(), "\n"), 0
+}
+
+type manListBuiltinRow struct {
+	Name            string   `json:"name"`
+	Summary         string   `json:"summary"`
+	StdinMode       string   `json:"stdin_mode,omitempty"`
+	Operands        string   `json:"operands,omitempty"`
+	DefaultOutput   string   `json:"default_output,omitempty"`
+	StructuredFlags []string `json:"structured_flags,omitempty"`
+	PipeBehavior    string   `json:"pipe_behavior,omitempty"`
+	MutationKind    string   `json:"mutation_kind,omitempty"`
+	SuccessOutput   string   `json:"success_output,omitempty"`
+	ExitCodes       []string `json:"exit_codes,omitempty"`
+}
+
+type manListExternalRow struct {
+	Name    string `json:"name"`
+	Summary string `json:"summary"`
+}
+
+func collectBuiltinDocs(runtime engine.CommandRuntime) []contract.BuiltinCommandDoc {
+	if runtime.BuiltinCommandDocs != nil {
+		docs := runtime.BuiltinCommandDocs()
+		sort.SliceStable(docs, func(i, j int) bool {
+			return docs[i].Name < docs[j].Name
+		})
+		return docs
+	}
+	names := []string{}
+	if runtime.ListBuiltinNames != nil {
+		names = runtime.ListBuiltinNames()
+		sort.Strings(names)
+	}
+	out := make([]contract.BuiltinCommandDoc, 0, len(names))
+	for _, name := range names {
+		if runtime.LookupBuiltinDoc != nil {
+			if doc, ok := runtime.LookupBuiltinDoc(name); ok {
+				out = append(out, doc)
+				continue
+			}
+		}
+		out = append(out, contract.BuiltinCommandDoc{Name: name})
+	}
+	return out
+}
+
+func collectExternalCommands(runtime engine.CommandRuntime) []contract.ExternalCommand {
+	if runtime.Ops.ListExternalCommands == nil {
+		return nil
+	}
+	cmds, err := runtime.Ops.ListExternalCommands(runtime.Ctx)
+	if err != nil {
+		return nil
+	}
+	sort.SliceStable(cmds, func(i, j int) bool {
+		return strings.TrimSpace(cmds[i].Name) < strings.TrimSpace(cmds[j].Name)
+	})
+	return cmds
+}
+
+func manListBuiltinRowFromDoc(doc contract.BuiltinCommandDoc) manListBuiltinRow {
+	return manListBuiltinRow{
+		Name:            strings.TrimSpace(doc.Name),
+		Summary:         renderListValue(doc.Summary),
+		StdinMode:       strings.TrimSpace(doc.StdinMode),
+		Operands:        strings.TrimSpace(doc.Operands),
+		DefaultOutput:   strings.TrimSpace(doc.DefaultOutput),
+		StructuredFlags: append([]string(nil), doc.StructuredFlags...),
+		PipeBehavior:    strings.TrimSpace(doc.PipeBehavior),
+		MutationKind:    strings.TrimSpace(doc.MutationKind),
+		SuccessOutput:   strings.TrimSpace(doc.SuccessOutput),
+		ExitCodes:       append([]string(nil), doc.ExitCodes...),
+	}
+}
+
+func renderListValue(value string) string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "-"
+	}
+	return trimmed
+}
+
+func externalSummary(cmd contract.ExternalCommand) string {
+	summary := strings.TrimSpace(cmd.Summary)
+	if summary == "" {
+		return "(no description)"
+	}
+	return summary
 }

@@ -311,6 +311,18 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 				if code != 0 || !strings.Contains(out, "Use-When:") || !strings.Contains(out, "Avoid-When:") {
 					t.Fatalf("man summary guidance missing: code=%d out=%q", code, out)
 				}
+				if !strings.Contains(out, "Contract:") || !strings.Contains(out, "pipe behavior:") {
+					t.Fatalf("man summary contract missing: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "man-list-json",
+			cmd:  "man --list --fmt json",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"builtins\"") || !strings.Contains(out, "\"name\": \"ls\"") {
+					t.Fatalf("man --list --fmt json failed: code=%d out=%q", code, out)
+				}
 			},
 		},
 		{
@@ -434,6 +446,9 @@ func TestBuiltinDocsCompleteness(t *testing.T) {
 		if strings.TrimSpace(doc.Name) == "" {
 			t.Fatalf("doc has empty name: %+v", doc)
 		}
+		if strings.TrimSpace(doc.Summary) == "" {
+			t.Fatalf("doc %q missing summary", doc.Name)
+		}
 		if strings.TrimSpace(doc.Manual) == "" {
 			t.Fatalf("doc %q missing manual synopsis", doc.Name)
 		}
@@ -442,6 +457,9 @@ func TestBuiltinDocsCompleteness(t *testing.T) {
 		}
 		if strings.TrimSpace(doc.DetailedManual) == "" {
 			t.Fatalf("doc %q missing detailed manual", doc.Name)
+		}
+		if strings.TrimSpace(doc.StdinMode) == "" {
+			t.Fatalf("doc %q missing stdin mode", doc.Name)
 		}
 	}
 }

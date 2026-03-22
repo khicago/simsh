@@ -2,6 +2,23 @@ package contract
 
 import "context"
 
+const (
+	BuiltinStdinNone     = "none"
+	BuiltinStdinOptional = "optional"
+	BuiltinStdinRequired = "required"
+
+	BuiltinMutationReadOnly = "read_only"
+	BuiltinMutationMutates  = "mutates"
+
+	BuiltinSuccessContent = "content"
+	BuiltinSuccessSilent  = "silent"
+	BuiltinSuccessSummary = "summary"
+
+	BuiltinPipeWeak   = "weak"
+	BuiltinPipeGood   = "good"
+	BuiltinPipeStrong = "strong"
+)
+
 // PathMeta carries semantic metadata for long-listing rendering.
 type PathMeta struct {
 	Exists           bool
@@ -56,10 +73,20 @@ type ExternalCommandResult struct {
 
 // BuiltinCommandDoc provides prompt/introspection-friendly command metadata.
 type BuiltinCommandDoc struct {
-	Name           string
-	Manual         string
-	Tips           []string
-	Examples       []string
-	DetailedManual string
-	Capabilities   []string
+	Name             string
+	Summary          string
+	Manual           string
+	Tips             []string
+	Examples         []string
+	DetailedManual   string
+	Capabilities     []string
+	StdinMode        string
+	Operands         string
+	DefaultOutput    string
+	StructuredOutput string
+	StructuredFlags  []string
+	MutationKind     string
+	SuccessOutput    string
+	PipeBehavior     string
+	ExitCodes        []string
 }

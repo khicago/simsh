@@ -1,6 +1,6 @@
 ---
 name: man
-synopsis: "man [-v] [-l|--list] <command>"
+synopsis: "man [-v] [-l|--list] [--fmt text|json] <command>"
 category: system
 ---
 
@@ -10,8 +10,8 @@ category: system
 
     man <command>
     man -v <command>
-    man -l
-    man --list
+    man -l [--fmt text|json]
+    man --list [--fmt text|json]
 
 ## DESCRIPTION
 
@@ -23,6 +23,7 @@ verbose mode shows the full embedded documentation.
 
 - `-v` -- Verbose mode. Show the full detailed manual instead of the summary.
 - `-l`, `--list` -- List all available commands with one-line descriptions.
+- `--fmt text|json` -- Output format for `--list`. Default is `text`.
 
 ## EXAMPLES
 
@@ -38,6 +39,10 @@ List all available commands:
 
     man --list
 
+List all available commands as JSON:
+
+    man --list --fmt json
+
 Show manual for an external command:
 
     man my_custom_tool
@@ -46,8 +51,10 @@ Show manual for an external command:
 
 - Builtin commands are looked up first, then external commands.
 - Summary mode appends `Use-When` and `Avoid-When` hints for quick decisions.
+- Summary mode also renders explicit contract fields when the builtin metadata provides them.
 - Verbose mode strips YAML frontmatter from markdown manuals before rendering.
 - The `--list` mode shows both builtin and external commands.
+- `--list --fmt json` returns a machine-readable command catalog without embedding full manuals.
 - Command references may be given as bare names, absolute command paths, or relative command paths that resolve under `/sys/bin` or `/bin`.
 - Path-like input that resolves outside `/sys/bin` or `/bin` returns an actionable error instead of a generic `not found`.
 

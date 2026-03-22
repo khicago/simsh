@@ -22,7 +22,7 @@ JSON SSOT: `tasks.json`
 - [ ] T-017 Optimize sed
 - [ ] T-018 Add JSON query tooling
 - [ ] T-019 Refresh README and aggregate docs after tool rollout
-- [ ] T-020 Reframe README and architecture around kernel and default workspace
+- [x] T-020 Reframe README and architecture around kernel and default workspace
 
 ## Status Legend
 - todo

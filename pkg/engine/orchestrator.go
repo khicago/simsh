@@ -699,6 +699,12 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 			runtime.ListBuiltinNames = func() []string {
 				return e.registry.ListNames()
 			}
+			runtime.LookupBuiltinDoc = func(name string) (contract.BuiltinCommandDoc, bool) {
+				return e.registry.LookupBuiltinDoc(name)
+			}
+			runtime.BuiltinCommandDocs = func() []contract.BuiltinCommandDoc {
+				return e.registry.BuiltinCommandDocs()
+			}
 			out, code := spec.Run(runtime, args[1:])
 			result := execOutput{stdout: out, code: code}
 			phase := contract.AuditPhaseCommandEnd
