@@ -488,8 +488,27 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "cp",
 			cmd:  "cp " + readme + " " + copyTarget,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("cp failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "cp-confirm",
+			cmd:  "cp --confirm " + readme + " " + rt.abs("workspace", "copy-confirm.md"),
+			want: func(t *testing.T, out string, code int) {
+				expected := "copied " + readme + " -> " + rt.abs("workspace", "copy-confirm.md")
+				if code != 0 || strings.TrimSpace(out) != expected {
+					t.Fatalf("cp --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "cp-json",
+			cmd:  "cp --json " + readme + " " + rt.abs("workspace", "copy-json.md"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"src\":\""+readme+"\"") || !strings.Contains(out, "\"dest\":\""+rt.abs("workspace", "copy-json.md")+"\"") || !strings.Contains(out, "\"bytes\":9") {
+					t.Fatalf("cp --json failed: code=%d out=%q", code, out)
 				}
 			},
 		},

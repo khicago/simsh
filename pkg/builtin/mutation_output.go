@@ -13,6 +13,12 @@ type mutationPathStatus struct {
 	Status string `json:"status"`
 }
 
+type mutationTransfer struct {
+	Src   string `json:"src"`
+	Dest  string `json:"dest"`
+	Bytes int    `json:"bytes"`
+}
+
 func extractMutationOutputFlags(commandName string, args []string) (filtered []string, confirm bool, jsonOutput bool, out string, code int, ok bool) {
 	filtered = make([]string, 0, len(args))
 	for idx := 0; idx < len(args); idx++ {
@@ -51,6 +57,20 @@ func renderPathStatusMutation(confirm bool, jsonOutput bool, entries []mutationP
 			lines = append(lines, fmt.Sprintf("%s %s", entry.Status, entry.Path))
 		}
 		return strings.Join(lines, "\n"), 0, nil
+	}
+	return "", 0, nil
+}
+
+func renderTransferMutation(confirm bool, jsonOutput bool, entry mutationTransfer, verb string) (string, int, error) {
+	if jsonOutput {
+		raw, err := json.Marshal(entry)
+		if err != nil {
+			return "", 0, err
+		}
+		return string(raw), 0, nil
+	}
+	if confirm {
+		return fmt.Sprintf("%s %s -> %s", verb, entry.Src, entry.Dest), 0, nil
 	}
 	return "", 0, nil
 }

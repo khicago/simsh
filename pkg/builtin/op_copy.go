@@ -11,26 +11,33 @@ import (
 func specCp() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandCp,
-		Manual: "cp SRC_PATH DEST_PATH",
+		Manual: "cp [--confirm] [--json] SRC_PATH DEST_PATH",
 		Tips: []string{
 			"Copies a file from source to destination.",
+			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
 			"Mount-backed virtual paths are immutable and not valid copy operands.",
 		},
-		Examples:       ExamplesFor("cp"),
-		DetailedManual: LoadEmbeddedManual("cp"),
-		Run:            runCp,
+		StructuredOutput: "copy summary",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("cp"),
+		DetailedManual:   LoadEmbeddedManual("cp"),
+		Run:              runCp,
 	}
 }
 
 func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
-	if len(args) != 2 {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("cp", args)
+	if !ok {
+		return out, code
+	}
+	if len(filteredArgs) != 2 {
 		return "cp: expected exactly two arguments: SRC DEST", contract.ExitCodeUsage
 	}
-	src, err := runtime.Ops.RequireAbsolutePath(args[0])
+	src, err := runtime.Ops.RequireAbsolutePath(filteredArgs[0])
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
 	}
-	dest, err := runtime.Ops.RequireAbsolutePath(args[1])
+	dest, err := runtime.Ops.RequireAbsolutePath(filteredArgs[1])
 	if err != nil {
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeUsage
 	}
@@ -54,5 +61,13 @@ func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
 	}
-	return "", 0
+	rendered, _, err := renderTransferMutation(confirm, jsonOutput, mutationTransfer{
+		Src:   src,
+		Dest:  dest,
+		Bytes: len(content),
+	}, "copied")
+	if err != nil {
+		return fmt.Sprintf("cp: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }

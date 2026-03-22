@@ -1233,13 +1233,31 @@ func TestCommandCp(t *testing.T) {
 	t.Run("basic copy", func(t *testing.T) {
 		fs := newTestFS()
 		ops := writableOps(fs)
-		_, code := eng.Execute(context.Background(), "cp /workspace/readme.md /workspace/copy.md", ops)
-		if code != 0 {
-			t.Fatalf("cp failed: code=%d", code)
+		out, code := eng.Execute(context.Background(), "cp /workspace/readme.md /workspace/copy.md", ops)
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("cp failed: code=%d out=%q", code, out)
 		}
-		out, code := eng.Execute(context.Background(), "cat /workspace/copy.md", ops)
+		out, code = eng.Execute(context.Background(), "cat /workspace/copy.md", ops)
 		if code != 0 || !strings.Contains(out, "hello") {
 			t.Fatalf("copied content mismatch: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("cp --confirm", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "cp --confirm /workspace/readme.md /workspace/copy2.md", ops)
+		if code != 0 || strings.TrimSpace(out) != "copied /workspace/readme.md -> /workspace/copy2.md" {
+			t.Fatalf("cp --confirm failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("cp --json", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "cp --json /workspace/readme.md /workspace/copy3.md", ops)
+		if code != 0 || !strings.Contains(out, `"src":"/workspace/readme.md"`) || !strings.Contains(out, `"dest":"/workspace/copy3.md"`) || !strings.Contains(out, `"bytes":12`) {
+			t.Fatalf("cp --json failed: code=%d out=%q", code, out)
 		}
 	})
 
@@ -1255,7 +1273,7 @@ func TestCommandCp(t *testing.T) {
 	t.Run("cp read-only rejected", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		_, code := eng.Execute(context.Background(), "cp /workspace/readme.md /workspace/copy.md", ops)
+		_, code := eng.Execute(context.Background(), "cp --json /workspace/readme.md /workspace/copy.md", ops)
 		if code == 0 {
 			t.Fatalf("expected cp to fail in read-only")
 		}
