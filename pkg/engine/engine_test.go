@@ -1336,13 +1336,31 @@ func TestCommandRm(t *testing.T) {
 	t.Run("basic rm", func(t *testing.T) {
 		fs := newTestFS()
 		ops := writableOps(fs)
-		_, code := eng.Execute(context.Background(), "rm /workspace/todo.txt", ops)
-		if code != 0 {
-			t.Fatalf("rm failed: code=%d", code)
+		out, code := eng.Execute(context.Background(), "rm /workspace/todo.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("rm failed: code=%d out=%q", code, out)
 		}
 		_, code = eng.Execute(context.Background(), "cat /workspace/todo.txt", ops)
 		if code == 0 {
 			t.Fatalf("expected file to be removed")
+		}
+	})
+
+	t.Run("rm --confirm", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "rm --confirm /workspace/todo.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "removed /workspace/todo.txt" {
+			t.Fatalf("rm --confirm failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("rm --json", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "rm --json /workspace/todo.txt", ops)
+		if code != 0 || !strings.Contains(out, `"status":"removed"`) || !strings.Contains(out, `"/workspace/todo.txt"`) {
+			t.Fatalf("rm --json failed: code=%d out=%q", code, out)
 		}
 	})
 
@@ -1358,7 +1376,7 @@ func TestCommandRm(t *testing.T) {
 	t.Run("rm read-only rejected", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		_, code := eng.Execute(context.Background(), "rm /workspace/todo.txt", ops)
+		_, code := eng.Execute(context.Background(), "rm --json /workspace/todo.txt", ops)
 		if code == 0 {
 			t.Fatalf("expected rm to fail in read-only")
 		}

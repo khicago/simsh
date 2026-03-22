@@ -82,6 +82,12 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", "mv-json-src.txt"), "abc"); err != nil {
 		t.Fatalf("setup write mv-json-src failed: %v", err)
 	}
+	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", "rm-confirm.txt"), "abc"); err != nil {
+		t.Fatalf("setup write rm-confirm failed: %v", err)
+	}
+	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", "rm-json.txt"), "abc"); err != nil {
+		t.Fatalf("setup write rm-json failed: %v", err)
+	}
 	if err := rt.ops.WriteFile(context.Background(), fmDoc, "---\ntitle: Coverage Fixture\ntags:\n  - a\n  - b\n---\nbody\n"); err != nil {
 		t.Fatalf("setup write frontmatter fixture failed: %v", err)
 	}
@@ -649,8 +655,27 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "rm",
 			cmd:  "rm " + copyTarget,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("rm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rm-confirm",
+			cmd:  "rm --confirm " + rt.abs("workspace", "rm-confirm.txt"),
+			want: func(t *testing.T, out string, code int) {
+				expected := "removed " + rt.abs("workspace", "rm-confirm.txt")
+				if code != 0 || strings.TrimSpace(out) != expected {
+					t.Fatalf("rm --confirm failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rm-json",
+			cmd:  "rm --json " + rt.abs("workspace", "rm-json.txt"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"status\":\"removed\"") || !strings.Contains(out, "\"path\":\""+rt.abs("workspace", "rm-json.txt")+"\"") {
+					t.Fatalf("rm --json failed: code=%d out=%q", code, out)
 				}
 			},
 		},

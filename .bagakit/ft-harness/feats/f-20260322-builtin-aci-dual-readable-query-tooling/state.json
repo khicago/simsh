@@ -11,17 +11,17 @@
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-03-22T10:39:53Z",
-  "updated_at": "2026-03-22T16:20:02Z",
-  "current_task_id": "T-013",
+  "updated_at": "2026-03-22T16:23:39Z",
+  "current_task_id": "T-014",
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 1,
-    "round_count": 14
+    "round_count": 15
   },
   "gate": {
     "last_result": "pass",
-    "last_task_id": "T-013",
-    "last_checked_at": "2026-03-22T16:20:02Z",
+    "last_task_id": "T-014",
+    "last_checked_at": "2026-03-22T16:23:39Z",
     "last_check_commands": [
       {
         "command": "go test ./...",
@@ -29,7 +29,7 @@
         "status": "pass"
       }
     ],
-    "last_log_path": ".bagakit/ft-harness/feats/f-20260322-builtin-aci-dual-readable-query-tooling/artifacts/gate-20260322T162002Z.log"
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260322-builtin-aci-dual-readable-query-tooling/artifacts/gate-20260322T162339Z.log"
   },
   "history": [
     {
@@ -241,6 +241,21 @@
       "at": "2026-03-22T16:20:02Z",
       "action": "task_gate",
       "detail": "T-013 => pass"
+    },
+    {
+      "at": "2026-03-22T16:21:06Z",
+      "action": "task_finished",
+      "detail": "T-013 => done"
+    },
+    {
+      "at": "2026-03-22T16:21:06Z",
+      "action": "task_started",
+      "detail": "T-014"
+    },
+    {
+      "at": "2026-03-22T16:23:39Z",
+      "action": "task_gate",
+      "detail": "T-014 => pass"
     }
   ]
 }

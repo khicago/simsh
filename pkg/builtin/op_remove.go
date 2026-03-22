@@ -12,20 +12,27 @@ import (
 func specRm() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandRm,
-		Manual: "rm PATH...",
+		Manual: "rm [--confirm] [--json] PATH...",
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
+			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
 			"Mount-backed virtual paths are immutable and cannot be removed.",
 		},
-		Examples:       ExamplesFor("rm"),
-		DetailedManual: LoadEmbeddedManual("rm"),
-		Run:            runRm,
+		StructuredOutput: "path status entries",
+		StructuredFlags:  []string{"--confirm", "--json"},
+		Examples:         ExamplesFor("rm"),
+		DetailedManual:   LoadEmbeddedManual("rm"),
+		Run:              runRm,
 	}
 }
 
 func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
-	paths := make([]string, 0, len(args))
-	for _, arg := range args {
+	filteredArgs, confirm, jsonOutput, out, code, ok := extractMutationOutputFlags("rm", args)
+	if !ok {
+		return out, code
+	}
+	paths := make([]string, 0, len(filteredArgs))
+	for _, arg := range filteredArgs {
 		if strings.HasPrefix(arg, "-") {
 			return fmt.Sprintf("rm: unsupported flag %s", arg), contract.ExitCodeUsage
 		}
@@ -49,6 +56,7 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "rm", checks); !ok {
 		return out, code
 	}
+	results := make([]mutationPathStatus, 0, len(paths))
 	for _, p := range paths {
 		if err := runtime.Ops.RemoveFile(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
@@ -56,6 +64,11 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 			}
 			return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
 		}
+		results = append(results, mutationPathStatus{Path: p, Status: "removed"})
 	}
-	return "", 0
+	rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
+	if err != nil {
+		return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }
