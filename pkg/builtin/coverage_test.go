@@ -506,8 +506,26 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			name: "touch",
 			cmd:  "touch " + newFile,
 			want: func(t *testing.T, out string, code int) {
-				if code != 0 {
+				if code != 0 || strings.TrimSpace(out) != "" {
 					t.Fatalf("touch failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "touch-json-created",
+			cmd:  "touch --json " + rt.abs("workspace", "created-by-json.txt"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"status\":\"created\"") {
+					t.Fatalf("touch --json created failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "touch-json-existing",
+			cmd:  "touch --json " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"status\":\"already_exists\"") || !strings.Contains(out, "\"path\":\""+readme+"\"") {
+					t.Fatalf("touch --json existing failed: code=%d out=%q", code, out)
 				}
 			},
 		},

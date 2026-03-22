@@ -12,19 +12,26 @@ import (
 func specTouch() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandTouch,
-		Manual: "touch PATH...",
+		Manual: "touch [--json] PATH...",
 		Tips: []string{
 			"Creates empty files if they do not exist.",
+			"Use --json when you want explicit created/already_exists feedback without changing the default silent behavior.",
 		},
-		Examples:       ExamplesFor("touch"),
-		DetailedManual: LoadEmbeddedManual("touch"),
-		Run:            runTouch,
+		StructuredOutput: "path status entries",
+		StructuredFlags:  []string{"--json"},
+		Examples:         ExamplesFor("touch"),
+		DetailedManual:   LoadEmbeddedManual("touch"),
+		Run:              runTouch,
 	}
 }
 
 func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
-	paths := make([]string, 0, len(args))
-	for _, arg := range args {
+	filteredArgs, _, jsonOutput, out, code, ok := extractMutationOutputFlags("touch", args)
+	if !ok {
+		return out, code
+	}
+	paths := make([]string, 0, len(filteredArgs))
+	for _, arg := range filteredArgs {
 		if strings.HasPrefix(arg, "-") {
 			return fmt.Sprintf("touch: unsupported flag %s", arg), contract.ExitCodeUsage
 		}
@@ -48,9 +55,11 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "touch", checks); !ok {
 		return out, code
 	}
+	results := make([]mutationPathStatus, 0, len(paths))
 	for _, p := range paths {
 		_, err := runtime.Ops.ReadRawContent(runtime.Ctx, p)
 		if err == nil {
+			results = append(results, mutationPathStatus{Path: p, Status: "already_exists"})
 			continue
 		}
 		if !isPathMissing(err) {
@@ -62,8 +71,13 @@ func runTouch(runtime engine.CommandRuntime, args []string) (string, int) {
 			}
 			return fmt.Sprintf("touch: %v", writeErr), contract.ExitCodeGeneral
 		}
+		results = append(results, mutationPathStatus{Path: p, Status: "created"})
 	}
-	return "", 0
+	rendered, _, err := renderPathStatusMutation(false, jsonOutput, results)
+	if err != nil {
+		return fmt.Sprintf("touch: %v", err), contract.ExitCodeGeneral
+	}
+	return rendered, 0
 }
 
 func isPathMissing(err error) bool {

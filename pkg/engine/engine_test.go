@@ -1335,22 +1335,31 @@ func TestCommandTouch(t *testing.T) {
 	t.Run("touch new file", func(t *testing.T) {
 		fs := newTestFS()
 		ops := writableOps(fs)
-		_, code := eng.Execute(context.Background(), "touch /workspace/new.txt", ops)
-		if code != 0 {
-			t.Fatalf("touch failed: code=%d", code)
+		out, code := eng.Execute(context.Background(), "touch /workspace/new.txt", ops)
+		if code != 0 || strings.TrimSpace(out) != "" {
+			t.Fatalf("touch failed: code=%d out=%q", code, out)
 		}
-		out, code := eng.Execute(context.Background(), "cat /workspace/new.txt", ops)
+		out, code = eng.Execute(context.Background(), "cat /workspace/new.txt", ops)
 		if code != 0 {
 			t.Fatalf("expected touched file to exist: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("touch --json existing and created", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		out, code := eng.Execute(context.Background(), "touch --json /workspace/readme.md /workspace/new.txt", ops)
+		if code != 0 || !strings.Contains(out, `"status":"already_exists"`) || !strings.Contains(out, `"status":"created"`) {
+			t.Fatalf("touch --json failed: code=%d out=%q", code, out)
 		}
 	})
 
 	t.Run("touch read-only rejected", func(t *testing.T) {
 		fs := newTestFS()
 		ops := readOnlyOps(fs)
-		_, code := eng.Execute(context.Background(), "touch /workspace/new.txt", ops)
+		out, code := eng.Execute(context.Background(), "touch --json /workspace/new.txt", ops)
 		if code == 0 {
-			t.Fatalf("expected touch to fail in read-only")
+			t.Fatalf("expected touch to fail in read-only: out=%q", out)
 		}
 	})
 }

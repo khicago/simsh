@@ -12,7 +12,7 @@ JSON SSOT: `tasks.json`
 - [x] T-007 Optimize env
 - [x] T-008 Optimize type
 - [x] T-009 Optimize which
-- [ ] T-010 Optimize mkdir
+- [x] T-010 Optimize mkdir
 - [ ] T-011 Optimize touch
 - [ ] T-012 Optimize cp
 - [ ] T-013 Optimize mv
