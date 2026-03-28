@@ -1,30 +1,7 @@
 {
   "selection_strategy": "status_confidence_evidence_priority",
   "resume_command": "bash .bagakit/long-run/check_and_resume.sh",
-  "next_row": {
-    "id": "manual-20260324-http-meta-request-edge-hardening",
-    "title": "Close HTTP execute or session metadata edge cases and request parsing gaps",
-    "status": "todo",
-    "system": "manual-default",
-    "source_ref": "pkg/service/httpapi/execute_endpoint.go",
-    "commands": [
-      "go test ./pkg/service/httpapi ./pkg/service",
-      "go test ./pkg/service/httpapi -cover"
-    ],
-    "confidence": 0.84,
-    "evidence": [
-      "`go test ./pkg/service/httpapi -cover` currently reports 71.1% coverage, with the lowest functions in `decodeOptionalJSON`, `NewHandler`, and `describePathMeta`.",
-      "Code inspection shows `extractAbsPaths()` always drops `/` even though the comment says root should only be skipped when it is implicit, which is a concrete metadata-contract risk worth pinning down with tests.",
-      "Current tests cover the common `include_meta` happy paths and quoted filenames, but not the optional-body matrix on `/v1/sessions` or the remaining metadata default or fallback branches."
-    ],
-    "evidence_count": 3
-  },
-  "next_feature": {
-    "id": "EXEC::manual-20260324-http-meta-request-edge-hardening",
-    "title": "Close HTTP execute or session metadata edge cases and request parsing gaps",
-    "status": "todo",
-    "confidence": 0.84,
-    "evidence_count": 3
-  },
-  "footer_line": "- LongRun: Item=manual-20260324-http-meta-request-edge-hardening; Status=todo; Confidence=0.84; Evidence=`go test ./pkg/service/httpapi -cover` currently reports 71.1% coverage, with the lowest functions in `decodeOptionalJSON`, `NewHandler`, and `describePathMeta`. | Code inspection shows `extractAbsPaths()` always drops `/` even though the comment says root should only be skipped when it is implicit, which is a concrete metadata-contract risk worth pinning down with tests. | Current tests cover the common `include_meta` happy paths and quoted filenames, but not the optional-body matrix on `/v1/sessions` or the remaining metadata default or fallback branches.; Next=bash .bagakit/long-run/check_and_resume.sh"
+  "next_row": null,
+  "next_feature": null,
+  "footer_line": "- LongRun: Item=none; Status=blocked; Confidence=0.00; Evidence=no actionable row; Next=bash .bagakit/long-run/check_and_resume.sh"
 }

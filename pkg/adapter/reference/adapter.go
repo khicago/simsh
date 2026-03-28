@@ -26,6 +26,14 @@ type ProjectionMetadata struct {
 	Freshness string `json:"freshness,omitempty"`
 }
 
+const (
+	projectionFreshnessSnapshot  = "snapshot"
+	projectionFreshnessLive      = "live"
+	projectionFreshnessStale     = "stale"
+	projectionFreshnessUpdated   = "updated"
+	projectionFreshnessGenerated = "generated"
+)
+
 type WorkflowSpec struct {
 	ID              string   `json:"id"`
 	Title           string   `json:"title"`
@@ -39,6 +47,7 @@ type Adapter struct {
 	documents       map[string]projectionEntry
 	resources       map[string]projectionEntry
 	workflows       []WorkflowSpec
+	workflowStatus  map[string]workflowStatusOverride
 	projectionError error
 }
 
@@ -78,7 +87,14 @@ type workflowView struct {
 	ResourcePaths   []string `json:"resource_paths,omitempty"`
 	ExpectedOutputs []string `json:"expected_outputs,omitempty"`
 	Status          string   `json:"status"`
+	StatusSource    string   `json:"status_source,omitempty"`
+	StatusReason    string   `json:"status_reason,omitempty"`
 	Evidence        []string `json:"evidence,omitempty"`
+}
+
+type workflowStatusOverride struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
 }
 
 func New(opts Options) *Adapter {
@@ -107,9 +123,10 @@ func New(opts Options) *Adapter {
 		}
 	}
 	return &Adapter{
-		documents: documents,
-		resources: resources,
-		workflows: workflows,
+		documents:      documents,
+		resources:      resources,
+		workflows:      workflows,
+		workflowStatus: map[string]workflowStatusOverride{},
 	}
 }
 
@@ -154,10 +171,7 @@ func (a *Adapter) UpdateDocument(name string, content string) {
 func (a *Adapter) UpsertDocument(name string, content string, meta ProjectionMetadata) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.documents[normalizeDocumentName(name)] = projectionEntry{
-		Content:  content,
-		Metadata: normalizeProjectionMetadata(meta, "control_plane", "updated"),
-	}
+	a.documents[normalizeDocumentName(name)] = newProjectionEntry(content, meta, "control_plane", projectionFreshnessUpdated)
 }
 
 func (a *Adapter) UpdateResource(name string, content string) {
@@ -167,10 +181,31 @@ func (a *Adapter) UpdateResource(name string, content string) {
 func (a *Adapter) UpsertResource(name string, content string, meta ProjectionMetadata) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	a.resources[normalizeResourceName(name)] = projectionEntry{
-		Content:  content,
-		Metadata: normalizeProjectionMetadata(meta, "control_plane", "updated"),
-	}
+	a.resources[normalizeResourceName(name)] = newProjectionEntry(content, meta, "control_plane", projectionFreshnessUpdated)
+}
+
+func (a *Adapter) RefreshDocument(name string, content string, meta ProjectionMetadata) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	refreshProjectionEntryInMap(a.documents, normalizeDocumentName(name), content, meta)
+}
+
+func (a *Adapter) RefreshResource(name string, content string, meta ProjectionMetadata) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	refreshProjectionEntryInMap(a.resources, normalizeResourceName(name), content, meta)
+}
+
+func (a *Adapter) InvalidateDocument(name string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	invalidateProjectionEntry(a.documents, normalizeDocumentName(name))
+}
+
+func (a *Adapter) InvalidateResource(name string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	invalidateProjectionEntry(a.resources, normalizeResourceName(name))
 }
 
 func (a *Adapter) UpsertWorkflow(spec WorkflowSpec) {
@@ -187,6 +222,33 @@ func (a *Adapter) UpsertWorkflow(spec WorkflowSpec) {
 		}
 	}
 	a.workflows = append(a.workflows, normalized)
+}
+
+func (a *Adapter) SetWorkflowStatus(id string, status string, reason string) {
+	id = strings.TrimSpace(id)
+	status = normalizeWorkflowStatus(status)
+	if id == "" || status == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.workflowStatus == nil {
+		a.workflowStatus = map[string]workflowStatusOverride{}
+	}
+	a.workflowStatus[id] = workflowStatusOverride{
+		Status: status,
+		Reason: strings.TrimSpace(reason),
+	}
+}
+
+func (a *Adapter) ClearWorkflowStatus(id string) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.workflowStatus, id)
 }
 
 func (a *Adapter) SetProjectionError(err error) {
@@ -376,14 +438,79 @@ func normalizeProjectionMetadata(meta ProjectionMetadata, defaultSource string, 
 	if source == "" {
 		source = defaultSource
 	}
-	freshness := strings.TrimSpace(meta.Freshness)
+	freshness := normalizeProjectionFreshness(meta.Freshness)
 	if freshness == "" {
-		freshness = defaultFreshness
+		freshness = normalizeProjectionFreshness(defaultFreshness)
 	}
 	return ProjectionMetadata{
 		Source:    source,
 		Freshness: freshness,
 	}
+}
+
+func normalizeProjectionFreshness(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case projectionFreshnessSnapshot,
+		projectionFreshnessLive,
+		projectionFreshnessStale,
+		projectionFreshnessUpdated,
+		projectionFreshnessGenerated:
+		return strings.TrimSpace(raw)
+	default:
+		return ""
+	}
+}
+
+func newProjectionEntry(content string, meta ProjectionMetadata, defaultSource string, defaultFreshness string) projectionEntry {
+	return projectionEntry{
+		Content:  content,
+		Metadata: normalizeProjectionMetadata(meta, defaultSource, defaultFreshness),
+	}
+}
+
+func refreshProjectionEntry(existing projectionEntry, content string, meta ProjectionMetadata) projectionEntry {
+	source := strings.TrimSpace(meta.Source)
+	if source == "" {
+		source = existing.Metadata.Source
+	}
+	if source == "" {
+		source = "control_plane"
+	}
+	freshness := normalizeProjectionFreshness(meta.Freshness)
+	if freshness == "" {
+		freshness = projectionFreshnessLive
+	}
+	return projectionEntry{
+		Content: content,
+		Metadata: ProjectionMetadata{
+			Source:    source,
+			Freshness: freshness,
+		},
+	}
+}
+
+func refreshProjectionEntryInMap(entries map[string]projectionEntry, name string, content string, meta ProjectionMetadata) {
+	existing, ok := entries[name]
+	if !ok {
+		return
+	}
+	entries[name] = refreshProjectionEntry(existing, content, meta)
+}
+
+func invalidateProjectionEntry(entries map[string]projectionEntry, name string) {
+	entry, ok := entries[name]
+	if !ok {
+		return
+	}
+	entry.Metadata = normalizeProjectionMetadata(
+		ProjectionMetadata{
+			Source:    entry.Metadata.Source,
+			Freshness: projectionFreshnessStale,
+		},
+		entry.Metadata.Source,
+		projectionFreshnessStale,
+	)
+	entries[name] = entry
 }
 
 func normalizeProjectionMetadataMap(raw map[string]ProjectionMetadata, normalizeName func(string) string) map[string]ProjectionMetadata {
@@ -416,6 +543,15 @@ func normalizeWorkflowSpec(spec WorkflowSpec) (WorkflowSpec, bool) {
 	spec.ResourcePaths = normalizeWorkflowPaths(spec.ResourcePaths, "/resources")
 	spec.ExpectedOutputs = normalizeWorkflowPaths(spec.ExpectedOutputs, "")
 	return spec, true
+}
+
+func normalizeWorkflowStatus(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case "pending", "in_progress", "completed", "blocked":
+		return strings.TrimSpace(raw)
+	default:
+		return ""
+	}
 }
 
 func normalizeWorkflowPaths(paths []string, defaultRoot string) []string {
@@ -477,6 +613,7 @@ func (a *Adapter) workflowViews(state sessionState) []workflowView {
 			ResourcePaths:   append([]string(nil), workflow.ResourcePaths...),
 			ExpectedOutputs: append([]string(nil), workflow.ExpectedOutputs...),
 			Status:          "pending",
+			StatusSource:    "trace",
 		}
 		evidence := make([]string, 0)
 		switch {
@@ -492,6 +629,11 @@ func (a *Adapter) workflowViews(state sessionState) []workflowView {
 			evidence = append(evidence, state.WrittenOutputs...)
 		}
 		view.Evidence = filterWorkflowEvidence(evidence, workflow)
+		if override, ok := a.workflowStatus[workflow.ID]; ok && override.Status != "" {
+			view.Status = override.Status
+			view.StatusSource = "control_plane"
+			view.StatusReason = override.Reason
+		}
 		views = append(views, view)
 	}
 	return views
@@ -591,6 +733,7 @@ func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, re
 }
 
 func renderMemorySummary(state sessionState, docs []projectionRecord, resources []projectionRecord) string {
+	freshnessCounts := countProjectionFreshness(docs, resources)
 	lines := []string{
 		"# Managed Memory",
 		"",
@@ -603,6 +746,20 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		fmt.Sprintf("- written_outputs: %d", len(state.WrittenOutputs)),
 		fmt.Sprintf("- denied_paths: %d", len(state.DeniedPaths)),
 	}
+	if len(freshnessCounts) > 0 {
+		lines = append(lines, "", "## Projection Freshness")
+		for _, freshness := range []string{
+			projectionFreshnessLive,
+			projectionFreshnessSnapshot,
+			projectionFreshnessStale,
+			projectionFreshnessUpdated,
+			projectionFreshnessGenerated,
+		} {
+			if count := freshnessCounts[freshness]; count > 0 {
+				lines = append(lines, fmt.Sprintf("- %s: %d", freshness, count))
+			}
+		}
+	}
 	if len(state.Workflows) > 0 {
 		lines = append(lines, "", "## Workflows")
 		for _, workflow := range state.Workflows {
@@ -610,6 +767,22 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		}
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func countProjectionFreshness(groups ...[]projectionRecord) map[string]int {
+	counts := map[string]int{}
+	for _, records := range groups {
+		for _, record := range records {
+			if record.Freshness == "" {
+				continue
+			}
+			counts[record.Freshness]++
+		}
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	return counts
 }
 
 func renderWorkflowSummary(workflows []workflowView) string {
@@ -620,6 +793,12 @@ func renderWorkflowSummary(workflows []workflowView) string {
 	}
 	for _, workflow := range workflows {
 		lines = append(lines, fmt.Sprintf("- [%s] %s (%s)", workflow.Status, workflow.Title, workflow.ID))
+		if workflow.StatusSource != "" {
+			lines = append(lines, fmt.Sprintf("  source: %s", workflow.StatusSource))
+		}
+		if workflow.StatusReason != "" {
+			lines = append(lines, fmt.Sprintf("  reason: %s", workflow.StatusReason))
+		}
 		if workflow.Summary != "" {
 			lines = append(lines, fmt.Sprintf("  summary: %s", workflow.Summary))
 		}

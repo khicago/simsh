@@ -47,7 +47,7 @@ func TestReferenceAdapterEndToEnd(t *testing.T) {
 	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_reference" }})
 	session, err := manager.Create(context.Background(), runtimeengine.Options{
 		HostRoot: t.TempDir(),
-		Profile:  contract.ProfileCoreStrict,
+		Profile:  contract.ProfileBashPlus,
 		Policy: contract.ExecutionPolicy{
 			WriteMode:        contract.WriteModeFull,
 			MaxPipelineDepth: 16,
@@ -284,6 +284,193 @@ func TestReferenceAdapterProjectionError(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterRefreshAndInvalidationAcrossResume(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"catalog/index.json": "{\"ok\":true}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"catalog/index.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_refresh" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("initial close failed: %v", err)
+	}
+
+	adapter.InvalidateDocument("guide.md")
+	adapter.InvalidateResource("catalog/index.json")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume stale projections failed: %v", err)
+	}
+
+	staleProjections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read stale projections failed: %v", err)
+	}
+	staleView := decodeProjectionView(t, []byte(staleProjections.Result.Stdout))
+	if record := requireProjectionRecord(t, staleView.Documents, "/knowledge_base/reference/guide.md"); record.Source != "knowledge_sync" || record.Freshness != "stale" {
+		t.Fatalf("stale document projection = %+v, want knowledge_sync/stale", record)
+	}
+	if record := requireProjectionRecord(t, staleView.Resources, "/resources/catalog/index.json"); record.Source != "workflow_catalog" || record.Freshness != "stale" {
+		t.Fatalf("stale resource projection = %+v, want workflow_catalog/stale", record)
+	}
+	staleSummary, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read stale summary failed: %v", err)
+	}
+	if !strings.Contains(staleSummary.Result.Stdout, "- stale: 2") {
+		t.Fatalf("stale summary = %+v, want stale projection count", staleSummary.Result)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before refresh failed: %v", err)
+	}
+	adapter.RefreshDocument("guide.md", "# Guide\nfresh\n", ProjectionMetadata{})
+	adapter.RefreshResource("catalog/index.json", "{\"ok\":false}\n", ProjectionMetadata{Source: "catalog_refresh"})
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume refreshed projections failed: %v", err)
+	}
+
+	liveProjections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read refreshed projections failed: %v", err)
+	}
+	liveView := decodeProjectionView(t, []byte(liveProjections.Result.Stdout))
+	if record := requireProjectionRecord(t, liveView.Documents, "/knowledge_base/reference/guide.md"); record.Source != "knowledge_sync" || record.Freshness != "live" {
+		t.Fatalf("live document projection = %+v, want knowledge_sync/live", record)
+	}
+	if record := requireProjectionRecord(t, liveView.Resources, "/resources/catalog/index.json"); record.Source != "catalog_refresh" || record.Freshness != "live" {
+		t.Fatalf("live resource projection = %+v, want catalog_refresh/live", record)
+	}
+	liveSummary, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read refreshed summary failed: %v", err)
+	}
+	if !strings.Contains(liveSummary.Result.Stdout, "- live: 2") {
+		t.Fatalf("live summary = %+v, want live projection count", liveSummary.Result)
+	}
+	refreshedGuide, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read refreshed guide failed: %v", err)
+	}
+	if !strings.Contains(refreshedGuide.Result.Stdout, "fresh") {
+		t.Fatalf("refreshed guide = %+v, want refreshed content", refreshedGuide.Result)
+	}
+}
+
+func TestReferenceAdapterWorkflowStatusOverrideAcrossResume(t *testing.T) {
+	adapter := New(Options{
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Workflows: []WorkflowSpec{
+			{
+				ID:              "draft-plan",
+				Title:           "Draft plan",
+				ResourcePaths:   []string{"/resources/checklists/plan.json"},
+				ExpectedOutputs: []string{"/task_outputs/plan.txt"},
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_workflow_status" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read resource failed: %v", err)
+	}
+	writeResult, err := manager.Execute(context.Background(), session.SessionID, "touch /task_outputs/plan.txt", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("write output failed: %v", err)
+	}
+	if writeResult.Result.ExitCode != 0 {
+		t.Fatalf("write output exit code = %d, want 0", writeResult.Result.ExitCode)
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before override failed: %v", err)
+	}
+
+	adapter.SetWorkflowStatus("draft-plan", "blocked", "awaiting review")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume with workflow override failed: %v", err)
+	}
+	overrideWorkflows, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read workflow override failed: %v", err)
+	}
+	overrideState := decodeWorkflowViews(t, []byte(overrideWorkflows.Result.Stdout))
+	deliver := requireWorkflowView(t, overrideState, "draft-plan")
+	if deliver.Status != "blocked" || deliver.StatusSource != "control_plane" || deliver.StatusReason != "awaiting review" {
+		t.Fatalf("workflow override = %+v, want blocked/control_plane/awaiting review", deliver)
+	}
+	if !containsLine(deliver.Evidence, "/task_outputs/plan.txt") {
+		t.Fatalf("workflow override evidence = %+v, want preserved output evidence", deliver.Evidence)
+	}
+	statusView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/status.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read status view failed: %v", err)
+	}
+	statusState := decodeReferenceState(t, []byte(statusView.Result.Stdout))
+	statusWorkflow := requireWorkflowView(t, statusState.Workflows, "draft-plan")
+	if statusWorkflow.StatusSource != "control_plane" {
+		t.Fatalf("status workflow source = %+v, want control_plane", statusWorkflow)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before clear failed: %v", err)
+	}
+	adapter.ClearWorkflowStatus("draft-plan")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after clearing workflow override failed: %v", err)
+	}
+	traceWorkflows, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read trace workflow failed: %v", err)
+	}
+	traceState := decodeWorkflowViews(t, []byte(traceWorkflows.Result.Stdout))
+	deliver = requireWorkflowView(t, traceState, "draft-plan")
+	if deliver.Status != "completed" || deliver.StatusSource != "trace" || deliver.StatusReason != "" {
+		t.Fatalf("trace workflow state = %+v, want completed/trace/blank", deliver)
+	}
+}
+
 func decodeReferenceState(t *testing.T, raw []byte) sessionState {
 	t.Helper()
 	var state sessionState
@@ -318,6 +505,17 @@ func workflowStatusByID(workflows []workflowView, id string) string {
 		}
 	}
 	return ""
+}
+
+func requireWorkflowView(t *testing.T, workflows []workflowView, id string) workflowView {
+	t.Helper()
+	for _, workflow := range workflows {
+		if workflow.ID == id {
+			return workflow
+		}
+	}
+	t.Fatalf("workflow %q not found in %+v", id, workflows)
+	return workflowView{}
 }
 
 func decodeProjectionView(t *testing.T, raw []byte) projectionView {

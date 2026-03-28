@@ -14,6 +14,8 @@ if [[ -z "$skill_dir" ]]; then
   exit 1
 fi
 loop_tool="${skill_dir}/scripts/long-run-loop.py"
+preflight_retry_cmd="bash .bagakit/long-run/ralphloop.sh preflight --json"
+resume_retry_cmd="bash .bagakit/long-run/check_and_resume.sh"
 
 usage() {
   cat >&2 <<'EOF'
@@ -22,6 +24,10 @@ Usage:
   bash .bagakit/long-run/ralphloop.sh run [--endless] [--json]
   bash .bagakit/long-run/ralphloop.sh plan [--json]
   bash .bagakit/long-run/ralphloop.sh preflight [--json]
+
+Temp-space retry path:
+  bash .bagakit/long-run/ralphloop.sh preflight --json
+  bash .bagakit/long-run/check_and_resume.sh
 EOF
   exit 1
 }
@@ -33,6 +39,8 @@ fi
 if [[ ! -f "$loop_tool" ]]; then
   echo "error: missing long-run loop tool at ${loop_tool}" >&2
   echo "set BAGAKIT_LONG_RUN_SKILL_DIR to a valid bagakit-long-run skill root." >&2
+  echo "retry path: ${preflight_retry_cmd}" >&2
+  echo "resume: ${resume_retry_cmd}" >&2
   exit 1
 fi
 

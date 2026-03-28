@@ -12,52 +12,9 @@
   },
   "features": [
     {
-      "id": "EXEC::manual-20260324-http-meta-request-edge-hardening",
-      "title": "Close HTTP execute or session metadata edge cases and request parsing gaps",
-      "status": "done",
-      "priority": 100,
-      "description": "Execution row from manual-default (manual-20260324-http-meta-request-edge-hardening). Why now: The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "`go test ./pkg/service/httpapi ./pkg/service` passes with new tests for empty or null session POST bodies, invalid JSON bodies, metadata fallback or defaulting branches, and shell tokenization edge cases.",
-        "An explicit `include_meta` request that names `/` or other quoted or escaped absolute paths keeps the intended path in `meta.paths`, so metadata extraction matches the command the caller actually sent.",
-        "Coverage for `pkg/service/httpapi` improves from the current 71.1% while preserving existing success-path and session-lifecycle behavior."
-      ],
-      "files_to_touch": [
-        "pkg/service/httpapi/handler_test.go",
-        "pkg/service/httpapi/execute_endpoint.go",
-        "pkg/service/service_test.go"
-      ],
-      "commands": [
-        "go test ./pkg/service/httpapi ./pkg/service",
-        "go test ./pkg/service/httpapi -cover"
-      ],
-      "risks": [
-        "Keep the handler thin; prefer small parsing or metadata fixes over pushing runtime semantics into HTTP-only code.",
-        "If root-path metadata is intentionally excluded, document and test that contract explicitly instead of leaving code and comments contradictory."
-      ],
-      "why_now": "The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table",
-        "2026-03-24T11:06:13Z coding pass complete: request-validation regressions added and explicit root metadata preserved"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.99,
-      "evidence": [
-        "`pkg/service/httpapi/handler_test.go` now covers empty and `null` session bodies, invalid execute JSON bodies, blank commands, session override rejection, direct `describePathMeta(...)` defaults, and explicit-root `include_meta` behavior.",
-        "`pkg/service/httpapi/execute_endpoint.go` now preserves explicit `/` tokens in `extractAbsPaths()` so `meta.paths` matches caller-named root paths without changing dedupe or sort behavior.",
-        "`go test ./pkg/service/httpapi ./pkg/service` exits 0 after the regressions land.",
-        "`go test ./pkg/service/httpapi -cover` exits 0 and reports 79.3% coverage, up from 71.1%."
-      ],
-      "evidence_count": 4,
-      "source_system": "manual-default",
-      "source_item": "manual-20260324-http-meta-request-edge-hardening",
-      "source_ref": "pkg/service/httpapi/execute_endpoint.go"
-    },
-    {
       "id": "EXEC::manual-20260324-long-run-temp-space-preflight",
       "title": "Make long-run preflight resilient to transient temp-space failures",
-      "status": "todo",
+      "status": "done",
       "priority": 110,
       "description": "Execution row from manual-default (manual-20260324-long-run-temp-space-preflight). Why now: The current long-run loop can misclassify actionable work as blocked when temporary-file creation fails transiently, and this repo is currently operating with less than 200 MiB free on `/System/Volumes/Data`, which makes that noise recurring rather than hypothetical.",
       "dependencies": [],
@@ -72,8 +29,8 @@
         ".bagakit/long-run/.gen/initializer_prompt.md"
       ],
       "commands": [
-        "bash .bagakit/long-run/check_and_resume.sh",
-        "bash .bagakit/long-run/ralphloop.sh preflight --json"
+        "bash .bagakit/long-run/ralphloop.sh preflight --json",
+        "bash .bagakit/long-run/check_and_resume.sh"
       ],
       "risks": [
         "Keep the runner orchestration-only; do not bury project-specific repair logic inside long-run scripts.",
@@ -81,19 +38,192 @@
       ],
       "why_now": "The current long-run loop can misclassify actionable work as blocked when temporary-file creation fails transiently, and this repo is currently operating with less than 200 MiB free on `/System/Volumes/Data`, which makes that noise recurring rather than hypothetical.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
-      "confidence": 0.74,
+      "confidence": 0.99,
       "evidence": [
-        "`make lint`, `make check`, and several package-local test runs in this session all failed at least once with `no space left on device` before succeeding again after cache cleanup or retry.",
-        "`docs/.bagakit/inbox/howto-long-run-preflight-rerun.md` already records a concrete initializer incident where a second `check_and_resume.sh` run selected the same row cleanly after a transient temp-file failure.",
-        "The generated `check_and_resume.sh` currently runs validation directly and stops on the first shell failure without classifying low-space issues as retryable loop noise."
+        "`.bagakit/long-run/.gen/check_and_resume.sh` now wraps `validate-long-run.sh` output and prints retryable guidance with exact `bash .bagakit/long-run/ralphloop.sh preflight --json` and `bash .bagakit/long-run/check_and_resume.sh` steps when stderr contains `No space left on device` or `cannot create temp file`.",
+        "`bash .bagakit/long-run/ralphloop.sh preflight --json` exits `0` with `workspace_writable`, `tmp_writable`, and `cache_writable` all passing after the wrapper change.",
+        "`bash .bagakit/long-run/check_and_resume.sh` exits `0` on the healthy workspace after the wrapper change and preserves the same current item selection until the row is marked done.",
+        "Under a shimmed `validate-long-run.sh` that prints `cannot create temp file for here document: No space left on device`, `bash .bagakit/long-run/check_and_resume.sh` exits non-zero and prints the exact retry path instead of only the raw shell error.",
+        "`.bagakit/long-run/.gen/initializer_prompt.md` now tells initializer agents to run `bash .bagakit/long-run/ralphloop.sh preflight --json` and one rerun of `bash .bagakit/long-run/check_and_resume.sh` before marking temp-space failures blocked."
       ],
-      "evidence_count": 3,
+      "evidence_count": 5,
       "source_system": "manual-default",
       "source_item": "manual-20260324-long-run-temp-space-preflight",
       "source_ref": ".bagakit/long-run/.gen/check_and_resume.sh"
+    },
+    {
+      "id": "EXEC::manual-20260331-reference-projection-freshness-refresh",
+      "title": "Implement projection freshness lifecycle and explicit refresh invalidation in the reference adapter",
+      "status": "done",
+      "priority": 10,
+      "description": "Execution row from manual-default (manual-20260331-reference-projection-freshness-refresh). Why now: The reference adapter now exposes source and freshness metadata, but freshness is still mostly a static label rather than a real lifecycle. Without explicit stale/live/snapshot transitions and refresh or invalidation seams, adapter-side realism stalls at the presentation layer and later benchmark review cannot distinguish fresh projections from merely renamed metadata.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The reference adapter exposes an explicit control-plane seam for projection refresh or invalidation without making `/memory`, `/resources`, or `/knowledge_base/reference` writable mounts.",
+        "Projected documents and resources can move through a deterministic freshness lifecycle such as `snapshot`, `live`, `stale`, or `updated`, and the current freshness is surfaced consistently in `_index.json`, `/memory/projections.json`, and `/memory/projections.md`.",
+        "Adapter tests cover refresh and invalidation across create, observe, checkpoint, and resume without partial metadata drift or path identity changes.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime` exits 0."
+      ],
+      "files_to_touch": [
+        "pkg/adapter/reference/adapter.go",
+        "pkg/adapter/reference/adapter_test.go",
+        "pkg/adapter/reference/adapter_helpers_test.go"
+      ],
+      "commands": [
+        "go test ./pkg/adapter/reference ./pkg/engine/runtime",
+        "go test ./pkg/adapter/reference -run 'TestReferenceAdapter'"
+      ],
+      "risks": [
+        "Keep freshness lifecycle adapter-local; do not introduce new core-runtime contracts just to model projection staleness.",
+        "Do not hide refresh semantics behind implicit file writes or mutable mounts; use explicit control-plane methods and deterministic projected views."
+      ],
+      "why_now": "The reference adapter now exposes source and freshness metadata, but freshness is still mostly a static label rather than a real lifecycle. Without explicit stale/live/snapshot transitions and refresh or invalidation seams, adapter-side realism stalls at the presentation layer and later benchmark review cannot distinguish fresh projections from merely renamed metadata.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`pkg/adapter/reference/adapter.go` now defines canonical projection freshness states plus explicit `Refresh*` and `Invalidate*` control-plane methods for documents and resources.",
+        "Refresh now preserves existing source metadata by default while invalidation marks existing projections `stale` without changing path identity or mount writeability.",
+        "Managed `/memory/summary.md` now exposes projection-freshness counts, and direct helper tests assert stale/live transitions in `/memory/projections.json` and `/resources/_index.json`.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the freshness lifecycle changes."
+      ],
+      "evidence_count": 4,
+      "source_system": "manual-default",
+      "source_item": "manual-20260331-reference-projection-freshness-refresh",
+      "source_ref": "pkg/adapter/reference/adapter.go"
+    },
+    {
+      "id": "EXEC::manual-20260331-reference-freshness-evidence-review",
+      "title": "Review freshness and projection-refresh evidence in adapter tests and reference benchmarks",
+      "status": "done",
+      "priority": 20,
+      "description": "Execution row from manual-default (manual-20260331-reference-freshness-evidence-review). Why now: Once freshness and refresh semantics exist, the next risk is false confidence: the benchmark and adapter tests can still pass while only string-matching a few happy-path fragments. This review slice makes evidence completeness part of the seam, not an afterthought.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The adapter-backed benchmark scenario asserts source and freshness fields by decoding structured projection views rather than relying only on substring checks.",
+        "Reference validation covers at least one refresh or invalidation cycle and fails the scenario if projection freshness evidence regresses.",
+        "`go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference` exits 0 with the stronger assertions."
+      ],
+      "files_to_touch": [
+        "benchmarks/simsh_native_reference/suite.go",
+        "benchmarks/simsh_native_reference/suite_test.go",
+        "pkg/adapter/reference/adapter_test.go"
+      ],
+      "commands": [
+        "go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference",
+        "go run ./benchmarks/simsh_native_reference"
+      ],
+      "risks": [
+        "Keep the benchmark seam-focused; do not turn reference validation into a product-orchestration harness.",
+        "Strengthen evidence by decoding structured views, but keep the assertions deterministic and lightweight enough to run in ordinary CI loops."
+      ],
+      "why_now": "Once freshness and refresh semantics exist, the next risk is false confidence: the benchmark and adapter tests can still pass while only string-matching a few happy-path fragments. This review slice makes evidence completeness part of the seam, not an afterthought.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`benchmarks/simsh_native_reference/suite.go` now decodes `/memory/projections.json` into structured projection records and checks source/freshness through refresh and invalidation cycles instead of substring-only matching.",
+        "The adapter-backed reference workload now covers stale and refreshed projection states plus refreshed guide/resource reads before declaring scenario success.",
+        "`benchmarks/simsh_native_reference/README.md` now documents that the adapter-backed lifecycle scenario includes projection invalidation and refresh.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the benchmark evidence tightening."
+      ],
+      "evidence_count": 4,
+      "source_system": "manual-default",
+      "source_item": "manual-20260331-reference-freshness-evidence-review",
+      "source_ref": "benchmarks/simsh_native_reference/suite.go"
+    },
+    {
+      "id": "EXEC::manual-20260331-reference-workflow-transition-control-plane",
+      "title": "Implement an explicit workflow-transition control plane over managed `/memory` views",
+      "status": "done",
+      "priority": 40,
+      "description": "Execution row from manual-default (manual-20260331-reference-workflow-transition-control-plane). Why now: Current workflow state is derived only from trace evidence. That is useful, but still too weak for a realistic non-core harness layer: adapters need a minimal explicit way to pin, override, or annotate workflow transitions without turning `/memory` into a writable scratch mount or leaking product workflow logic into core.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The reference adapter exposes a minimal workflow-transition control plane that can record explicit status or reason updates while preserving the existing trace-derived defaults.",
+        "`/memory/workflows.json`, `/memory/workflows.md`, and `/memory/status.json` surface both the current workflow status and whether it came from trace evidence or explicit adapter control-plane action.",
+        "Adapter tests cover checkpoint and resume with both trace-driven and control-plane-driven workflow transitions.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime` exits 0."
+      ],
+      "files_to_touch": [
+        "pkg/adapter/reference/adapter.go",
+        "pkg/adapter/reference/adapter_test.go",
+        "pkg/adapter/reference/adapter_helpers_test.go"
+      ],
+      "commands": [
+        "go test ./pkg/adapter/reference ./pkg/engine/runtime",
+        "go test ./pkg/adapter/reference -run 'TestReferenceAdapter'"
+      ],
+      "risks": [
+        "Keep the transition model generic and adapter-local; avoid baking product-specific workflow graphs into the reference adapter.",
+        "Do not let explicit status overrides erase the underlying trace evidence that justified the transition in the first place."
+      ],
+      "why_now": "Current workflow state is derived only from trace evidence. That is useful, but still too weak for a realistic non-core harness layer: adapters need a minimal explicit way to pin, override, or annotate workflow transitions without turning `/memory` into a writable scratch mount or leaking product workflow logic into core.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`pkg/adapter/reference/adapter.go` now adds explicit `SetWorkflowStatus` and `ClearWorkflowStatus` control-plane methods plus `status_source` and `status_reason` fields on workflow views.",
+        "Managed `/memory/workflows.json`, `/memory/workflows.md`, and `/memory/status.json` now distinguish trace-derived workflow state from control-plane overrides without discarding trace evidence.",
+        "`pkg/adapter/reference/adapter_helpers_test.go` and `pkg/adapter/reference/adapter_test.go` now cover override, clear, and checkpoint/resume behavior for workflow transition provenance.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime` and `go test ./...` both exited 0 after the workflow control-plane changes."
+      ],
+      "evidence_count": 4,
+      "source_system": "manual-default",
+      "source_item": "manual-20260331-reference-workflow-transition-control-plane",
+      "source_ref": "pkg/adapter/reference/adapter.go"
+    },
+    {
+      "id": "EXEC::manual-20260331-reference-workflow-proof-review",
+      "title": "Review workflow-transition proof and adapter-backed workload realism end to end",
+      "status": "done",
+      "priority": 50,
+      "description": "Execution row from manual-default (manual-20260331-reference-workflow-proof-review). Why now: Explicit workflow transitions will only be valuable if the reference workload and gate logic actually depend on them. This closing review slice checks that the new control plane remains truthful, benchmark-visible, and still downstream from kernel contracts.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The adapter-backed reference workload exercises both trace-driven and control-plane-driven workflow transitions across checkpoint and resume.",
+        "Scenario success and evidence gating fail when workflow status, evidence source, or managed-memory summaries regress.",
+        "`go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime` and `go test ./...` both exit 0."
+      ],
+      "files_to_touch": [
+        "benchmarks/simsh_native_reference/suite.go",
+        "benchmarks/simsh_native_reference/suite_test.go",
+        "pkg/adapter/reference/adapter_test.go",
+        "docs/notes-kernel-execution-backlog.md"
+      ],
+      "commands": [
+        "go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime",
+        "go test ./..."
+      ],
+      "risks": [
+        "Keep the review anchored on seam truth and benchmark evidence, not on adding a larger product workflow harness.",
+        "If the benchmark reveals a contract mismatch, fix the contract and tests together instead of accepting a cosmetic workflow view."
+      ],
+      "why_now": "Explicit workflow transitions will only be valuable if the reference workload and gate logic actually depend on them. This closing review slice checks that the new control plane remains truthful, benchmark-visible, and still downstream from kernel contracts.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`benchmarks/simsh_native_reference/suite.go` now proves workflow-transition provenance end to end by toggling a control-plane override through close/resume and then clearing it back to trace-derived status.",
+        "The adapter-backed benchmark now decodes workflow JSON structurally and requires both `control_plane` and `trace` workflow states to succeed before the scenario passes.",
+        "`benchmarks/simsh_native_reference/README.md` now documents workflow-transition provenance as part of the adapter-backed lifecycle scenario.",
+        "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the proof pass."
+      ],
+      "evidence_count": 4,
+      "source_system": "manual-default",
+      "source_item": "manual-20260331-reference-workflow-proof-review",
+      "source_ref": "benchmarks/simsh_native_reference/suite.go"
     },
     {
       "id": "EXEC::manual-20260324-session-manager-adapter-failure-edges",
@@ -123,7 +253,7 @@
       ],
       "why_now": "Session lifecycle is a core kernel contract, and `pkg/engine/runtime` still leaves the lowest coverage in `Execute` and `Resume` precisely where policy narrowing, adapter phases, and closed-session recovery interact.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -137,6 +267,48 @@
       "source_system": "manual-default",
       "source_item": "manual-20260324-session-manager-adapter-failure-edges",
       "source_ref": "pkg/engine/runtime/session_manager.go"
+    },
+    {
+      "id": "EXEC::manual-20260324-http-meta-request-edge-hardening",
+      "title": "Close HTTP execute or session metadata edge cases and request parsing gaps",
+      "status": "done",
+      "priority": 100,
+      "description": "Execution row from manual-default (manual-20260324-http-meta-request-edge-hardening). Why now: The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "`go test ./pkg/service/httpapi ./pkg/service` passes with new tests for empty or null session POST bodies, invalid JSON bodies, metadata fallback or defaulting branches, and shell tokenization edge cases.",
+        "An explicit `include_meta` request that names `/` or other quoted or escaped absolute paths keeps the intended path in `meta.paths`, so metadata extraction matches the command the caller actually sent.",
+        "Coverage for `pkg/service/httpapi` improves from the current 71.1% while preserving existing success-path and session-lifecycle behavior."
+      ],
+      "files_to_touch": [
+        "pkg/service/httpapi/handler_test.go",
+        "pkg/service/httpapi/execute_endpoint.go",
+        "pkg/service/service_test.go"
+      ],
+      "commands": [
+        "go test ./pkg/service/httpapi ./pkg/service",
+        "go test ./pkg/service/httpapi -cover"
+      ],
+      "risks": [
+        "Keep the handler thin; prefer small parsing or metadata fixes over pushing runtime semantics into HTTP-only code.",
+        "If root-path metadata is intentionally excluded, document and test that contract explicitly instead of leaving code and comments contradictory."
+      ],
+      "why_now": "The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`pkg/service/httpapi/handler_test.go` now covers empty and `null` session bodies, invalid execute JSON bodies, blank commands, session override rejection, direct `describePathMeta(...)` defaults, and explicit-root `include_meta` behavior.",
+        "`pkg/service/httpapi/execute_endpoint.go` now preserves explicit `/` tokens in `extractAbsPaths()` so `meta.paths` matches caller-named root paths without changing dedupe or sort behavior.",
+        "`go test ./pkg/service/httpapi ./pkg/service` exits 0 after the regressions land.",
+        "`go test ./pkg/service/httpapi -cover` exits 0 and reports 79.3% coverage, up from 71.1%."
+      ],
+      "evidence_count": 4,
+      "source_system": "manual-default",
+      "source_item": "manual-20260324-http-meta-request-edge-hardening",
+      "source_ref": "pkg/service/httpapi/execute_endpoint.go"
     },
     {
       "id": "EXEC::manual-20260324-lint-check-gate",
@@ -165,7 +337,7 @@
       ],
       "why_now": "`make check` is currently red on staticcheck findings, so the project's default evidence gate is already broken before any new kernel work begins.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -205,7 +377,7 @@
       ],
       "why_now": "The default workspace trust story depends on `agentfs` and `pathguard`, but those packages still have zero direct package coverage even though they own zone resolution and path-escape prevention.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -246,7 +418,7 @@
       ],
       "why_now": "The parser and script runner are core kernel surfaces, but heredoc branches and several parser failure paths remain effectively unexercised, which makes shell-level regressions easy to miss.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -259,6 +431,48 @@
       "source_system": "manual-default",
       "source_item": "manual-20260324-shell-parser-redirection-regressions",
       "source_ref": "pkg/engine/script_parser_v2.go"
+    },
+    {
+      "id": "EXEC::manual-20260331-adapter-freshness-contract-refine",
+      "title": "Refine the documented adapter-side freshness and managed-memory contract",
+      "status": "done",
+      "priority": 30,
+      "description": "Execution row from manual-default (manual-20260331-adapter-freshness-contract-refine). Why now: After one implementation slice and one review slice, the durable rules should be written down before the control plane grows further. Freshness states, refresh triggers, and managed `/memory` boundaries are adapter-facing contracts, and leaving them implicit invites drift across future adapters and benchmarks.",
+      "dependencies": [],
+      "acceptance_criteria": [
+        "The relevant adapter-side docs explicitly describe freshness states, refresh or invalidation triggers, and how managed `/memory` views relate to projection metadata.",
+        "The refreshed docs keep these semantics out of core packages and align with the charter principle that product workflows remain adapter-local.",
+        "If SOP frontmatter sources change, `docs/must-sop.md` is regenerated and committed."
+      ],
+      "files_to_touch": [
+        "docs/architecture-platform-adapter-contract.md",
+        "docs/architecture-memory-skills-extension.md",
+        "docs/notes-kernel-execution-backlog.md",
+        "docs/must-sop.md"
+      ],
+      "commands": [
+        "sh /Users/bytedance/proj/priv/bagakit/skills/dist_local/bagakit-living-docs/scripts/living-docs-generate-sop.sh .",
+        "git diff -- docs/architecture-platform-adapter-contract.md docs/architecture-memory-skills-extension.md docs/notes-kernel-execution-backlog.md docs/must-sop.md"
+      ],
+      "risks": [
+        "Do not let doc refinement silently widen the contract beyond what code and tests actually guarantee.",
+        "Keep the narrative centered on adapter seams and managed views rather than reintroducing product semantics into kernel docs."
+      ],
+      "why_now": "After one implementation slice and one review slice, the durable rules should be written down before the control plane grows further. Freshness states, refresh triggers, and managed `/memory` boundaries are adapter-facing contracts, and leaving them implicit invites drift across future adapters and benchmarks.",
+      "updates": [
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
+      ],
+      "managed_by": "execution-table",
+      "confidence": 0.99,
+      "evidence": [
+        "`docs/architecture-platform-adapter-contract.md` now defines the canonical adapter-side freshness lifecycle (`snapshot`, `live`, `stale`, `updated`), makes refresh/invalidation ownership explicit, and requires refresh round-trips in adapter contract tests.",
+        "`docs/architecture-memory-skills-extension.md` now states that refresh belongs to the adapter control plane and that `/memory` remains a managed read-only evidence view over projection indexes, summaries, and workflow state.",
+        "`sh /Users/bytedance/proj/priv/bagakit/skills/dist_local/bagakit-living-docs/scripts/living-docs-generate-sop.sh .` exited 0, and `docs/must-sop.md` required no semantic change beyond regeneration."
+      ],
+      "evidence_count": 3,
+      "source_system": "manual-default",
+      "source_item": "manual-20260331-adapter-freshness-contract-refine",
+      "source_ref": "docs/architecture-platform-adapter-contract.md"
     },
     {
       "id": "EXEC::manual-20260324-http-cli-entry-regressions",
@@ -287,7 +501,7 @@
       ],
       "why_now": "Entry adapters are not the architecture center, but they are still public integration surfaces; current coverage misses serve-mode branches, service wrappers, and include-meta fallback edges.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -327,7 +541,7 @@
       ],
       "why_now": "The default workspace still depends on `agentfs` for trusted writes, but direct package coverage remains only 41.5% and every mutator path (`WriteFile`, `AppendFile`, `EditFile`, `MakeDir`, `RemoveFile`) is still uncovered.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -367,7 +581,7 @@
       ],
       "why_now": "Agent inspect/search loops rely on `agentfs` path normalization and search expansion, but `RequireAbsolutePath`, `ResolveSearchPaths`, `CollectFilesUnder`, `toVirtualPath`, and `NewDefaultFilesystem` are still uncovered direct behavior.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -409,7 +623,7 @@
       ],
       "why_now": "Entry surfaces are downstream from the kernel, but they are still public operator paths; `pkg/cmd` and `cmd/simshd` both remain at 0.0% package coverage, so launcher drift can go unnoticed until manual use.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -453,7 +667,7 @@
       ],
       "why_now": "The default workspace is the agent's main surface, yet `pkg/builtin` still sits at 66.8% coverage and the least-covered logic is concentrated in `ls`, `man`, and `json`, which drive directory inspection, command discovery, and structured querying.",
       "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
+        "2026-03-31T16:13:51Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -466,1041 +680,7 @@
       "source_system": "manual-default",
       "source_item": "manual-20260324-builtin-ls-man-json-edge-regressions",
       "source_ref": "pkg/builtin/op_listing.go"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-      "title": "支持 mount 父路径访问和路径保护 / Implement first scoped change for this feat",
-      "status": "done",
-      "priority": 101,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260217-vfs-mount-ancestors:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260217-vfs-mount-ancestors:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260217-vfs-mount-ancestors/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260218-path-access-metadata:T-001",
-      "title": "Path access metadata + ls/API formats / SSOT access/capabilities + compact ls -l columns",
-      "status": "done",
-      "priority": 201,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260218-path-access-metadata:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260218-path-access-metadata:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=3",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260218-path-access-metadata:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260218-path-access-metadata/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260220-tooling-docs-consistency:T-001",
-      "title": "工具与文档一致性优化 / Implement first scoped change for this feat",
-      "status": "done",
-      "priority": 301,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260220-tooling-docs-consistency:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260220-tooling-docs-consistency:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260220-tooling-docs-consistency:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260220-tooling-docs-consistency/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260222-memory-skills-extension-framework:T-001",
-      "title": "memory skills extension framework / Implement first scoped change for this feat",
-      "status": "done",
-      "priority": 401,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260222-memory-skills-extension-framework:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260222-memory-skills-extension-framework:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260222-memory-skills-extension-framework:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260222-memory-skills-extension-framework/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260224-plan-sync-agentfs-write-limit:T-001",
-      "title": "文档状态校准与agentfs写限额联动 / 同步计划文档并接通agentfs写限额联动",
-      "status": "done",
-      "priority": 501,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260224-plan-sync-agentfs-write-limit:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260224-plan-sync-agentfs-write-limit:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260224-plan-sync-agentfs-write-limit:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260224-plan-sync-agentfs-write-limit/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260321-cancel-timeout-effectiveness:T-001",
-      "title": "Cancel and timeout effectiveness / Honor canceled contexts in default filesystem and execution loops",
-      "status": "done",
-      "priority": 1101,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260321-cancel-timeout-effectiveness:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260321-cancel-timeout-effectiveness:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260321-cancel-timeout-effectiveness:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260321-cancel-timeout-effectiveness/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260321-default-filesystem-boundary-enforcement:T-001",
-      "title": "Default filesystem boundary enforcement / Harden default filesystem boundary enforcement",
-      "status": "done",
-      "priority": 1201,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260321-default-filesystem-boundary-enforcement:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260321-default-filesystem-boundary-enforcement:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=2",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260321-default-filesystem-boundary-enforcement:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260321-default-filesystem-boundary-enforcement/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260321-mutation-trace-fidelity:T-001",
-      "title": "Mutation trace fidelity / Make edit trace bytes and mutation denials more truthful",
-      "status": "done",
-      "priority": 1301,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260321-mutation-trace-fidelity:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260321-mutation-trace-fidelity:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=2",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260321-mutation-trace-fidelity:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260321-mutation-trace-fidelity/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260321-virtual-cwd-path-resolution:T-001",
-      "title": "Virtual cwd and path resolution model / Implement virtual cwd and shared path resolution",
-      "status": "done",
-      "priority": 1401,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260321-virtual-cwd-path-resolution:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260321-virtual-cwd-path-resolution:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260321-virtual-cwd-path-resolution:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260321-virtual-cwd-path-resolution/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260322-builtin-aci-dual-readable-query-tooling:T-001",
-      "title": "Builtin ACI dual-readable output and query tooling / Lock feat plan, tool inventory, and requirements baseline",
-      "status": "done",
-      "priority": 1501,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260322-builtin-aci-dual-readable-query-tooling:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260322-builtin-aci-dual-readable-query-tooling:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=20",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260322-builtin-aci-dual-readable-query-tooling:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260322-builtin-aci-dual-readable-query-tooling/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260322-harness-legacy-feat-cleanup:T-001",
-      "title": "Harness legacy feat cleanup / Migrate legacy feat schema and archive policy safely",
-      "status": "done",
-      "priority": 1601,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260322-harness-legacy-feat-cleanup:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260322-harness-legacy-feat-cleanup:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260322-harness-legacy-feat-cleanup:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260322-harness-legacy-feat-cleanup/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260322-simsh-native-reference-validation-metric-gates:T-001",
-      "title": "simsh-native reference validation and metric gates / Define the benchmark pack and metric-gate schema",
-      "status": "done",
-      "priority": 1701,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260322-simsh-native-reference-validation-metric-gates:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260322-simsh-native-reference-validation-metric-gates:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260322-simsh-native-reference-validation-metric-gates:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260322-simsh-native-reference-validation-metric-gates/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260323-adapter-backed-workload-validation:T-001",
-      "title": "Adapter-backed workload validation / Add reference adapter workload validation",
-      "status": "done",
-      "priority": 1801,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260323-adapter-backed-workload-validation:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260323-adapter-backed-workload-validation:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260323-adapter-backed-workload-validation:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260323-adapter-backed-workload-validation/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260323-adapter-projection-metadata-control-plane:T-001",
-      "title": "Adapter projection metadata and control plane / Add projection metadata and explicit adapter upsert APIs",
-      "status": "done",
-      "priority": 1901,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260323-adapter-projection-metadata-control-plane:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260323-adapter-projection-metadata-control-plane:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260323-adapter-projection-metadata-control-plane:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260323-adapter-projection-metadata-control-plane/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260323-effective-core-default-workspace-hardening:T-001",
-      "title": "Effective-core default workspace hardening / Harden default-workspace engine regressions",
-      "status": "done",
-      "priority": 2001,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260323-effective-core-default-workspace-hardening:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260323-effective-core-default-workspace-hardening:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260323-effective-core-default-workspace-hardening:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260323-effective-core-default-workspace-hardening/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260323-realistic-adapter-projections-managed-memory-views:T-001",
-      "title": "Realistic adapter projections and managed memory views / Upgrade the reference adapter projection model",
-      "status": "done",
-      "priority": 2101,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260323-realistic-adapter-projections-managed-memory-views:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260323-realistic-adapter-projections-managed-memory-views:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260323-realistic-adapter-projections-managed-memory-views:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260323-realistic-adapter-projections-managed-memory-views/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260323-runtime-audit-follow-up-hardening:T-001",
-      "title": "Runtime audit follow-up hardening / Eliminate remaining runtime truth gaps",
-      "status": "done",
-      "priority": 2201,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260323-runtime-audit-follow-up-hardening:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260323-runtime-audit-follow-up-hardening:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-24T10:59:10Z synced from bk-execution-table"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.16,
-      "evidence": [
-        "feat_status=archived",
-        "task_status=done",
-        "selected_task=T-001",
-        "round_count=1",
-        "task_gate_result=pass"
-      ],
-      "evidence_count": 5,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260323-runtime-audit-follow-up-hardening:T-001",
-      "source_ref": ".bagakit/ft-harness/feats-archived/f-20260323-runtime-audit-follow-up-hardening/tasks.json"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
-      "title": "Session lifecycle and policy ceiling / Implement session lifecycle contract and policy ceiling",
-      "status": "blocked",
-      "priority": 101,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-01T17:59:22Z synced from bk-execution-table",
-        "2026-03-23T18:44:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:50:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:52:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:55:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:04:03Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:06:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:07:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:17:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:19:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:27:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:11Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:38:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:41:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:50:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:54:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:38:38Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:39:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:47:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:48:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:57:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:00:36Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:01:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:07:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:09:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:18:17Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:21:16Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:22:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:28:32Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:30:25Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:33:07Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:35:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:37:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:45:52Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:12Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:53:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:55:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:03:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:07:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:08:18Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:12:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:15:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:25:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:28:14Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:36:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:05:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:06:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:11:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:12:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:19:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:23:22Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:24:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:20Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:36:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:37:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:47:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:50:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:51:31Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:57:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:59:10Z upstream row missing during sync; kept as tombstone"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.7,
-      "evidence": [
-        "feat_status=proposal",
-        "task_status=todo",
-        "selected_task=T-001"
-      ],
-      "evidence_count": 3,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260301-session-lifecycle-policy-ceiling/tasks.json",
-      "managed_state": "stale_missing_upstream",
-      "stale_since": "2026-03-23T18:44:19Z"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260301-structured-execution-result-contract:T-001",
-      "title": "Structured execution result contract / Implement structured ExecutionResult as core SSOT",
-      "status": "blocked",
-      "priority": 201,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260301-structured-execution-result-contract:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260301-structured-execution-result-contract:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-01T17:59:22Z synced from bk-execution-table",
-        "2026-03-23T18:44:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:50:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:52:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:55:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:04:03Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:06:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:07:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:17:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:19:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:27:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:11Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:38:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:41:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:50:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:54:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:38:38Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:39:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:47:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:48:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:57:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:00:36Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:01:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:07:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:09:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:18:17Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:21:16Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:22:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:28:32Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:30:25Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:33:07Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:35:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:37:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:45:52Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:12Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:53:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:55:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:03:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:07:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:08:18Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:12:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:15:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:25:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:28:14Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:36:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:05:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:06:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:11:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:12:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:19:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:23:22Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:24:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:20Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:36:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:37:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:47:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:50:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:51:31Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:57:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:59:10Z upstream row missing during sync; kept as tombstone"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.7,
-      "evidence": [
-        "feat_status=proposal",
-        "task_status=todo",
-        "selected_task=T-001"
-      ],
-      "evidence_count": 3,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260301-structured-execution-result-contract:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260301-structured-execution-result-contract/tasks.json",
-      "managed_state": "stale_missing_upstream",
-      "stale_since": "2026-03-23T18:44:19Z"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260301-execution-trace-side-effect-tracking:T-001",
-      "title": "Execution trace side effect tracking / Implement ExecutionTrace side-effect collection",
-      "status": "blocked",
-      "priority": 301,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260301-execution-trace-side-effect-tracking:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260301-execution-trace-side-effect-tracking:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-01T17:59:22Z synced from bk-execution-table",
-        "2026-03-23T18:44:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:50:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:52:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:55:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:04:03Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:06:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:07:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:17:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:19:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:27:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:11Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:38:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:41:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:50:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:54:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:38:38Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:39:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:47:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:48:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:57:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:00:36Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:01:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:07:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:09:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:18:17Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:21:16Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:22:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:28:32Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:30:25Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:33:07Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:35:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:37:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:45:52Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:12Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:53:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:55:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:03:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:07:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:08:18Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:12:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:15:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:25:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:28:14Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:36:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:05:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:06:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:11:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:12:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:19:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:23:22Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:24:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:20Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:36:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:37:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:47:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:50:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:51:31Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:57:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:59:10Z upstream row missing during sync; kept as tombstone"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.7,
-      "evidence": [
-        "feat_status=proposal",
-        "task_status=todo",
-        "selected_task=T-001"
-      ],
-      "evidence_count": 3,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260301-execution-trace-side-effect-tracking:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260301-execution-trace-side-effect-tracking/tasks.json",
-      "managed_state": "stale_missing_upstream",
-      "stale_since": "2026-03-23T18:44:19Z"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260301-adapter-lifecycle-memory-protocol:T-001",
-      "title": "Adapter lifecycle and memory protocol / Implement adapter lifecycle and optional memory hooks",
-      "status": "blocked",
-      "priority": 401,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260301-adapter-lifecycle-memory-protocol:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260301-adapter-lifecycle-memory-protocol:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-01T17:59:22Z synced from bk-execution-table",
-        "2026-03-23T18:44:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:50:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:52:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:55:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:04:03Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:06:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:07:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:17:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:19:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:27:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:11Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:38:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:41:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:50:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:54:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:38:38Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:39:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:47:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:48:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:57:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:00:36Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:01:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:07:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:09:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:18:17Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:21:16Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:22:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:28:32Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:30:25Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:33:07Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:35:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:37:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:45:52Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:12Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:53:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:55:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:03:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:07:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:08:18Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:12:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:15:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:25:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:28:14Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:36:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:05:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:06:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:11:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:12:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:19:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:23:22Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:24:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:20Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:36:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:37:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:47:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:50:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:51:31Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:57:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:59:10Z upstream row missing during sync; kept as tombstone"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.7,
-      "evidence": [
-        "feat_status=proposal",
-        "task_status=todo",
-        "selected_task=T-001"
-      ],
-      "evidence_count": 3,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260301-adapter-lifecycle-memory-protocol:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260301-adapter-lifecycle-memory-protocol/tasks.json",
-      "managed_state": "stale_missing_upstream",
-      "stale_since": "2026-03-23T18:44:19Z"
-    },
-    {
-      "id": "EXEC::bagakit-ft:f-20260301-reference-adapter-e2e-validation:T-001",
-      "title": "Reference adapter end-to-end validation / Implement reference adapter and end-to-end validation",
-      "status": "blocked",
-      "priority": 501,
-      "description": "Execution row from bagakit-ft (bagakit-ft:f-20260301-reference-adapter-e2e-validation:T-001).",
-      "dependencies": [],
-      "acceptance_criteria": [
-        "Source item reaches done/blocked: bagakit-ft:f-20260301-reference-adapter-e2e-validation:T-001",
-        "Validation checks pass for changed scope"
-      ],
-      "files_to_touch": [],
-      "commands": [],
-      "risks": [],
-      "why_now": "",
-      "updates": [
-        "2026-03-01T17:59:22Z synced from bk-execution-table",
-        "2026-03-23T18:44:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:47:59Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:50:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:52:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T18:55:19Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:04:03Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:06:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:07:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:06Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:14:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:17:24Z upstream row missing during sync; kept as tombstone",
-        "2026-03-23T19:19:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:27:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:11Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:34:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:38:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:41:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:50:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T02:54:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:38:38Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:39:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:47:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:48:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T03:57:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:00:36Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:01:10Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:07:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:09:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:18:17Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:21:16Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:22:43Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:28:32Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:30:25Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:33:07Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:35:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:37:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:45:52Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:12Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:48:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:53:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T04:55:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:03:45Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:07:40Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:08:18Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:12:48Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:15:26Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:25:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:28:14Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T05:36:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:05:56Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:06:29Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:11:34Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:12:33Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:19:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:23:22Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:24:02Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:20Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:31:49Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:36:30Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:37:41Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:47:13Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:50:53Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:51:31Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:57:47Z upstream row missing during sync; kept as tombstone",
-        "2026-03-24T10:59:10Z upstream row missing during sync; kept as tombstone"
-      ],
-      "managed_by": "execution-table",
-      "confidence": 0.7,
-      "evidence": [
-        "feat_status=proposal",
-        "task_status=todo",
-        "selected_task=T-001"
-      ],
-      "evidence_count": 3,
-      "source_system": "bagakit-ft",
-      "source_item": "bagakit-ft:f-20260301-reference-adapter-e2e-validation:T-001",
-      "source_ref": ".bagakit/ft-harness/feats/f-20260301-reference-adapter-e2e-validation/tasks.json",
-      "managed_state": "stale_missing_upstream",
-      "stale_since": "2026-03-23T18:44:19Z"
     }
   ],
-  "updated_at": "2026-03-24T10:59:10Z"
+  "updated_at": "2026-03-31T16:13:51Z"
 }

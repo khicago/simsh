@@ -5,19 +5,18 @@
   },
   "detection": {
     "status": "ready",
-    "last_reviewed_at": "2026-03-24T05:55:00Z",
+    "last_reviewed_at": "2026-03-31T08:20:00Z",
     "reviewed_by": "codex",
     "upstream_systems": [
-      "bagakit-ft",
       "manual"
     ],
-    "notes": "Archived bagakit-ft rows remain historical implementation evidence. The active backlog is now a manual review-derived follow-up plan refreshed on 2026-03-24 after re-reading the kernel architecture/backlog docs, re-checking targeted package coverage (`pkg/builtin` 66.8%, `pkg/service/httpapi` 71.1%, `pkg/engine/runtime` 87.1%), and observing repeated low-space interruptions in the default evidence gate."
+    "notes": "Archived and discarded bagakit-ft rows remain historical implementation evidence only. The active backlog is refreshed on 2026-03-31 after re-reading the kernel charter/architecture/backlog docs, re-checking the reference adapter and benchmark suites, and identifying the next current-phase loop as adapter-side realism work that alternates implementation, review, and design-refinement around freshness lifecycle, projection refresh, and workflow transition truth."
   },
   "adapters": [
     {
       "name": "bagakit-ft-default",
       "kind": "bagakit-ft",
-      "enabled": true,
+      "enabled": false,
       "root": ".",
       "weight": 100,
       "detect": {
@@ -37,7 +36,7 @@
     {
       "name": "openspec-default",
       "kind": "openspec",
-      "enabled": true,
+      "enabled": false,
       "root": ".",
       "weight": 80,
       "detect": {
@@ -392,7 +391,7 @@
           "id": "manual-20260324-long-run-temp-space-preflight",
           "title": "Make long-run preflight resilient to transient temp-space failures",
           "source_ref": ".bagakit/long-run/.gen/check_and_resume.sh",
-          "status": "todo",
+          "status": "done",
           "priority": 110,
           "why_now": "The current long-run loop can misclassify actionable work as blocked when temporary-file creation fails transiently, and this repo is currently operating with less than 200 MiB free on `/System/Volumes/Data`, which makes that noise recurring rather than hypothetical.",
           "acceptance_criteria": [
@@ -406,18 +405,201 @@
             ".bagakit/long-run/.gen/initializer_prompt.md"
           ],
           "commands": [
-            "bash .bagakit/long-run/check_and_resume.sh",
-            "bash .bagakit/long-run/ralphloop.sh preflight --json"
+            "bash .bagakit/long-run/ralphloop.sh preflight --json",
+            "bash .bagakit/long-run/check_and_resume.sh"
           ],
-          "confidence": 0.74,
+          "confidence": 0.99,
           "evidence": [
-            "`make lint`, `make check`, and several package-local test runs in this session all failed at least once with `no space left on device` before succeeding again after cache cleanup or retry.",
-            "`docs/.bagakit/inbox/howto-long-run-preflight-rerun.md` already records a concrete initializer incident where a second `check_and_resume.sh` run selected the same row cleanly after a transient temp-file failure.",
-            "The generated `check_and_resume.sh` currently runs validation directly and stops on the first shell failure without classifying low-space issues as retryable loop noise."
+            "`.bagakit/long-run/.gen/check_and_resume.sh` now wraps `validate-long-run.sh` output and prints retryable guidance with exact `bash .bagakit/long-run/ralphloop.sh preflight --json` and `bash .bagakit/long-run/check_and_resume.sh` steps when stderr contains `No space left on device` or `cannot create temp file`.",
+            "`bash .bagakit/long-run/ralphloop.sh preflight --json` exits `0` with `workspace_writable`, `tmp_writable`, and `cache_writable` all passing after the wrapper change.",
+            "`bash .bagakit/long-run/check_and_resume.sh` exits `0` on the healthy workspace after the wrapper change and preserves the same current item selection until the row is marked done.",
+            "Under a shimmed `validate-long-run.sh` that prints `cannot create temp file for here document: No space left on device`, `bash .bagakit/long-run/check_and_resume.sh` exits non-zero and prints the exact retry path instead of only the raw shell error.",
+            "`.bagakit/long-run/.gen/initializer_prompt.md` now tells initializer agents to run `bash .bagakit/long-run/ralphloop.sh preflight --json` and one rerun of `bash .bagakit/long-run/check_and_resume.sh` before marking temp-space failures blocked."
           ],
           "risks": [
             "Keep the runner orchestration-only; do not bury project-specific repair logic inside long-run scripts.",
             "If temp-space failures are actually durable, the new preflight must still stop the loop clearly instead of silently masking the problem."
+          ]
+        },
+        {
+          "id": "manual-20260331-reference-projection-freshness-refresh",
+          "title": "Implement projection freshness lifecycle and explicit refresh invalidation in the reference adapter",
+          "source_ref": "pkg/adapter/reference/adapter.go",
+          "status": "done",
+          "priority": 10,
+          "why_now": "The reference adapter now exposes source and freshness metadata, but freshness is still mostly a static label rather than a real lifecycle. Without explicit stale/live/snapshot transitions and refresh or invalidation seams, adapter-side realism stalls at the presentation layer and later benchmark review cannot distinguish fresh projections from merely renamed metadata.",
+          "acceptance_criteria": [
+            "The reference adapter exposes an explicit control-plane seam for projection refresh or invalidation without making `/memory`, `/resources`, or `/knowledge_base/reference` writable mounts.",
+            "Projected documents and resources can move through a deterministic freshness lifecycle such as `snapshot`, `live`, `stale`, or `updated`, and the current freshness is surfaced consistently in `_index.json`, `/memory/projections.json`, and `/memory/projections.md`.",
+            "Adapter tests cover refresh and invalidation across create, observe, checkpoint, and resume without partial metadata drift or path identity changes.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime` exits 0."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/reference/adapter.go",
+            "pkg/adapter/reference/adapter_test.go",
+            "pkg/adapter/reference/adapter_helpers_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/reference ./pkg/engine/runtime",
+            "go test ./pkg/adapter/reference -run 'TestReferenceAdapter'"
+          ],
+          "dependencies": [],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/adapter/reference/adapter.go` now defines canonical projection freshness states plus explicit `Refresh*` and `Invalidate*` control-plane methods for documents and resources.",
+            "Refresh now preserves existing source metadata by default while invalidation marks existing projections `stale` without changing path identity or mount writeability.",
+            "Managed `/memory/summary.md` now exposes projection-freshness counts, and direct helper tests assert stale/live transitions in `/memory/projections.json` and `/resources/_index.json`.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the freshness lifecycle changes."
+          ],
+          "risks": [
+            "Keep freshness lifecycle adapter-local; do not introduce new core-runtime contracts just to model projection staleness.",
+            "Do not hide refresh semantics behind implicit file writes or mutable mounts; use explicit control-plane methods and deterministic projected views."
+          ]
+        },
+        {
+          "id": "manual-20260331-reference-freshness-evidence-review",
+          "title": "Review freshness and projection-refresh evidence in adapter tests and reference benchmarks",
+          "source_ref": "benchmarks/simsh_native_reference/suite.go",
+          "status": "done",
+          "priority": 20,
+          "why_now": "Once freshness and refresh semantics exist, the next risk is false confidence: the benchmark and adapter tests can still pass while only string-matching a few happy-path fragments. This review slice makes evidence completeness part of the seam, not an afterthought.",
+          "acceptance_criteria": [
+            "The adapter-backed benchmark scenario asserts source and freshness fields by decoding structured projection views rather than relying only on substring checks.",
+            "Reference validation covers at least one refresh or invalidation cycle and fails the scenario if projection freshness evidence regresses.",
+            "`go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference` exits 0 with the stronger assertions."
+          ],
+          "files_to_touch": [
+            "benchmarks/simsh_native_reference/suite.go",
+            "benchmarks/simsh_native_reference/suite_test.go",
+            "pkg/adapter/reference/adapter_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference",
+            "go run ./benchmarks/simsh_native_reference"
+          ],
+          "dependencies": [
+            "manual-20260331-reference-projection-freshness-refresh"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`benchmarks/simsh_native_reference/suite.go` now decodes `/memory/projections.json` into structured projection records and checks source/freshness through refresh and invalidation cycles instead of substring-only matching.",
+            "The adapter-backed reference workload now covers stale and refreshed projection states plus refreshed guide/resource reads before declaring scenario success.",
+            "`benchmarks/simsh_native_reference/README.md` now documents that the adapter-backed lifecycle scenario includes projection invalidation and refresh.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the benchmark evidence tightening."
+          ],
+          "risks": [
+            "Keep the benchmark seam-focused; do not turn reference validation into a product-orchestration harness.",
+            "Strengthen evidence by decoding structured views, but keep the assertions deterministic and lightweight enough to run in ordinary CI loops."
+          ]
+        },
+        {
+          "id": "manual-20260331-adapter-freshness-contract-refine",
+          "title": "Refine the documented adapter-side freshness and managed-memory contract",
+          "source_ref": "docs/architecture-platform-adapter-contract.md",
+          "status": "done",
+          "priority": 30,
+          "why_now": "After one implementation slice and one review slice, the durable rules should be written down before the control plane grows further. Freshness states, refresh triggers, and managed `/memory` boundaries are adapter-facing contracts, and leaving them implicit invites drift across future adapters and benchmarks.",
+          "acceptance_criteria": [
+            "The relevant adapter-side docs explicitly describe freshness states, refresh or invalidation triggers, and how managed `/memory` views relate to projection metadata.",
+            "The refreshed docs keep these semantics out of core packages and align with the charter principle that product workflows remain adapter-local.",
+            "If SOP frontmatter sources change, `docs/must-sop.md` is regenerated and committed."
+          ],
+          "files_to_touch": [
+            "docs/architecture-platform-adapter-contract.md",
+            "docs/architecture-memory-skills-extension.md",
+            "docs/notes-kernel-execution-backlog.md",
+            "docs/must-sop.md"
+          ],
+          "commands": [
+            "sh /Users/bytedance/proj/priv/bagakit/skills/dist_local/bagakit-living-docs/scripts/living-docs-generate-sop.sh .",
+            "git diff -- docs/architecture-platform-adapter-contract.md docs/architecture-memory-skills-extension.md docs/notes-kernel-execution-backlog.md docs/must-sop.md"
+          ],
+          "dependencies": [
+            "manual-20260331-reference-freshness-evidence-review"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`docs/architecture-platform-adapter-contract.md` now defines the canonical adapter-side freshness lifecycle (`snapshot`, `live`, `stale`, `updated`), makes refresh/invalidation ownership explicit, and requires refresh round-trips in adapter contract tests.",
+            "`docs/architecture-memory-skills-extension.md` now states that refresh belongs to the adapter control plane and that `/memory` remains a managed read-only evidence view over projection indexes, summaries, and workflow state.",
+            "`sh /Users/bytedance/proj/priv/bagakit/skills/dist_local/bagakit-living-docs/scripts/living-docs-generate-sop.sh .` exited 0, and `docs/must-sop.md` required no semantic change beyond regeneration."
+          ],
+          "risks": [
+            "Do not let doc refinement silently widen the contract beyond what code and tests actually guarantee.",
+            "Keep the narrative centered on adapter seams and managed views rather than reintroducing product semantics into kernel docs."
+          ]
+        },
+        {
+          "id": "manual-20260331-reference-workflow-transition-control-plane",
+          "title": "Implement an explicit workflow-transition control plane over managed `/memory` views",
+          "source_ref": "pkg/adapter/reference/adapter.go",
+          "status": "done",
+          "priority": 40,
+          "why_now": "Current workflow state is derived only from trace evidence. That is useful, but still too weak for a realistic non-core harness layer: adapters need a minimal explicit way to pin, override, or annotate workflow transitions without turning `/memory` into a writable scratch mount or leaking product workflow logic into core.",
+          "acceptance_criteria": [
+            "The reference adapter exposes a minimal workflow-transition control plane that can record explicit status or reason updates while preserving the existing trace-derived defaults.",
+            "`/memory/workflows.json`, `/memory/workflows.md`, and `/memory/status.json` surface both the current workflow status and whether it came from trace evidence or explicit adapter control-plane action.",
+            "Adapter tests cover checkpoint and resume with both trace-driven and control-plane-driven workflow transitions.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime` exits 0."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/reference/adapter.go",
+            "pkg/adapter/reference/adapter_test.go",
+            "pkg/adapter/reference/adapter_helpers_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/reference ./pkg/engine/runtime",
+            "go test ./pkg/adapter/reference -run 'TestReferenceAdapter'"
+          ],
+          "dependencies": [
+            "manual-20260331-adapter-freshness-contract-refine"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/adapter/reference/adapter.go` now adds explicit `SetWorkflowStatus` and `ClearWorkflowStatus` control-plane methods plus `status_source` and `status_reason` fields on workflow views.",
+            "Managed `/memory/workflows.json`, `/memory/workflows.md`, and `/memory/status.json` now distinguish trace-derived workflow state from control-plane overrides without discarding trace evidence.",
+            "`pkg/adapter/reference/adapter_helpers_test.go` and `pkg/adapter/reference/adapter_test.go` now cover override, clear, and checkpoint/resume behavior for workflow transition provenance.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime` and `go test ./...` both exited 0 after the workflow control-plane changes."
+          ],
+          "risks": [
+            "Keep the transition model generic and adapter-local; avoid baking product-specific workflow graphs into the reference adapter.",
+            "Do not let explicit status overrides erase the underlying trace evidence that justified the transition in the first place."
+          ]
+        },
+        {
+          "id": "manual-20260331-reference-workflow-proof-review",
+          "title": "Review workflow-transition proof and adapter-backed workload realism end to end",
+          "source_ref": "benchmarks/simsh_native_reference/suite.go",
+          "status": "done",
+          "priority": 50,
+          "why_now": "Explicit workflow transitions will only be valuable if the reference workload and gate logic actually depend on them. This closing review slice checks that the new control plane remains truthful, benchmark-visible, and still downstream from kernel contracts.",
+          "acceptance_criteria": [
+            "The adapter-backed reference workload exercises both trace-driven and control-plane-driven workflow transitions across checkpoint and resume.",
+            "Scenario success and evidence gating fail when workflow status, evidence source, or managed-memory summaries regress.",
+            "`go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime` and `go test ./...` both exit 0."
+          ],
+          "files_to_touch": [
+            "benchmarks/simsh_native_reference/suite.go",
+            "benchmarks/simsh_native_reference/suite_test.go",
+            "pkg/adapter/reference/adapter_test.go",
+            "docs/notes-kernel-execution-backlog.md"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime",
+            "go test ./..."
+          ],
+          "dependencies": [
+            "manual-20260331-reference-workflow-transition-control-plane"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`benchmarks/simsh_native_reference/suite.go` now proves workflow-transition provenance end to end by toggling a control-plane override through close/resume and then clearing it back to trace-derived status.",
+            "The adapter-backed benchmark now decodes workflow JSON structurally and requires both `control_plane` and `trace` workflow states to succeed before the scenario passes.",
+            "`benchmarks/simsh_native_reference/README.md` now documents workflow-transition provenance as part of the adapter-backed lifecycle scenario.",
+            "`go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` both exited 0 after the proof pass."
+          ],
+          "risks": [
+            "Keep the review anchored on seam truth and benchmark evidence, not on adding a larger product workflow harness.",
+            "If the benchmark reveals a contract mismatch, fix the contract and tests together instead of accepting a cosmetic workflow view."
           ]
         }
       ]

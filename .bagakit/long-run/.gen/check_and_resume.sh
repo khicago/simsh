@@ -28,6 +28,42 @@ archive_disabled="${BAGAKIT_LONG_RUN_ARCHIVE_DISABLED:-0}"
 archive_file_override="${BAGAKIT_LONG_RUN_ARCHIVE_FILE:-}"
 archive_done_keep="${BAGAKIT_LONG_RUN_ARCHIVE_DONE_KEEP:-120}"
 archive_max_per_run="${BAGAKIT_LONG_RUN_ARCHIVE_MAX_PER_RUN:-60}"
+preflight_retry_cmd="bash .bagakit/long-run/ralphloop.sh preflight --json"
+resume_retry_cmd="bash .bagakit/long-run/check_and_resume.sh"
+
+is_retryable_temp_space_failure() {
+  local text="${1:-}"
+  printf '%s\n' "$text" | grep -Eiq 'No space left on device|cannot create temp file'
+}
+
+run_validate_or_report_retryable_failure() {
+  local output rc
+  set +e
+  output="$(bash "$validate_script" "$project_root" 2>&1)"
+  rc=$?
+  set -e
+
+  if [[ -n "$output" ]]; then
+    if [[ "$rc" -eq 0 ]]; then
+      printf '%s\n' "$output"
+    else
+      printf '%s\n' "$output" >&2
+    fi
+  fi
+
+  if [[ "$rc" -eq 0 ]]; then
+    return 0
+  fi
+
+  if is_retryable_temp_space_failure "$output"; then
+    echo "warn: validate-long-run.sh hit a retryable temp-space or temp-file failure." >&2
+    echo "next: ${preflight_retry_cmd}" >&2
+    echo "next: ${resume_retry_cmd}" >&2
+    echo "blocked only if the preflight sanity check or the rerun fails again." >&2
+  fi
+
+  return "$rc"
+}
 
 echo "== Bagakit Long Run: check + resume =="
 
@@ -70,7 +106,7 @@ if [[ -e "${harness_dir}/init.sh" || -e "${harness_dir}/initial_prompt.md" ]]; t
 fi
 echo "self-check: managed runtime layout ok"
 
-bash "$validate_script" "$project_root"
+run_validate_or_report_retryable_failure
 
 echo
 echo "== Execution table archive maintenance =="
@@ -153,7 +189,7 @@ echo "setup) export BAGAKIT_LONG_RUN_ARCHIVE_DONE_KEEP=120 BAGAKIT_LONG_RUN_ARCH
 echo "setup) optional rollback only: export BAGAKIT_LONG_RUN_LEGACY_RC_ONLY=1"
 echo "0) ${rel_harness}/ralphloop-runner.sh (continuous loop; requires BAGAKIT_AGENT_CMD/BAGAKIT_AGENT_CLI)"
 echo "0b) ${rel_harness}/ralphloop.sh pulse --endless (single pulse fallback)"
-echo "0c) preflight check: python3 \"${skill_dir}/scripts/long-run-loop.py\" preflight \"${project_root}\" --json"
+echo "0c) ${preflight_retry_cmd}  # tiny-write sanity check before retrying temp-space failures"
 echo "1) ${rel_harness}/.gen/detect_prompt.md (when adding/changing upstream systems)"
 echo "2) ${rel_harness}/.gen/initializer_prompt.md for initializer pass"
 echo "3) ${rel_harness}/.gen/coding_prompt.md for coding pass"

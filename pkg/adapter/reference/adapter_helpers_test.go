@@ -252,6 +252,184 @@ func TestNewNormalizesProjectionMetadataKeys(t *testing.T) {
 	}
 }
 
+func TestNormalizeProjectionFreshnessRejectsUnknownValues(t *testing.T) {
+	tests := []struct {
+		raw  string
+		want string
+	}{
+		{raw: "live", want: "live"},
+		{raw: " stale ", want: "stale"},
+		{raw: "unexpected", want: ""},
+		{raw: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		if got := normalizeProjectionFreshness(tt.raw); got != tt.want {
+			t.Fatalf("normalizeProjectionFreshness(%q) = %q, want %q", tt.raw, got, tt.want)
+		}
+	}
+}
+
+func TestRefreshAndInvalidateProjectionMetadata(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"catalog/index.json": "{\"ok\":true}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"catalog/index.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+	})
+
+	adapter.InvalidateDocument("guide.md")
+	adapter.InvalidateResource("catalog/index.json")
+	staleProjection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(stale) error = %v", err)
+	}
+
+	staleIndexRaw, err := staleProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	if err != nil {
+		t.Fatalf("read stale projections error = %v", err)
+	}
+	staleView := decodeProjectionViewHelper(t, []byte(staleIndexRaw))
+	if record := requireProjectionRecordHelper(t, staleView.Documents, "/knowledge_base/reference/guide.md"); record.Source != "knowledge_sync" || record.Freshness != "stale" {
+		t.Fatalf("stale document projection = %+v, want knowledge_sync/stale", record)
+	}
+	if record := requireProjectionRecordHelper(t, staleView.Resources, "/resources/catalog/index.json"); record.Source != "workflow_catalog" || record.Freshness != "stale" {
+		t.Fatalf("stale resource projection = %+v, want workflow_catalog/stale", record)
+	}
+	staleSummary, err := staleProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	if err != nil {
+		t.Fatalf("read stale summary error = %v", err)
+	}
+	if !strings.Contains(staleSummary, "- stale: 2") {
+		t.Fatalf("stale summary = %q, want stale count", staleSummary)
+	}
+	staleResourceIndex, err := staleProjection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	if err != nil {
+		t.Fatalf("read stale resource index error = %v", err)
+	}
+	staleResourceRecords := decodeProjectionRecordsHelper(t, []byte(staleResourceIndex))
+	if record := requireProjectionRecordHelper(t, staleResourceRecords, "/resources/catalog/index.json"); record.Freshness != "stale" {
+		t.Fatalf("stale resource index record = %+v, want stale freshness", record)
+	}
+
+	adapter.RefreshDocument("guide.md", "# Guide\nfresh\n", ProjectionMetadata{})
+	adapter.RefreshResource("catalog/index.json", "{\"ok\":false}\n", ProjectionMetadata{Source: "catalog_refresh"})
+	adapter.RefreshDocument("missing.md", "# Missing\n", ProjectionMetadata{})
+	adapter.RefreshResource("missing.json", "{\"missing\":true}\n", ProjectionMetadata{})
+	adapter.InvalidateDocument("missing.md")
+	adapter.InvalidateResource("missing.json")
+
+	liveProjection, err := adapter.buildProjection(sessionState{Freshness: "resumed"})
+	if err != nil {
+		t.Fatalf("buildProjection(live) error = %v", err)
+	}
+	liveIndexRaw, err := liveProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	if err != nil {
+		t.Fatalf("read live projections error = %v", err)
+	}
+	liveView := decodeProjectionViewHelper(t, []byte(liveIndexRaw))
+	if record := requireProjectionRecordHelper(t, liveView.Documents, "/knowledge_base/reference/guide.md"); record.Source != "knowledge_sync" || record.Freshness != "live" {
+		t.Fatalf("live document projection = %+v, want knowledge_sync/live", record)
+	}
+	if record := requireProjectionRecordHelper(t, liveView.Resources, "/resources/catalog/index.json"); record.Source != "catalog_refresh" || record.Freshness != "live" {
+		t.Fatalf("live resource projection = %+v, want catalog_refresh/live", record)
+	}
+	guideRaw, err := liveProjection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/guide.md")
+	if err != nil {
+		t.Fatalf("read refreshed guide error = %v", err)
+	}
+	if guideRaw != "# Guide\nfresh\n" {
+		t.Fatalf("refreshed guide = %q, want %q", guideRaw, "# Guide\nfresh\n")
+	}
+	liveSummary, err := liveProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	if err != nil {
+		t.Fatalf("read live summary error = %v", err)
+	}
+	if !strings.Contains(liveSummary, "- live: 2") {
+		t.Fatalf("live summary = %q, want live count", liveSummary)
+	}
+	liveResourceIndex, err := liveProjection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	if err != nil {
+		t.Fatalf("read live resource index error = %v", err)
+	}
+	liveResourceRecords := decodeProjectionRecordsHelper(t, []byte(liveResourceIndex))
+	if record := requireProjectionRecordHelper(t, liveResourceRecords, "/resources/catalog/index.json"); record.Source != "catalog_refresh" || record.Freshness != "live" {
+		t.Fatalf("live resource index record = %+v, want catalog_refresh/live", record)
+	}
+	if len(liveView.Documents) != 1 {
+		t.Fatalf("live document projections = %+v, want missing refresh to avoid creating a new projection", liveView.Documents)
+	}
+	if len(liveView.Resources) != 1 {
+		t.Fatalf("live resource projections = %+v, want missing refresh to avoid creating a new projection", liveView.Resources)
+	}
+}
+
+func TestWorkflowControlPlaneOverridesTraceStatus(t *testing.T) {
+	adapter := New(Options{
+		Workflows: []WorkflowSpec{
+			{
+				ID:              "deliver",
+				Title:           "Deliver",
+				ResourcePaths:   []string{"/resources/catalog/index.json"},
+				ExpectedOutputs: []string{"/task_outputs/final.md"},
+			},
+		},
+	})
+	state := sessionState{
+		Freshness:      "observed",
+		ReadResources:  []string{"/resources/catalog/index.json"},
+		WrittenOutputs: []string{"/task_outputs/final.md"},
+	}
+
+	adapter.SetWorkflowStatus("deliver", "blocked", "awaiting approval")
+	projection, err := adapter.buildProjection(state)
+	if err != nil {
+		t.Fatalf("buildProjection(workflow override) error = %v", err)
+	}
+	workflowsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.json")
+	if err != nil {
+		t.Fatalf("read workflow override json error = %v", err)
+	}
+	workflows := decodeWorkflowViewsHelper(t, []byte(workflowsRaw))
+	deliver := requireWorkflowViewHelper(t, workflows, "deliver")
+	if deliver.Status != "blocked" || deliver.StatusSource != "control_plane" || deliver.StatusReason != "awaiting approval" {
+		t.Fatalf("workflow override = %+v, want blocked/control_plane/awaiting approval", deliver)
+	}
+	if !containsLine(deliver.Evidence, "/task_outputs/final.md") {
+		t.Fatalf("workflow override evidence = %+v, want preserved trace evidence", deliver.Evidence)
+	}
+	workflowsSummary, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.md")
+	if err != nil {
+		t.Fatalf("read workflow override summary error = %v", err)
+	}
+	if !strings.Contains(workflowsSummary, "source: control_plane") || !strings.Contains(workflowsSummary, "reason: awaiting approval") {
+		t.Fatalf("workflow override summary = %q, want source and reason", workflowsSummary)
+	}
+
+	adapter.ClearWorkflowStatus("deliver")
+	projection, err = adapter.buildProjection(state)
+	if err != nil {
+		t.Fatalf("buildProjection(clear workflow override) error = %v", err)
+	}
+	workflowsRaw, err = projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.json")
+	if err != nil {
+		t.Fatalf("read cleared workflow json error = %v", err)
+	}
+	workflows = decodeWorkflowViewsHelper(t, []byte(workflowsRaw))
+	deliver = requireWorkflowViewHelper(t, workflows, "deliver")
+	if deliver.Status != "completed" || deliver.StatusSource != "trace" || deliver.StatusReason != "" {
+		t.Fatalf("workflow after clear = %+v, want completed/trace/blank", deliver)
+	}
+}
+
 func decodeProjectionRecordsHelper(t *testing.T, raw []byte) []projectionRecord {
 	t.Helper()
 	var records []projectionRecord
@@ -277,6 +455,17 @@ func decodeWorkflowViewsHelper(t *testing.T, raw []byte) []workflowView {
 		t.Fatalf("decode workflow views failed: %v", err)
 	}
 	return workflows
+}
+
+func requireWorkflowViewHelper(t *testing.T, workflows []workflowView, id string) workflowView {
+	t.Helper()
+	for _, workflow := range workflows {
+		if workflow.ID == id {
+			return workflow
+		}
+	}
+	t.Fatalf("workflow %q not found in %+v", id, workflows)
+	return workflowView{}
 }
 
 func requireProjectionRecordHelper(t *testing.T, records []projectionRecord, target string) projectionRecord {

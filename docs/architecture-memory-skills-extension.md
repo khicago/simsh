@@ -65,11 +65,16 @@ Keep write/update flows explicit and auditable via dedicated commands/APIs (not 
 - register/unregister/update skill entries
 - promote/curate memory entries
 - trigger reindex/snapshot/hot-reload
+- refresh or invalidate projected resources/documents
+- advance adapter-local workflow or curation state when the adapter owns that policy
 
 ## Suggested Conventions
 
 - Default mounts to read-only; use `PathMeta.access/capabilities` for planner-facing clarity.
 - Define source precedence clearly (recommended: workspace > user-managed > bundled).
+- Keep projection freshness explicit and small-state, not prose-only. Prefer canonical states such as `snapshot`, `live`, `stale`, and `updated`, and surface them in sidecars or managed summary views.
+- Keep refresh ownership in the control plane. If a projection becomes stale, expose that staleness in `/memory` or sidecar metadata, but do not make the projected mount itself the write path for refresh.
+- Treat `/memory` as a managed read-only view over adapter state. Raw observations, projection indexes, curated summaries, and workflow views may share the namespace, but they should remain conceptually distinct and auditable.
 - Add load-time gating for skills (required bins/env/config/os), but keep fallback predictable.
 - Handle missing memory/resource files gracefully (`not found` should be a normal result path, not a hard failure).
 - Apply limits from day one (scan count, loaded entries, prompt injection size, debounce/watch intervals).

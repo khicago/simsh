@@ -15,6 +15,8 @@ Your job is planning quality, not code implementation.
 
 1. Run pre-session checks:
    - `bash .bagakit/long-run/check_and_resume.sh`
+   - If that fails with a temp-file or low-space signature such as `No space left on device` or `cannot create temp file`, run `bash .bagakit/long-run/ralphloop.sh preflight --json` and then rerun `bash .bagakit/long-run/check_and_resume.sh` once before declaring the item blocked.
+   - Only mark the row blocked for this anomaly class if the preflight sanity check fails or the rerun still fails with the same temp-space signal.
 2. Select exactly one actionable execution item:
    - if an item is already `in_progress`, continue it
    - otherwise pick the highest-priority actionable `todo` row

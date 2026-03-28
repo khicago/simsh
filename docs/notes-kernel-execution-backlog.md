@@ -300,7 +300,7 @@ Optional but recommended:
 
 ### K-011: Close runtime truth gaps found by post-implementation audit
 - Feat: `f-20260323-runtime-audit-follow-up-hardening`
-- Status: in_progress
+- Status: done
 - Why now: Recent audit findings highlighted three remaining trust gaps: output redirection atomicity under write limits, canonical metadata lookup in the reference adapter constructor, and benchmark success semantics that could still count business-only success without full evidence.
 - Kernel invariant: runtime, adapter, and benchmark contracts must agree on truth; no partial side effects, no dual naming of the same projected object, and no success metrics that ignore missing evidence.
 - Files to touch:
@@ -318,8 +318,106 @@ Optional but recommended:
   - Benchmark session/async success requires evidence-complete scenarios whenever trace or assertion checks are defined.
 - Notes:
   - Prefer global fixes over case-by-case patches: payload-dependent redirection preflight, canonical metadata maps, and one benchmark success helper.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260323-runtime-audit-follow-up-hardening/`.
 - Rollback note:
   - If any fix changes intended contract semantics, update the benchmark/tests/docs together rather than keeping mismatched behavior and evidence.
+
+### K-012: Add a deterministic projection freshness lifecycle and refresh policy
+- Status: done
+- Why now: The reference adapter now exposes multiple projected namespaces and metadata, but freshness is still mostly a free-form label instead of a lifecycle. That leaves a realism gap exactly where the adapter contract says projected content must distinguish live, cached, snapshot, stale, or partial/error materialization explicitly.
+- Kernel invariant: adapter-side freshness and materialization state must be explicit, deterministic, and machine-visible; refresh or invalidation must not rely on hidden runtime channels.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `benchmarks/simsh_native_reference/README.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+- Done gate:
+  - Projected documents and resources move through a deterministic freshness/materialization model instead of only carrying free-form freshness strings.
+  - Refresh or invalidate flows update sidecars, indexes, and managed `/memory` summaries consistently.
+  - The reference workload covers at least one stale-to-refreshed or invalidated-to-refreshed round-trip without special-casing core semantics.
+- Notes:
+  - Keep the lifecycle adapter-local; do not add new core-runtime contracts for this.
+  - Prefer state that is legible in `/memory/projections.json`, `_index.json`, or equivalent sidecars over hidden control-plane-only semantics.
+  - The reference adapter now exposes canonical freshness states plus explicit `Refresh*` / `Invalidate*` control-plane methods.
+  - Adapter tests and the reference benchmark now cover a stale-to-refreshed round-trip through session close/resume, and managed `/memory/summary.md` exposes projection-freshness counts.
+- Rollback note:
+  - If a richer lifecycle becomes too noisy, keep canonical state names plus refresh hooks and simplify the rendered summaries instead of reverting to opaque free-form labels.
+
+### K-013: Audit and refine the adapter-side freshness and managed-memory contract
+- Status: done
+- Why now: Once freshness becomes a real lifecycle, the highest-value review is to verify that the implementation still stays adapter-local, evidence-complete, and aligned with the documented `/memory` contract before another feature wave builds on top of it.
+- Kernel invariant: business-visible adapter success must still require evidence-complete freshness and memory semantics; `/memory` remains a managed read-only view rather than an implicit writable control plane.
+- Files to touch:
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `docs/notes-kernel-execution-backlog.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+- Done gate:
+  - Review produces either explicit no-findings or a tightly bounded follow-up finding list.
+  - Benchmark and adapter tests assert freshness/materialization evidence, not only business-visible output.
+  - Docs clearly state refresh ownership, managed-memory curation boundaries, and the allowed relationship between workflow state and trace-derived evidence.
+- Notes:
+  - This is intentionally a review/refine loop, not another broad implementation wave.
+  - If the review uncovers contract drift, tighten the contract before widening the adapter surface.
+  - The evidence-review slice is complete: the reference benchmark now decodes projection views structurally and covers stale-to-refreshed projection state.
+  - The doc/backlog refinement is now complete: the written adapter contract names the freshness lifecycle explicitly and keeps refresh ownership in the adapter control plane.
+  - `docs/architecture-memory-skills-extension.md` now makes managed `/memory` boundaries explicit so future adapter work does not blur raw observations, projection indexes, curated summaries, and workflow views.
+- Rollback note:
+  - If the review suggests the current slice is too broad, keep the finished freshness lifecycle and reduce the next implementation scope rather than weakening evidence requirements.
+
+### K-014: Implement explicit managed-memory curation and workflow transitions
+- Status: todo
+- Why now: The reference adapter already proves projection and trace consumption, but managed `/memory` still behaves mainly like a derived report over trace sets. The next realism step is one explicit curation layer plus workflow transitions that are adapter-owned rather than purely heuristic.
+- Kernel invariant: `/memory` remains a managed read-only view over adapter-owned state; raw observations, curated summaries, and workflow transitions must stay explicit and auditable.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+- Done gate:
+  - `/memory` exposes curated read-only promotion views that are distinct from raw projection indexes and raw observation logs.
+  - Workflow state advances through explicit adapter-local transition rules rather than ad hoc trace heuristics alone.
+  - The reference workload covers at least one non-happy-path transition such as blocked-to-resolved-to-completed across checkpoint or resume.
+- Notes:
+  - Keep curation and transition semantics adapter-local and deterministic.
+  - Prefer one small realistic managed-memory layer over a large pseudo-product framework.
+- Rollback note:
+  - If explicit workflow transitions prove too product-specific, keep the curated memory views and narrow transitions to the smallest generic state machine that still matches tests and docs.
+
+### K-015: Add a `/skills` projection driver with explicit eligibility metadata
+- Status: todo
+- Why now: After freshness and managed-memory semantics become trustworthy, the biggest remaining adapter-side namespace gap is `/skills`. The architecture already expects a skill projection seam, but the reference adapter does not yet exercise it.
+- Kernel invariant: skill projection remains a read-only adapter concern; eligibility, precedence, and source metadata must be surfaced explicitly rather than by silent omission.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `docs/architecture-memory-skills-extension.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+- Done gate:
+  - The reference adapter can project a stable read-only `/skills` namespace with index or metadata views.
+  - Skill entries expose source, freshness, and eligibility metadata in a deterministic machine-readable shape.
+  - The reference workload includes at least one skill-backed workflow that proves selection or non-selection without pushing skill logic into core packages.
+- Notes:
+  - This is a next-phase candidate after the current freshness and managed-memory loop closes cleanly.
+  - Do not let `/skills` widen into a product-specific registry before freshness and workflow evidence are already solid.
+- Rollback note:
+  - If `/skills` is still too early, preserve the contract wording and move the item to the next phase rather than smuggling skill semantics into unrelated adapter work.
 
 ## Backlog Rules
 

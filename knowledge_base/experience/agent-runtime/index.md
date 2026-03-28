@@ -1,7 +1,7 @@
 ---
 title: Frontier Agent Team Experience Index
-summary: Index of practical lessons from frontier agent teams on coding agents, runtimes, traces, review loops, and isolation, with direct implications for simsh kernel design.
-updated: 2026-03-22
+summary: Index of practical lessons from frontier agent teams on coding agents, runtimes, traces, review loops, and isolation, with direct implications for simsh kernel and adapter-side design.
+updated: 2026-03-31
 tags:
   - agent-runtime
   - coding-agents
@@ -20,6 +20,8 @@ tags:
 - `knowledge_base/experience/agent-runtime/openai-introducing-codex-2025-05-16.md`
 - `knowledge_base/experience/agent-runtime/openai-introducing-the-codex-app-2026-02-02.md`
 - `knowledge_base/experience/agent-runtime/openai-harness-engineering-2026-02-11.md`
+- `knowledge_base/experience/agent-runtime/openhands-runtime-architecture-2026-03-31.md`
+- `knowledge_base/experience/agent-runtime/swe-rex-runtime-framework-2026-03-31.md`
 - `knowledge_base/experience/agent-runtime/cognition-how-cognition-uses-devin-to-build-devin-2026-02-27.md`
 - `knowledge_base/experience/agent-runtime/cognition-closing-the-agent-loop-2026-02-10.md`
 - `knowledge_base/experience/agent-runtime/cognition-agent-trace-2026-01-29.md`
@@ -32,8 +34,10 @@ tags:
 - Context preservation and traceability are becoming first-class.
 - Review and correction loops are the next bottleneck after generation.
 - Isolation and scoped concurrency matter once agents scale.
+- Runtime/provider seams and refresh policy need to stay explicit as systems become more dynamic.
 
 ## Relevance To simsh
 - `simsh` should optimize for trustworthy file editing, search, and shell execution.
 - Kernel contracts should be explicit enough that agents do not need to guess at path semantics or side effects.
 - `ExecutionTrace`, reviewability, and scoped sessions should be treated as core capabilities rather than accessories.
+- Adapter-side freshness, refresh, and managed-memory behavior should be legible in projected state instead of hidden in backend control flow.

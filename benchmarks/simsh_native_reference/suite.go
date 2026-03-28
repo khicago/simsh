@@ -53,6 +53,25 @@ type ScenarioReport struct {
 	Notes                 []string `json:"notes,omitempty"`
 }
 
+type projectionRecordView struct {
+	Path      string `json:"path"`
+	Source    string `json:"source"`
+	Freshness string `json:"freshness"`
+}
+
+type projectionIndexView struct {
+	Documents []projectionRecordView `json:"documents,omitempty"`
+	Resources []projectionRecordView `json:"resources,omitempty"`
+}
+
+type workflowViewRecord struct {
+	ID           string   `json:"id"`
+	Status       string   `json:"status"`
+	StatusSource string   `json:"status_source,omitempty"`
+	StatusReason string   `json:"status_reason,omitempty"`
+	Evidence     []string `json:"evidence,omitempty"`
+}
+
 type SuiteReport struct {
 	GeneratedAt time.Time        `json:"generated_at"`
 	Thresholds  GateThresholds   `json:"thresholds"`
@@ -236,20 +255,20 @@ func runRelativeNavigationScenario() (ScenarioReport, error) {
 	}
 	duration := time.Since(start).Milliseconds()
 	return ScenarioReport{
-		Name:              "relative_navigation_session",
-		Category:          "relative_path_navigation",
-		Success:           success,
-		SessionScoped:     true,
-		AsyncCandidate:    false,
-		PatchWorkflow:     false,
-		DurationMS:        duration,
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "relative_navigation_session",
+		Category:              "relative_path_navigation",
+		Success:               success,
+		SessionScoped:         true,
+		AsyncCandidate:        false,
+		PatchWorkflow:         false,
+		DurationMS:            duration,
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -290,20 +309,20 @@ func runInspectEditWriteScenario() (ScenarioReport, error) {
 		notes = append(notes, "inspect/edit/write loop did not produce final reviewable output")
 	}
 	return ScenarioReport{
-		Name:              "inspect_edit_write_loop",
-		Category:          "file_inspect_edit_write_loops",
-		Success:           success,
-		SessionScoped:     true,
-		AsyncCandidate:    true,
-		PatchWorkflow:     true,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "inspect_edit_write_loop",
+		Category:              "file_inspect_edit_write_loops",
+		Success:               success,
+		SessionScoped:         true,
+		AsyncCandidate:        true,
+		PatchWorkflow:         true,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -333,20 +352,20 @@ func runMountBoundaryScenario() (ScenarioReport, error) {
 		notes = append(notes, "mount or synthetic boundary was not denied as expected")
 	}
 	return ScenarioReport{
-		Name:              "mount_boundary_relative_path",
-		Category:          "mount_synthetic_capability_boundaries",
-		Success:           success,
-		SessionScoped:     false,
-		AsyncCandidate:    true,
-		PatchWorkflow:     false,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "mount_boundary_relative_path",
+		Category:              "mount_synthetic_capability_boundaries",
+		Success:               success,
+		SessionScoped:         false,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -399,19 +418,19 @@ func runCommandNamespaceScenario() (ScenarioReport, error) {
 		notes = append(notes, "command namespace normalization or actionable path-like error handling regressed")
 	}
 	return ScenarioReport{
-		Name:              "command_namespace_consistency",
-		Category:          "command_namespace_consistency",
-		Success:           success,
-		SessionScoped:     false,
-		AsyncCandidate:    true,
-		PatchWorkflow:     false,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: 0,
-		TraceChecksTotal:  0,
+		Name:                  "command_namespace_consistency",
+		Category:              "command_namespace_consistency",
+		Success:               success,
+		SessionScoped:         false,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     0,
+		TraceChecksTotal:      0,
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -447,20 +466,20 @@ func runTracePlanningScenario() (ScenarioReport, error) {
 		notes = append(notes, "trace-planning scenario failed to produce readable output")
 	}
 	return ScenarioReport{
-		Name:              "trace_consumable_planning",
-		Category:          "trace_consumable_planning",
-		Success:           success,
-		SessionScoped:     false,
-		AsyncCandidate:    true,
-		PatchWorkflow:     false,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "trace_consumable_planning",
+		Category:              "trace_consumable_planning",
+		Success:               success,
+		SessionScoped:         false,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -515,6 +534,10 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	initialProjectionView, err := decodeProjectionIndex(projectionsView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
 	workflowsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.md", contract.ExecutionPolicy{})
 	if err != nil {
 		return ScenarioReport{}, err
@@ -531,10 +554,78 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	adapter.InvalidateDocument("guide.md")
+	adapter.InvalidateResource("checklists/plan.json")
 	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
 		return ScenarioReport{}, err
 	}
 	resumed, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	staleProjectionsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	staleProjectionView, err := decodeProjectionIndex(staleProjectionsView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	staleSummaryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.RefreshDocument("guide.md", "# Guide\nhello refreshed\n", referenceadapter.ProjectionMetadata{})
+	adapter.RefreshResource("checklists/plan.json", "{\"steps\":[\"refresh\"]}\n", referenceadapter.ProjectionMetadata{})
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	refreshedGuide, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	refreshedResource, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	refreshedProjectionsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	refreshedProjectionView, err := decodeProjectionIndex(refreshedProjectionsView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.SetWorkflowStatus("draft-plan", "blocked", "awaiting review")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	overrideWorkflowsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	overrideWorkflowState, err := decodeWorkflowViews(overrideWorkflowsView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.ClearWorkflowStatus("draft-plan")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	traceWorkflowsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	traceWorkflowState, err := decodeWorkflowViews(traceWorkflowsView.Result.Stdout)
 	if err != nil {
 		return ScenarioReport{}, err
 	}
@@ -565,22 +656,46 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	})
 	tracePassed := readTracePassed + resourceTracePassed + writeTracePassed + denyTracePassed
 	traceTotal := readTraceTotal + resourceTraceTotal + writeTraceTotal + denyTraceTotal
+	initialGuideProjection, initialGuideOK := findProjectionRecord(initialProjectionView.Documents, "/knowledge_base/reference/guide.md")
+	initialResourceProjection, initialResourceOK := findProjectionRecord(initialProjectionView.Resources, "/resources/checklists/plan.json")
+	staleGuideProjection, staleGuideOK := findProjectionRecord(staleProjectionView.Documents, "/knowledge_base/reference/guide.md")
+	staleResourceProjection, staleResourceOK := findProjectionRecord(staleProjectionView.Resources, "/resources/checklists/plan.json")
+	refreshedGuideProjection, refreshedGuideOK := findProjectionRecord(refreshedProjectionView.Documents, "/knowledge_base/reference/guide.md")
+	refreshedResourceProjection, refreshedResourceOK := findProjectionRecord(refreshedProjectionView.Resources, "/resources/checklists/plan.json")
+	overrideWorkflow, overrideWorkflowOK := findWorkflowView(overrideWorkflowState, "draft-plan")
+	traceWorkflow, traceWorkflowOK := findWorkflowView(traceWorkflowState, "draft-plan")
 	assertionPassed, assertionTotal := countChecks(
 		strings.Contains(readGuide.Result.Stdout, "# Guide"),
 		strings.Contains(readResource.Result.Stdout, "\"steps\""),
-		strings.Contains(projectionsView.Result.Stdout, "\"source\": \"knowledge_sync\"") &&
-			strings.Contains(projectionsView.Result.Stdout, "\"freshness\": \"live\""),
+		initialGuideOK && initialGuideProjection.Source == "knowledge_sync" && initialGuideProjection.Freshness == "snapshot",
+		initialResourceOK && initialResourceProjection.Source == "workflow_catalog" && initialResourceProjection.Freshness == "live",
 		strings.Contains(workflowsView.Result.Stdout, "[in_progress] Draft plan (draft-plan)"),
 		writeOutput.Result.ExitCode == 0,
 		deniedWrite.Result.ExitCode != 0,
 		len(checkpoint.State.Opaque[adapter.AdapterID()]) > 0,
 		len(resumed.State.Opaque[adapter.AdapterID()]) > 0,
+		staleGuideOK && staleGuideProjection.Source == "knowledge_sync" && staleGuideProjection.Freshness == "stale",
+		staleResourceOK && staleResourceProjection.Source == "workflow_catalog" && staleResourceProjection.Freshness == "stale",
+		strings.Contains(staleSummaryView.Result.Stdout, "- stale: 2"),
+		strings.Contains(refreshedGuide.Result.Stdout, "hello refreshed"),
+		strings.Contains(refreshedResource.Result.Stdout, "\"refresh\""),
+		refreshedGuideOK && refreshedGuideProjection.Source == "knowledge_sync" && refreshedGuideProjection.Freshness == "live",
+		refreshedResourceOK && refreshedResourceProjection.Source == "workflow_catalog" && refreshedResourceProjection.Freshness == "live",
+		overrideWorkflowOK &&
+			overrideWorkflow.Status == "blocked" &&
+			overrideWorkflow.StatusSource == "control_plane" &&
+			overrideWorkflow.StatusReason == "awaiting review" &&
+			containsPath(overrideWorkflow.Evidence, "/task_outputs/plan.txt"),
+		traceWorkflowOK &&
+			traceWorkflow.Status == "completed" &&
+			traceWorkflow.StatusSource == "trace" &&
+			traceWorkflow.StatusReason == "",
 		strings.Contains(memoryView.Result.Stdout, "read-ref:/knowledge_base/reference/guide.md") &&
-		strings.Contains(memoryView.Result.Stdout, "read-resource:/resources/checklists/plan.json") &&
-		strings.Contains(memoryView.Result.Stdout, "wrote:/task_outputs/plan.txt") &&
-		strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md"),
+			strings.Contains(memoryView.Result.Stdout, "read-resource:/resources/checklists/plan.json") &&
+			strings.Contains(memoryView.Result.Stdout, "wrote:/task_outputs/plan.txt") &&
+			strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md"),
 		strings.Contains(summaryView.Result.Stdout, "resource_reads: 1") &&
-		strings.Contains(summaryView.Result.Stdout, "written_outputs: 1"),
+			strings.Contains(summaryView.Result.Stdout, "written_outputs: 1"),
 	)
 
 	notes := []string{}
@@ -589,20 +704,20 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		notes = append(notes, "adapter-backed projection or managed /memory lifecycle regressed")
 	}
 	return ScenarioReport{
-		Name:              "adapter_projection_memory_lifecycle",
-		Category:          "adapter_backed_projection_validation",
-		Success:           success,
-		SessionScoped:     true,
-		AsyncCandidate:    true,
-		PatchWorkflow:     false,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "adapter_projection_memory_lifecycle",
+		Category:              "adapter_backed_projection_validation",
+		Success:               success,
+		SessionScoped:         true,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -646,20 +761,20 @@ func runCancelTimeoutScenario() (ScenarioReport, error) {
 		notes = append(notes, "cancel or timeout flags were not surfaced as expected")
 	}
 	return ScenarioReport{
-		Name:              "cancel_timeout_interruptions",
-		Category:          "cancel_timeout_interruption",
-		Success:           success,
-		SessionScoped:     false,
-		AsyncCandidate:    true,
-		PatchWorkflow:     false,
-		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: tracePassed,
-		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		Name:                  "cancel_timeout_interruptions",
+		Category:              "cancel_timeout_interruption",
+		Success:               success,
+		SessionScoped:         false,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
 		AssertionChecksPassed: assertionPassed,
 		AssertionChecksTotal:  assertionTotal,
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
-		Notes:             notes,
+		Notes:                 notes,
 	}, nil
 }
 
@@ -766,6 +881,36 @@ func scenarioSucceeded(tracePassed int, traceTotal int, assertionPassed int, ass
 		return false
 	}
 	return true
+}
+
+func decodeProjectionIndex(raw string) (projectionIndexView, error) {
+	var view projectionIndexView
+	err := json.Unmarshal([]byte(raw), &view)
+	return view, err
+}
+
+func findProjectionRecord(records []projectionRecordView, target string) (projectionRecordView, bool) {
+	for _, record := range records {
+		if record.Path == target {
+			return record, true
+		}
+	}
+	return projectionRecordView{}, false
+}
+
+func decodeWorkflowViews(raw string) ([]workflowViewRecord, error) {
+	var workflows []workflowViewRecord
+	err := json.Unmarshal([]byte(raw), &workflows)
+	return workflows, err
+}
+
+func findWorkflowView(workflows []workflowViewRecord, id string) (workflowViewRecord, bool) {
+	for _, workflow := range workflows {
+		if workflow.ID == id {
+			return workflow, true
+		}
+	}
+	return workflowViewRecord{}, false
 }
 
 func boolPtr(value bool) *bool {

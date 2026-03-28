@@ -67,6 +67,13 @@ Ship contract tests and at least one end-to-end adapter-backed workload that pro
 ### Freshness
 - Adapters MUST define whether projected content is live, cached, or snapshot-based.
 - Staleness/freshness metadata SHOULD be surfaced explicitly, either via frontmatter, sidecar metadata, or adapter-specific describe fields.
+- Adapters SHOULD prefer a small canonical freshness lifecycle over free-form labels. The current reference shape is:
+  - `snapshot`: stable captured projection
+  - `live`: currently refreshed projection
+  - `stale`: known out-of-date projection awaiting refresh
+  - `updated`: control-plane-authored projection that diverged from its prior snapshot
+- Refresh or invalidation SHOULD happen through explicit adapter control-plane or lifecycle hooks, not through implicit writes to read-only projected mounts.
+- If a refresh does not complete, callers should still be able to tell whether the last visible state is `stale`, `snapshot`, or a failed/absent projection.
 
 ### Error Handling
 - Projection failures SHOULD surface as explicit errors or absent paths, not silent partial files.
@@ -91,6 +98,8 @@ Adapters that expose session memory SHOULD implement a standard lifecycle even i
 - Mutable belief or summary state SHOULD be checkpointed explicitly, not inferred from log replay on every call.
 - Promotion, curation, and long-term indexing remain adapter control-plane responsibilities.
 - Adapters SHOULD treat any `/memory` projection as a view over managed state, not as an ungoverned writable scratch mount.
+- When `/memory` mirrors projection metadata, keep raw observations, projected indexes, curated summaries, and workflow views conceptually separate even if they share one mount namespace.
+- `/memory` MAY expose freshness summaries and workflow status, but those views are evidence surfaces, not the source of truth for control-plane mutation.
 
 ## Trace Consumption Contract
 - Adapters MUST document which trace fields they consume and why.
@@ -110,6 +119,7 @@ The purpose is validation of the seam, not canonization of one business domain.
 Minimum adapter contract tests SHOULD cover:
 - stable path projection for the same logical source object;
 - explicit freshness/error behavior;
+- refresh or invalidation round-trips that preserve path identity while changing visible freshness state;
 - session checkpoint and resume;
 - trace-driven observation or follow-up behavior;
 - separation of mirrored source data from derived outputs.
