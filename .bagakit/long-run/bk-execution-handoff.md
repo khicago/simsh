@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-02T00:55:00Z
+- Updated At (UTC): 2026-04-02T04:18:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,7 +14,7 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. The `K-017` implementation wave was completed through the feat-task harness, so long-run should remain explicitly idle until a new manual row is created.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. `K-019: /skills control-plane observability and audit` has now been completed through the feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
 
 ## Acceptance Criteria
 
@@ -23,7 +23,7 @@
 
 ## Execution Plan
 
-1. Use the feat-task harness for the current `K-017` implementation wave.
+1. Keep long-run explicitly idle until the next row is deliberately created.
 2. When this slice is complete, either reopen long-run with a fresh manual row or keep handoff explicitly idle.
 3. Do not point handoff at stale completed rows.
 
@@ -47,8 +47,8 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: The long-run queue is currently idle. `K-017: /skills selection and precedence truth` has landed through `f-20260401-skills-selection-precedence-truth`, and there is still no new actionable row.
-- Tests: `go test ./...`, `make lint`, and `make check` are green after the `K-017` implementation wave.
+- Summary: The long-run queue is currently idle. `K-019: /skills control-plane observability and audit` has landed through the feat harness, and there is still no new actionable row.
+- Tests: `go test ./...`, `make lint`, and `make check` are green after the `K-019` implementation wave.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, which now matches this handoff.
 
 ## Response Driver Snapshot
@@ -56,7 +56,7 @@ bash .bagakit/long-run/check_and_resume.sh
 ```text
 [[BAGAKIT]]
 - LivingDoc: long-run handoff refreshed so it no longer points at a completed row while the next adapter-side slice is executed through the feat-task harness.
-- LongRun: Item=none; Status=blocked; Confidence=0.93; Evidence=next_row null | stale workflow row cleared | K-017 queued in backlog; Next=bash .bagakit/long-run/check_and_resume.sh
+- LongRun: Item=none; Status=blocked; Confidence=0.95; Evidence=next_row null | K-019 closed | repository gates green; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

@@ -484,6 +484,75 @@ Optional but recommended:
 - Rollback note:
   - If the selection truth surface grows too opinionated, keep explicit scope and reason metadata while narrowing the number of derived states rather than falling back to a naked `selected` flag.
 
+### K-018: Add a minimal explicit `/skills` control plane
+- Feat: `f-20260401-skills-control-plane-lifecycle`
+- Status: done
+- Why now: The reference adapter now projects `/skills` with explicit selection truth, but it still lacks the minimal control-plane seam that the architecture already expects for skills. Without explicit add/update/remove APIs, skill evolution remains artificially static and the only way to change skill state is to rebuild adapter seed input wholesale.
+- Kernel invariant: `/skills` remains a read-only projection; skill evolution stays adapter-local; selection truth remains derived from one SSOT after control-plane changes.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - The reference adapter exposes minimal explicit APIs to add, update, and remove skills without making `/skills` writable.
+  - `/skills/_index.json` and `/memory/projections.json` reflect control-plane changes deterministically.
+  - Selection truth recomputes from the same adapter-local derivation path after skill lifecycle changes.
+  - Benchmark and adapter tests prove at least one add-or-update case and one remove-or-fallback case structurally.
+- Notes:
+  - Keep the slice narrow: no remote sync, marketplace, or product registry semantics.
+  - Reuse the existing selection truth surface; do not create a second path for post-update selection decisions.
+  - Prefer one coherent skill control plane over ad hoc mutation helpers spread across tests.
+  - The reference adapter now exposes explicit `UpsertSkill`, `UpdateSkill`, and `RemoveSkill` APIs while keeping `/skills` itself read-only.
+  - Skill add/update/remove changes become visible on the next projection rebuild or resume, and reselection still flows through the same adapter-local derivation path used by static skills.
+  - Adapter tests now cover add, update, remove, and fallback restoration across lifecycle boundaries; the reference benchmark structurally asserts control-plane skill addition, update, reselection, and removal.
+  - Validated with `go test ./pkg/adapter/reference -count=1`, `go test ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Rollback note:
+  - If the control plane starts widening into registry semantics, keep the minimal add/update/remove seam and drop the product-shaped pieces rather than reverting to static-only skills.
+
+### K-019: Add control-plane observability and audit for `/skills`
+- Feat: `f-20260402-skills-control-plane-observability-audit`
+- Status: done
+- Why now: The reference adapter now has real skill control-plane APIs, but it still lacks an explicit audit surface for what changed, when it becomes visible, and how reselection moved. Without that, future adapters and harnesses will have to infer control-plane truth indirectly from projection diffs.
+- Kernel invariant: control-plane observability stays adapter-local; `/skills` remains read-only; audit truth and projection truth must stay aligned.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `benchmarks/simsh_native_reference/README.md`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - The reference adapter exposes machine-readable audit events for skill add/update/remove flows.
+  - Audit events make visibility timing explicit instead of forcing callers to guess from mount diffs.
+  - `/memory` exposes a compact human-readable summary and a structured audit view.
+  - Benchmark and adapter tests prove audit truth and projection truth stay aligned after control-plane changes.
+- Notes:
+  - Keep the slice narrow: do not build a generic event bus or product audit platform.
+  - Prefer one compact event surface and one compact summary surface over multiple overlapping logs.
+  - Keep the audit vocabulary machine-readable and stable.
+  - The reference adapter now emits compact machine-readable skill control-plane audit events and mirrors them in `/memory/skills_audit.json` plus `/memory/skills_audit.md`.
+  - Audit makes visibility timing explicit through projection generation and `visible_from_generation`, while projection truth remains derived from the existing skill selection SSOT.
+  - Adapter tests and the native reference benchmark now prove add/update/remove audit alignment, reselection movement, and `/skills` read-only enforcement together.
+  - Validated with `go test ./pkg/adapter/reference -count=1`, `go test ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Rollback note:
+  - If the audit surface becomes too broad, keep the event schema and trim fields or views rather than falling back to prose-only logging.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

@@ -88,6 +88,8 @@ Ship contract tests and at least one end-to-end adapter-backed workload that pro
 - Skill projections under `/skills` SHOULD stay read-only and expose eligibility or precedence as metadata, not as implicit side effects on mount writability.
 - If adapters expose skill selection, they SHOULD make the competition boundary and loser or winner reason explicit. A bare `selected` bit is acceptable only as a compatibility surface, not as the whole truth contract.
 - A minimal current reference shape is: explicit adapter-defined selection scope on competing skills, derived `selection` provenance in namespace indexes and `/memory/projections.json`, and no path-derived fallback competition semantics.
+- If adapters evolve skill entries over time, they SHOULD do so through explicit adapter-local control-plane APIs such as add/update/remove, with visibility taking effect on the next projection rebuild rather than through writable `/skills` mounts.
+- If adapters audit control-plane mutations, they SHOULD do so through compact machine-readable event views with explicit visibility timing, not through free-form logs or inferred projection diffs.
 
 ## Memory Lifecycle Protocol
 Adapters that expose session memory SHOULD implement a standard lifecycle even if the internal storage differs.

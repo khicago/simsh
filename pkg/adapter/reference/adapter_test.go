@@ -6,6 +6,7 @@ import (
 	"errors"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -889,6 +890,353 @@ func TestReferenceAdapterSkillsSelectionTruthAcrossResume(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterSkillControlPlaneLifecycle(t *testing.T) {
+	const selectionScope = "planning/default"
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+			"planning/alternate":  "# Alternate Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: selectionScope,
+				Eligibility: SkillEligibility{
+					State: skillEligibilityEligible,
+				},
+				Precedence: SkillPrecedence{
+					Tier: skillPrecedenceTierWorkspace,
+					Rank: 1,
+				},
+			},
+			"planning/alternate": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: selectionScope,
+				Eligibility: SkillEligibility{
+					State: skillEligibilityEligible,
+				},
+				Precedence: SkillPrecedence{
+					Tier: skillPrecedenceTierWorkspace,
+					Rank: 5,
+				},
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_skill_control_plane" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	initialIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read initial skills index failed: %v", err)
+	}
+	initialRecords := decodeProjectionRecords(t, []byte(initialIndex.Result.Stdout))
+	draftInitial := requireProjectionRecord(t, initialRecords, "/skills/planning/draft-plan/SKILL.md")
+	if !draftInitial.Selected {
+		t.Fatalf("expected draft skill selected initially, got %+v", draftInitial)
+	}
+	if draftInitial.Selection == nil || draftInitial.Selection.Scope != selectionScope {
+		t.Fatalf("initial draft skill selection missing or wrong scope: %+v", draftInitial.Selection)
+	}
+	alternateInitial := requireProjectionRecord(t, initialRecords, "/skills/planning/alternate/SKILL.md")
+	if alternateInitial.Selected {
+		t.Fatalf("alternate skill should not be selected initially: %+v", alternateInitial)
+	}
+
+	adapter.UpsertSkill("planning/priority", "# Priority Planner\n", SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      projectionFreshnessLive,
+		SelectionScope: selectionScope,
+		Eligibility: SkillEligibility{
+			State: skillEligibilityEligible,
+		},
+		Precedence: SkillPrecedence{
+			Tier: skillPrecedenceTierWorkspace,
+			Rank: 0,
+		},
+	})
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after skill upsert failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after skill upsert failed: %v", err)
+	}
+	postAddIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index after addition failed: %v", err)
+	}
+	postAddRecords := decodeProjectionRecords(t, []byte(postAddIndex.Result.Stdout))
+	priorityRecord := requireProjectionRecord(t, postAddRecords, "/skills/planning/priority/SKILL.md")
+	if !priorityRecord.Selected {
+		t.Fatalf("priority skill should be selected after addition: %+v", priorityRecord)
+	}
+	if priorityRecord.Selection == nil || priorityRecord.Selection.Scope != selectionScope {
+		t.Fatalf("priority selection scope wrong: %+v", priorityRecord.Selection)
+	}
+	if priorityRecord.Selection.Mode != skillSelectionModeDerived {
+		t.Fatalf("expected derived selection mode for priority skill, got %+v", priorityRecord.Selection.Mode)
+	}
+	if priorityRecord.Selection.Reason != skillSelectionReasonHighestPrecedence {
+		t.Fatalf("expected highest precedence reason, got %+v", priorityRecord.Selection.Reason)
+	}
+	if priorityRecord.Source != "control_plane" || priorityRecord.Freshness != projectionFreshnessLive {
+		t.Fatalf("priority projection metadata mismatch: %+v", priorityRecord)
+	}
+	if priorityRecord.Precedence == nil || priorityRecord.Precedence.Tier != skillPrecedenceTierWorkspace || priorityRecord.Precedence.Rank != 0 {
+		t.Fatalf("priority precedence metadata wrong: %+v", priorityRecord.Precedence)
+	}
+	draftAfterAdd := requireProjectionRecord(t, postAddRecords, "/skills/planning/draft-plan/SKILL.md")
+	if draftAfterAdd.Selected {
+		t.Fatalf("draft skill should yield selection to priority, got %+v", draftAfterAdd)
+	}
+	if draftAfterAdd.Selection == nil || draftAfterAdd.Selection.Scope != selectionScope {
+		t.Fatalf("draft selection scope drifted: %+v", draftAfterAdd.Selection)
+	}
+
+	deniedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /skills/planning/priority/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("write to /skills failed unexpectedly: %v", err)
+	}
+	if deniedWrite.Result.ExitCode == 0 {
+		t.Fatalf("expected /skills write to be denied, got %+v", deniedWrite.Result)
+	}
+
+	adapter.UpdateSkill("planning/priority", "# Priority Planner\nUpdated content.\n")
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after skill update failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after skill update failed: %v", err)
+	}
+	updatedSkill, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/priority/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read updated priority skill failed: %v", err)
+	}
+	if !strings.Contains(updatedSkill.Result.Stdout, "Updated content") {
+		t.Fatalf("updated priority skill missing refreshed indicator: %+v", updatedSkill.Result)
+	}
+	updatedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index after update failed: %v", err)
+	}
+	updatedRecords := decodeProjectionRecords(t, []byte(updatedIndex.Result.Stdout))
+	updatedPriority := requireProjectionRecord(t, updatedRecords, "/skills/planning/priority/SKILL.md")
+	if updatedPriority.Freshness != projectionFreshnessUpdated {
+		t.Fatalf("expected updated freshness after UpdateSkill, got %+v", updatedPriority.Freshness)
+	}
+	if updatedPriority.Selection == nil || updatedPriority.Selection.Scope != selectionScope {
+		t.Fatalf("updated priority selection incompatible: %+v", updatedPriority.Selection)
+	}
+
+	adapter.RemoveSkill("planning/priority")
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after skill removal failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after skill removal failed: %v", err)
+	}
+	afterRemovalIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index after removal failed: %v", err)
+	}
+	afterRemovalRecords := decodeProjectionRecords(t, []byte(afterRemovalIndex.Result.Stdout))
+	for _, record := range afterRemovalRecords {
+		if record.Path == "/skills/planning/priority/SKILL.md" {
+			t.Fatalf("priority skill still present after removal: %+v", record)
+		}
+	}
+	draftAfterRemoval := requireProjectionRecord(t, afterRemovalRecords, "/skills/planning/draft-plan/SKILL.md")
+	if !draftAfterRemoval.Selected {
+		t.Fatalf("draft skill should regain selection after removal, got %+v", draftAfterRemoval)
+	}
+	if draftAfterRemoval.Selection == nil || draftAfterRemoval.Selection.Scope != selectionScope {
+		t.Fatalf("draft selection scope not preserved after removal: %+v", draftAfterRemoval.Selection)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close session failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume session failed: %v", err)
+	}
+	resumedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read resumed skills index failed: %v", err)
+	}
+	resumedRecords := decodeProjectionRecords(t, []byte(resumedIndex.Result.Stdout))
+	for _, record := range resumedRecords {
+		if record.Path == "/skills/planning/priority/SKILL.md" {
+			t.Fatalf("priority skill reappeared after resume: %+v", record)
+		}
+	}
+	resumedDraft := requireProjectionRecord(t, resumedRecords, "/skills/planning/draft-plan/SKILL.md")
+	if !resumedDraft.Selected {
+		t.Fatalf("draft skill selection lost after resume: %+v", resumedDraft)
+	}
+	if resumedDraft.Selection == nil || resumedDraft.Selection.Scope != selectionScope {
+		t.Fatalf("draft selection scope drifted after resume: %+v", resumedDraft.Selection)
+	}
+}
+
+func TestReferenceAdapterSkillControlPlaneAuditEvents(t *testing.T) {
+	const selectionScope = "planning/default"
+	const skillPath = "/skills/planning/live-hotfix/SKILL.md"
+
+	adapter := New(Options{})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{
+		NewID: func() string { return "sess_skill_control_plane_audit" },
+	})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/status.json", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("initial memory status failed: %v", err)
+	}
+
+	adapter.UpsertSkill("planning/live-hotfix", "# Live hotfix skill\n", SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      "updated",
+		SelectionScope: selectionScope,
+		Eligibility: SkillEligibility{
+			State: skillEligibilityEligible,
+		},
+		Precedence: SkillPrecedence{
+			Tier: skillPrecedenceTierWorkspace,
+			Rank: 0,
+		},
+	})
+	adapter.UpdateSkill("planning/live-hotfix", "# Live hotfix skill\nUpdated guidance.\n")
+	adapter.RemoveSkill("planning/live-hotfix")
+
+	skillsIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index for removal check failed: %v", err)
+	}
+	if skillsIndex.Result.ExitCode == 0 {
+		t.Fatalf("/skills/_index.json should be missing after removal, got %q", skillsIndex.Result.Stdout)
+	}
+
+	auditResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills audit view failed: %v", err)
+	}
+	if auditResp.Result.ExitCode != 0 {
+		t.Fatalf("skills audit command failed: %+v", auditResp.Result)
+	}
+	events := decodeControlPlaneEventViews(t, []byte(auditResp.Result.Stdout))
+	if len(events) != 3 {
+		t.Fatalf("expected 3 control-plane events, got %d", len(events))
+	}
+
+	added := events[0]
+	if added.Op != controlPlaneEventKindSkillAdded || added.Path != skillPath {
+		t.Fatalf("unexpected add event = %+v", added)
+	}
+	if added.SelectionScope != selectionScope {
+		t.Fatalf("added selection scope = %q, want %q", added.SelectionScope, selectionScope)
+	}
+	if added.SelectedBefore || !added.SelectedAfter {
+		t.Fatalf("added selection transition = %+v", added)
+	}
+	if added.Result != "applied" || added.VisibleAfter != controlPlaneVisibilityNextProjection {
+		t.Fatalf("added event metadata wrong = %+v", added)
+	}
+	if added.WinnerAfter != skillPath {
+		t.Fatalf("added winner path = %q, want %q", added.WinnerAfter, skillPath)
+	}
+
+	updated := events[1]
+	if updated.Op != controlPlaneEventKindSkillUpdated {
+		t.Fatalf("expected update event second, got %+v", updated)
+	}
+	if !updated.SelectedBefore || !updated.SelectedAfter {
+		t.Fatalf("update selection transition = %+v", updated)
+	}
+	if updated.WinnerBefore != skillPath || updated.WinnerAfter != skillPath {
+		t.Fatalf("update winner tracking = %+v", updated)
+	}
+
+	removed := events[2]
+	if removed.Op != controlPlaneEventKindSkillRemoved {
+		t.Fatalf("expected removal third, got %+v", removed)
+	}
+	if removed.SelectedAfter {
+		t.Fatalf("removal should leave selection false, got %+v", removed)
+	}
+	if removed.WinnerBefore != skillPath {
+		t.Fatalf("removal winner_before = %q, want %q", removed.WinnerBefore, skillPath)
+	}
+	if removed.VisibleAfter != controlPlaneVisibilityNextProjection {
+		t.Fatalf("removal visibility metadata = %+v", removed)
+	}
+
+	for i := 1; i < len(events); i++ {
+		if events[i].VisibleFromGeneration < events[i-1].VisibleFromGeneration {
+			t.Fatalf("visible_from_generation should be non-decreasing: %v vs %v", events[i-1], events[i])
+		}
+	}
+	for _, event := range events {
+		if event.Result != "applied" || event.VisibleAfter != controlPlaneVisibilityNextProjection {
+			t.Fatalf("event metadata corrupt: %+v", event)
+		}
+	}
+
+	snapshot, err := manager.Get(session.SessionID)
+	if err != nil {
+		t.Fatalf("snapshot failed: %v", err)
+	}
+	state := decodeReferenceState(t, snapshot.State.Opaque[adapter.AdapterID()])
+	if state.ControlPlaneEvents != len(events) {
+		t.Fatalf("state reports %d events, want %d", state.ControlPlaneEvents, len(events))
+	}
+	if state.LastControlPlaneKind != removed.Op {
+		t.Fatalf("state last kind = %q, want %q", state.LastControlPlaneKind, removed.Op)
+	}
+
+	summaryResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read memory summary failed: %v", err)
+	}
+	summaryText := summaryResp.Result.Stdout
+	if count, ok := summaryLineInt(summaryText, "control_plane_events"); !ok {
+		t.Fatalf("summary missing control_plane_events line")
+	} else if count != len(events) {
+		t.Fatalf("summary control_plane_events = %d, want %d", count, len(events))
+	}
+	expectedLast := removed.Op + " " + removed.Path
+	if lastValue, ok := summaryLineValue(summaryText, "last_control_plane_event"); !ok {
+		t.Fatalf("summary missing last_control_plane_event line")
+	} else if lastValue != expectedLast {
+		t.Fatalf("summary last_control_plane_event = %q, want %q", lastValue, expectedLast)
+	}
+}
+
 func TestReferenceAdapterSkillSelectionTieBreakDeterministic(t *testing.T) {
 	adapter := New(Options{
 		Skills: map[string]string{
@@ -962,6 +1310,134 @@ func TestReferenceAdapterSkillSelectionTieBreakDeterministic(t *testing.T) {
 		if scope != firstScope {
 			t.Fatalf("tie-break selection scope drifted across resume #%d: first=%q now=%q", idx+1, firstScope, scope)
 		}
+	}
+}
+
+func TestReferenceAdapterSkillControlPlaneLifecycleAcrossResume(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/fallback": "# Fallback Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: "eligible"},
+				Precedence:     SkillPrecedence{Tier: "bundled", Rank: 90},
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_skill_control_plane" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	initialIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read initial skills index failed: %v", err)
+	}
+	initialSkills := decodeProjectionRecords(t, []byte(initialIndex.Result.Stdout))
+	fallback := requireProjectionRecord(t, initialSkills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, fallback, "bundled_catalog", "snapshot", "eligible", "", "bundled", 90, true)
+
+	adapter.UpsertSkill("planning/primary", "# Primary Planner\n", SkillMetadata{
+		Source:         "workspace_catalog",
+		Freshness:      "live",
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: "eligible"},
+		Precedence:     SkillPrecedence{Tier: "workspace", Rank: 1},
+	})
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after upsert failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after upsert failed: %v", err)
+	}
+
+	updatedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read updated skills index failed: %v", err)
+	}
+	updatedSkills := decodeProjectionRecords(t, []byte(updatedIndex.Result.Stdout))
+	primary := requireProjectionRecord(t, updatedSkills, "/skills/planning/primary/SKILL.md")
+	assertSkillProjectionMetadata(t, primary, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+	fallback = requireProjectionRecord(t, updatedSkills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, fallback, "bundled_catalog", "snapshot", "eligible", "", "bundled", 90, false)
+	updatedSkillMaps := decodeProjectionRecordMaps(t, []byte(updatedIndex.Result.Stdout))
+	primaryMap := requireProjectionRecordMap(t, updatedSkillMaps, "/skills/planning/primary/SKILL.md")
+	fallbackMap := requireProjectionRecordMap(t, updatedSkillMaps, "/skills/planning/fallback/SKILL.md")
+	primarySelection := requireSelectionMap(t, primaryMap)
+	fallbackSelection := requireSelectionMap(t, fallbackMap)
+	if mapStringField(t, primarySelection, "scope") != "planning/default" || mapStringField(t, primarySelection, "mode") == "" {
+		t.Fatalf("primary selection after upsert = %+v, want explicit planning/default provenance", primarySelection)
+	}
+	if mapStringField(t, fallbackSelection, "reason") == "" || mapStringField(t, fallbackSelection, "winner_path") != "/skills/planning/primary/SKILL.md" {
+		t.Fatalf("fallback selection after upsert = %+v, want loser reason and winner path", fallbackSelection)
+	}
+
+	adapter.UpdateSkill("planning/primary", "# Primary Planner\nupdated\n")
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after update failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after update failed: %v", err)
+	}
+
+	updatedSkill, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/primary/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read updated skill failed: %v", err)
+	}
+	if !strings.Contains(updatedSkill.Result.Stdout, "updated") {
+		t.Fatalf("updated skill content = %+v, want updated marker", updatedSkill.Result)
+	}
+	updatedProjection, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read updated projection view failed: %v", err)
+	}
+	updatedProjectionView := decodeProjectionView(t, []byte(updatedProjection.Result.Stdout))
+	primary = requireProjectionRecord(t, updatedProjectionView.Skills, "/skills/planning/primary/SKILL.md")
+	if primary.Source != "control_plane" || primary.Freshness != projectionFreshnessUpdated || !primary.Selected {
+		t.Fatalf("updated primary projection = %+v, want control_plane/updated selected", primary)
+	}
+	if primary.Selection == nil || primary.Selection.Scope != "planning/default" || strings.TrimSpace(primary.Selection.Reason) == "" {
+		t.Fatalf("updated primary selection = %+v, want preserved planning/default selected state", primary.Selection)
+	}
+
+	adapter.RemoveSkill("planning/primary")
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close after remove failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after remove failed: %v", err)
+	}
+
+	removedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read removed skills index failed: %v", err)
+	}
+	removedSkills := decodeProjectionRecords(t, []byte(removedIndex.Result.Stdout))
+	if len(removedSkills) != 1 {
+		t.Fatalf("skills after remove = %+v, want only fallback", removedSkills)
+	}
+	fallback = requireProjectionRecord(t, removedSkills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, fallback, "bundled_catalog", "snapshot", "eligible", "", "bundled", 90, true)
+	removedSkillMaps := decodeProjectionRecordMaps(t, []byte(removedIndex.Result.Stdout))
+	fallbackMap = requireProjectionRecordMap(t, removedSkillMaps, "/skills/planning/fallback/SKILL.md")
+	fallbackSelection = requireSelectionMap(t, fallbackMap)
+	if mapStringField(t, fallbackSelection, "scope") != "planning/default" || mapStringField(t, fallbackSelection, "winner_path") != "" {
+		t.Fatalf("fallback selection after remove = %+v, want reselected singleton without winner path", fallbackSelection)
 	}
 }
 
@@ -1489,6 +1965,18 @@ func mapStringField(t *testing.T, record map[string]any, key string) string {
 	return strings.TrimSpace(text)
 }
 
+func mapOptionalStringField(t *testing.T, record map[string]any, key string) string {
+	t.Helper()
+	if value, ok := record[key]; ok {
+		text, ok := value.(string)
+		if !ok {
+			t.Fatalf("field %q has unexpected type %T in record %+v", key, value, record)
+		}
+		return strings.TrimSpace(text)
+	}
+	return ""
+}
+
 func mapBoolField(record map[string]any, key string) bool {
 	value, ok := record[key]
 	if !ok {
@@ -1534,15 +2022,64 @@ func readTieBreakSnapshot(t *testing.T, manager *runtimeengine.SessionManager, s
 	if alphaSelected {
 		winner = "/skills/triage/alpha/SKILL.md"
 		loser = "/skills/triage/beta/SKILL.md"
-		if mapStringField(t, betaSelection, "reason") == "" {
+		if mapStringField(t, betaSelection, "reason") == "" || mapOptionalStringField(t, betaSelection, "winner_path") != winner {
 			t.Fatalf("tie-break loser must carry machine-readable reason: %+v", betaSelection)
 		}
 	} else {
 		winner = "/skills/triage/beta/SKILL.md"
 		loser = "/skills/triage/alpha/SKILL.md"
-		if mapStringField(t, alphaSelection, "reason") == "" {
+		if mapStringField(t, alphaSelection, "reason") == "" || mapOptionalStringField(t, alphaSelection, "winner_path") != winner {
 			t.Fatalf("tie-break loser must carry machine-readable reason: %+v", alphaSelection)
 		}
 	}
 	return winner, loser, alphaScope
+}
+
+type controlPlaneEventView struct {
+	Seq                   int    `json:"seq"`
+	Op                    string `json:"op"`
+	Path                  string `json:"path"`
+	SelectionScope        string `json:"selection_scope,omitempty"`
+	Result                string `json:"result"`
+	Visibility            string `json:"visibility"`
+	VisibleAfter          string `json:"visible_after"`
+	VisibleFromGeneration int    `json:"visible_from_generation"`
+	SelectedBefore        bool   `json:"selected_before"`
+	SelectedAfter         bool   `json:"selected_after"`
+	WinnerBefore          string `json:"winner_before,omitempty"`
+	WinnerAfter           string `json:"winner_after,omitempty"`
+	ReasonAfter           string `json:"reason_after,omitempty"`
+}
+
+func decodeControlPlaneEventViews(t *testing.T, raw []byte) []controlPlaneEventView {
+	t.Helper()
+	var events []controlPlaneEventView
+	if err := json.Unmarshal(raw, &events); err != nil {
+		t.Fatalf("decode control-plane events failed: %v", err)
+	}
+	return events
+}
+
+func summaryLineValue(raw string, key string) (string, bool) {
+	prefix := "- " + key + ": "
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		return strings.TrimSpace(strings.TrimPrefix(line, prefix)), true
+	}
+	return "", false
+}
+
+func summaryLineInt(raw string, key string) (int, bool) {
+	value, ok := summaryLineValue(raw, key)
+	if !ok {
+		return 0, false
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, false
+	}
+	return parsed, true
 }

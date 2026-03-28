@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260401-skills-control-plane-lifecycle",
+  "updated_at": "2026-04-01T19:22:50Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add minimal explicit skill control-plane lifecycle",
+      "status": "done",
+      "summary": "Update docs and SSOT, add adapter-local add/update/remove skill APIs, prove re-projection and reselection behavior, then review and archive the slice cleanly.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-01T19:21:27Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-04-01T19:00:01Z",
+      "finished_at": "2026-04-01T19:22:50Z",
+      "updated_at": "2026-04-01T19:22:50Z",
+      "notes": []
+    }
+  ]
+}

@@ -16,6 +16,7 @@ Current scenario classes:
 - trace-consumable planning
 - adapter-backed projection and managed-memory lifecycle, including projection invalidation, refresh, workflow-transition provenance, and structural per-item projection materialization/failure-state assertions for docs/resources/skills (not message-only checks)
   plus explicit `/skills` selection-provenance assertions (scope, mode, and loser/ineligible reason) and deterministic precedence outcomes
+  plus structured control-plane audit coverage via `/memory/skills_audit.json` and `/memory/skills_audit.md` so every add/update/remove event, visibility timing, and `/memory/summary.md` alignment is machine-checked
   plus a generic curated-memory entry assertion with explicit source-path references
 - cancel and timeout interruption
 

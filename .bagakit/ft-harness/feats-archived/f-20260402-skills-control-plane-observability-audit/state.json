@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "feat_id": "f-20260402-skills-control-plane-observability-audit",
+  "title": "Skills control-plane observability and audit",
+  "slug": "skills-control-plane-observability-audit",
+  "goal": "Expose machine-readable control-plane audit events and visibility timing for skill add/update/remove without widening core contracts or making /skills writable.",
+  "status": "archived",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-04-02T03:32:23Z",
+  "updated_at": "2026-04-02T04:26:31Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 2
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-04-02T04:25:12Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260402-skills-control-plane-observability-audit/artifacts/gate-20260402T042512Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-04-02T03:32:23Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-04-02T03:33:02Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-04-02T04:17:03Z",
+      "action": "task_gate",
+      "detail": "T-001 => fail"
+    },
+    {
+      "at": "2026-04-02T04:25:12Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-04-02T04:26:31Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-04-02T04:26:31Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-04-02T04:26:31Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
+}

@@ -369,11 +369,13 @@ func TestBuildProjectionIncludesKnowledgeAndMemoryViews(t *testing.T) {
 		t.Fatalf("json.Unmarshal(projection.OpaqueState) error = %v", err)
 	}
 	if !reflect.DeepEqual(decoded, sessionState{
-		Observations:   []string{"read-ref:/knowledge_base/reference/guide.md", "read-resource:/resources/checklists/plan.json"},
-		Freshness:      "observed",
-		ReadRefs:       []string{"/knowledge_base/reference/guide.md"},
-		ReadResources:  []string{"/resources/checklists/plan.json"},
-		WrittenOutputs: []string{"/task_outputs/plan.txt"},
+		Observations:         []string{"read-ref:/knowledge_base/reference/guide.md", "read-resource:/resources/checklists/plan.json"},
+		Freshness:            "observed",
+		ReadRefs:             []string{"/knowledge_base/reference/guide.md"},
+		ReadResources:        []string{"/resources/checklists/plan.json"},
+		WrittenOutputs:       []string{"/task_outputs/plan.txt"},
+		ProjectionGeneration: 1,
+		ControlPlaneEvents:   0,
 	}) {
 		t.Fatalf("decoded opaque state = %#v, want observed session state", decoded)
 	}
@@ -445,6 +447,107 @@ func TestControlPlaneUpsertsAndProjectionMetadata(t *testing.T) {
 	workflows := decodeWorkflowViewsHelper(t, []byte(workflowsRaw))
 	if got := workflowStatusByID(workflows, "deliver"); got != "pending" {
 		t.Fatalf("deliver workflow status = %q, want pending", got)
+	}
+}
+
+func TestSkillControlPlaneUpsertAndRemoveRecomputeSelection(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/fallback": "# Fallback Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      projectionFreshnessSnapshot,
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierBundled, Rank: 80},
+			},
+		},
+	})
+
+	initialProjection, err := adapter.buildProjection(sessionState{Freshness: "created"})
+	if err != nil {
+		t.Fatalf("buildProjection(initial skill control plane) error = %v", err)
+	}
+	initialIndex := decodeProjectionViewHelper(t, []byte(`{"skills":`+mustReadFromMounts(t, initialProjection.VirtualMounts, "/skills/_index.json")+`}`))
+	fallback := requireProjectionRecordHelper(t, initialIndex.Skills, "/skills/planning/fallback/SKILL.md")
+	if !fallback.Selected || fallback.Selection == nil || fallback.Selection.Scope != "planning/default" || fallback.Selection.Mode != skillSelectionModeDerived {
+		t.Fatalf("initial fallback skill = %+v, want selected derived fallback", fallback)
+	}
+
+	adapter.UpsertSkill("planning/primary", "# Primary Planner\n", SkillMetadata{
+		Source:         "workspace_catalog",
+		Freshness:      projectionFreshnessLive,
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+	})
+
+	updatedProjection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(updated skill control plane) error = %v", err)
+	}
+	updatedIndex := decodeProjectionViewHelper(t, []byte(`{"skills":`+mustReadFromMounts(t, updatedProjection.VirtualMounts, "/skills/_index.json")+`}`))
+	primary := requireProjectionRecordHelper(t, updatedIndex.Skills, "/skills/planning/primary/SKILL.md")
+	if !primary.Selected || primary.Source != "workspace_catalog" || primary.Freshness != projectionFreshnessLive {
+		t.Fatalf("primary skill after upsert = %+v, want selected workspace/live skill", primary)
+	}
+	fallback = requireProjectionRecordHelper(t, updatedIndex.Skills, "/skills/planning/fallback/SKILL.md")
+	if fallback.Selected || fallback.Selection == nil || fallback.Selection.WinnerPath != "/skills/planning/primary/SKILL.md" {
+		t.Fatalf("fallback skill after upsert = %+v, want loser pointing at primary", fallback)
+	}
+
+	adapter.RemoveSkill("planning/primary")
+	removedProjection, err := adapter.buildProjection(sessionState{Freshness: "resumed"})
+	if err != nil {
+		t.Fatalf("buildProjection(removed skill control plane) error = %v", err)
+	}
+	removedIndex := decodeProjectionViewHelper(t, []byte(`{"skills":`+mustReadFromMounts(t, removedProjection.VirtualMounts, "/skills/_index.json")+`}`))
+	if len(removedIndex.Skills) != 1 {
+		t.Fatalf("skills after remove = %+v, want one fallback skill", removedIndex.Skills)
+	}
+	fallback = requireProjectionRecordHelper(t, removedIndex.Skills, "/skills/planning/fallback/SKILL.md")
+	if !fallback.Selected || fallback.Selection == nil || fallback.Selection.WinnerPath != "" {
+		t.Fatalf("fallback after remove = %+v, want reselected singleton", fallback)
+	}
+}
+
+func TestUpdateSkillPreservesSelectionMetadataWhileRefreshingControlPlaneSource(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      projectionFreshnessLive,
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+			},
+		},
+	})
+
+	adapter.UpdateSkill("planning/draft-plan", "# Draft Planner\nupdated\n")
+	projection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(update skill) error = %v", err)
+	}
+	skillRaw := mustReadFromMounts(t, projection.VirtualMounts, "/skills/planning/draft-plan/SKILL.md")
+	if !strings.Contains(skillRaw, "updated") {
+		t.Fatalf("updated skill content = %q, want updated content", skillRaw)
+	}
+	index := decodeProjectionViewHelper(t, []byte(`{"skills":`+mustReadFromMounts(t, projection.VirtualMounts, "/skills/_index.json")+`}`))
+	record := requireProjectionRecordHelper(t, index.Skills, "/skills/planning/draft-plan/SKILL.md")
+	if record.Source != "control_plane" || record.Freshness != projectionFreshnessUpdated {
+		t.Fatalf("updated skill metadata = %+v, want control_plane/updated", record)
+	}
+	if record.Precedence == nil || record.Precedence.Tier != skillPrecedenceTierWorkspace || record.Precedence.Rank != 1 {
+		t.Fatalf("updated skill precedence = %+v, want preserved workspace/1", record.Precedence)
+	}
+	if record.Selection == nil || record.Selection.Scope != "planning/default" || !record.Selected {
+		t.Fatalf("updated skill selection = %+v, want preserved selected planning/default state", record)
 	}
 }
 
@@ -648,6 +751,180 @@ func TestBuildProjectionIncludesSkillProjectionMetadata(t *testing.T) {
 	}
 	if !strings.Contains(summaryRaw, "projections.skills: 1") {
 		t.Fatalf("memory summary = %q, want skills projection count", summaryRaw)
+	}
+}
+
+func TestControlPlaneUpsertSkillAddsSelection(t *testing.T) {
+	adapter := New(Options{})
+	adapter.UpsertSkill("planning/winner", "# Winner\n", SkillMetadata{
+		SelectionScope: "planning",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 0},
+	})
+	records := adapter.skillRecords()
+	record := requireProjectionRecordHelper(t, records, "/skills/planning/winner/SKILL.md")
+	if !record.Selected || record.Selection == nil || record.Selection.Mode != skillSelectionModeDerived || record.Selection.Scope != "planning" {
+		t.Fatalf("derived selection = %+v, want derived planning winner", record.Selection)
+	}
+	if record.Selection.Reason != skillSelectionReasonHighestPrecedence {
+		t.Fatalf("selection reason = %q, want highest_precedence", record.Selection.Reason)
+	}
+	if record.Source != "control_plane" || record.Freshness != projectionFreshnessUpdated {
+		t.Fatalf("control-plane metadata = %+v, want control_plane/updated", record)
+	}
+}
+
+func TestControlPlaneUpdateSkillRefreshesContentAndMetadata(t *testing.T) {
+	adapter := New(Options{})
+	adapter.UpsertSkill("strategy/initiate", "# Initial\n", SkillMetadata{
+		SelectionScope: "strategy",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+	})
+	adapter.UpdateSkill("strategy/initiate", "# Updated\n")
+	projection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(update) error = %v", err)
+	}
+	if content := mustReadFromMounts(t, projection.VirtualMounts, "/skills/strategy/initiate/SKILL.md"); content != "# Updated\n" {
+		t.Fatalf("updated content = %q, want updated markdown", content)
+	}
+	indexRaw := mustReadFromMounts(t, projection.VirtualMounts, "/skills/_index.json")
+	records := decodeProjectionRecordsHelper(t, []byte(indexRaw))
+	record := requireProjectionRecordHelper(t, records, "/skills/strategy/initiate/SKILL.md")
+	if record.Source != "control_plane" || record.Freshness != projectionFreshnessUpdated {
+		t.Fatalf("updated skill metadata = %+v, want control_plane/updated", record)
+	}
+}
+
+func TestControlPlaneRemoveSkillRecomputesSelection(t *testing.T) {
+	adapter := New(Options{})
+	adapter.UpsertSkill("planning/alpha", "# Alpha\n", SkillMetadata{
+		SelectionScope: "planning",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 0},
+	})
+	adapter.UpsertSkill("planning/beta", "# Beta\n", SkillMetadata{
+		SelectionScope: "planning",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+	})
+	records := adapter.skillRecords()
+	alpha := requireProjectionRecordHelper(t, records, "/skills/planning/alpha/SKILL.md")
+	if !alpha.Selected {
+		t.Fatalf("alpha selection = %+v, want selected", alpha.Selection)
+	}
+	adapter.RemoveSkill("planning/alpha")
+	records = adapter.skillRecords()
+	if len(records) != 1 {
+		t.Fatalf("remaining skill records = %+v, want single beta", records)
+	}
+	beta := requireProjectionRecordHelper(t, records, "/skills/planning/beta/SKILL.md")
+	if !beta.Selected {
+		t.Fatalf("beta selection after remove = %+v, want selected", beta.Selection)
+	}
+	if beta.Selection == nil || beta.Selection.Reason != skillSelectionReasonHighestPrecedence {
+		t.Fatalf("beta selection reason = %+v, want highest_precedence", beta.Selection)
+	}
+}
+
+func TestSkillControlPlaneAuditVisibilityAndSummary(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/fallback": "# Fallback\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/fallback": {
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierBundled, Rank: 80},
+			},
+		},
+	})
+
+	adapter.UpsertSkill("planning/primary", "# Primary\n", SkillMetadata{
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+	})
+	if adapter.projectionSeq != 0 {
+		t.Fatalf("projectionSeq before build = %d, want 0", adapter.projectionSeq)
+	}
+	if len(adapter.controlPlaneEvents) != 1 {
+		t.Fatalf("control-plane events before build = %+v, want one pending event", adapter.controlPlaneEvents)
+	}
+	event := adapter.controlPlaneEvents[0]
+	if event.Op != controlPlaneEventKindSkillAdded || event.VisibleFromGeneration != 1 || event.VisibleAfter != controlPlaneVisibilityNextProjection {
+		t.Fatalf("pending control-plane event = %+v, want skill_added visible from generation 1", event)
+	}
+
+	projection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(audit) error = %v", err)
+	}
+	status := decodeReferenceStateHelper(t, mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/status.json"))
+	if status.ProjectionGeneration != 1 || status.ControlPlaneEvents != 1 || status.LastControlPlaneKind != controlPlaneEventKindSkillAdded {
+		t.Fatalf("status after build = %+v, want generation=1 event_count=1 last=skill_added", status)
+	}
+	auditRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.json")
+	if err != nil {
+		t.Fatalf("read skills audit json error = %v", err)
+	}
+	audit := decodeControlPlaneEventViewsHelper(t, []byte(auditRaw))
+	if len(audit) != 1 {
+		t.Fatalf("skills audit events = %+v, want one event", audit)
+	}
+	if audit[0].Visibility != "visible" || audit[0].WinnerBefore != "/skills/planning/fallback/SKILL.md" || audit[0].WinnerAfter != "/skills/planning/primary/SKILL.md" || !audit[0].SelectedAfter {
+		t.Fatalf("skills audit event = %+v, want visible winner flip to primary", audit[0])
+	}
+	summaryRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.md")
+	if err != nil {
+		t.Fatalf("read skills audit summary error = %v", err)
+	}
+	if !strings.Contains(summaryRaw, "projection_generation: 1") || !strings.Contains(summaryRaw, "skill_added /skills/planning/primary/SKILL.md") {
+		t.Fatalf("skills audit summary = %q, want projection generation and skill_added line", summaryRaw)
+	}
+}
+
+func TestSkillControlPlaneAuditTracksUpdateAndRemove(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/primary":  "# Primary\n",
+			"planning/fallback": "# Fallback\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/primary": {
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+			},
+			"planning/fallback": {
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierBundled, Rank: 80},
+			},
+		},
+	})
+
+	adapter.UpdateSkill("planning/primary", "# Primary\nupdated\n")
+	adapter.RemoveSkill("planning/primary")
+	projection, err := adapter.buildProjection(sessionState{Freshness: "resumed"})
+	if err != nil {
+		t.Fatalf("buildProjection(update/remove audit) error = %v", err)
+	}
+	auditRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.json")
+	if err != nil {
+		t.Fatalf("read skills audit json after update/remove error = %v", err)
+	}
+	audit := decodeControlPlaneEventViewsHelper(t, []byte(auditRaw))
+	if len(audit) != 2 {
+		t.Fatalf("skills audit events after update/remove = %+v, want two events", audit)
+	}
+	if audit[0].Op != controlPlaneEventKindSkillUpdated || audit[0].ReasonAfter == "" || !audit[0].SelectedAfter {
+		t.Fatalf("update audit event = %+v, want selected update event", audit[0])
+	}
+	if audit[1].Op != controlPlaneEventKindSkillRemoved || !audit[1].SelectedBefore || audit[1].WinnerBefore != "/skills/planning/primary/SKILL.md" || audit[1].WinnerAfter != "/skills/planning/fallback/SKILL.md" {
+		t.Fatalf("remove audit event = %+v, want fallback reselection after removal", audit[1])
 	}
 }
 
@@ -1062,6 +1339,96 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	}
 }
 
+func TestSkillControlPlaneAuditViewsNormalizePathsAndExposeVisibility(t *testing.T) {
+	adapter := New(Options{})
+	adapter.UpsertSkill(" planning/winner ", "# Winner\n", SkillMetadata{
+		SelectionScope: "planning",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 0},
+	})
+	projection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(skill audit) error = %v", err)
+	}
+
+	summary := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/skills_audit.md")
+	if !strings.Contains(summary, "/skills/planning/winner/SKILL.md") {
+		t.Fatalf("skills audit summary = %q, want normalized path", summary)
+	}
+	if !strings.Contains(summary, "visible_from=1") {
+		t.Fatalf("skills audit summary = %q, want visibility timing line", summary)
+	}
+
+	jsonRaw := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/skills_audit.json")
+	events := decodeControlPlaneEventViewsHelper(t, []byte(jsonRaw))
+	if len(events) != 1 {
+		t.Fatalf("skills audit events = %+v, want a single entry", events)
+	}
+	event := events[0]
+	if event.Path != "/skills/planning/winner/SKILL.md" {
+		t.Fatalf("event path = %q, want normalized path", event.Path)
+	}
+	if event.VisibleAfter != controlPlaneVisibilityNextProjection {
+		t.Fatalf("visible_after = %q, want %s", event.VisibleAfter, controlPlaneVisibilityNextProjection)
+	}
+	if event.VisibleFromGeneration != 1 {
+		t.Fatalf("visible_from_generation = %d, want 1", event.VisibleFromGeneration)
+	}
+	if event.SelectionScope != "planning" {
+		t.Fatalf("selection_scope = %q, want planning", event.SelectionScope)
+	}
+	if !event.SelectedAfter {
+		t.Fatalf("SelectedAfter = %v, want true", event.SelectedAfter)
+	}
+}
+
+func TestSkillControlPlaneEventsMaintainOrderAndSelectionTransitions(t *testing.T) {
+	adapter := New(Options{})
+	adapter.UpsertSkill("planning/fallback", "# Fallback\n", SkillMetadata{
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 5},
+	})
+	adapter.UpsertSkill("planning/primary", "# Primary\n", SkillMetadata{
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+		Precedence:     SkillPrecedence{Tier: skillPrecedenceTierWorkspace, Rank: 1},
+	})
+	adapter.RemoveSkill("planning/primary")
+
+	projection, err := adapter.buildProjection(sessionState{Freshness: "observed"})
+	if err != nil {
+		t.Fatalf("buildProjection(skill audit order) error = %v", err)
+	}
+	events := decodeControlPlaneEventViewsHelper(t, []byte(mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/skills_audit.json")))
+	if len(events) != 3 {
+		t.Fatalf("skills audit events = %+v, want three entries", events)
+	}
+	if !(events[0].Seq < events[1].Seq && events[1].Seq < events[2].Seq) {
+		t.Fatalf("event sequence = %v, want increasing seq", []int{events[0].Seq, events[1].Seq, events[2].Seq})
+	}
+
+	if events[0].Op != controlPlaneEventKindSkillAdded || events[0].Path != "/skills/planning/fallback/SKILL.md" {
+		t.Fatalf("first event = %+v, want fallback added", events[0])
+	}
+	if events[1].Op != controlPlaneEventKindSkillAdded || events[1].Path != "/skills/planning/primary/SKILL.md" {
+		t.Fatalf("second event = %+v, want primary added", events[1])
+	}
+	if events[2].Op != controlPlaneEventKindSkillRemoved || events[2].Path != "/skills/planning/primary/SKILL.md" {
+		t.Fatalf("third event = %+v, want primary removed", events[2])
+	}
+
+	if !events[1].SelectedAfter || events[1].WinnerAfter != "/skills/planning/primary/SKILL.md" {
+		t.Fatalf("primary event = %+v, want selected winner", events[1])
+	}
+	if !events[2].SelectedBefore {
+		t.Fatalf("removal event = %+v, want SelectedBefore true", events[2])
+	}
+	if events[2].WinnerAfter != "/skills/planning/fallback/SKILL.md" {
+		t.Fatalf("removal event winner_after = %q, want fallback path", events[2].WinnerAfter)
+	}
+}
+
 func decodeProjectionRecordsHelper(t *testing.T, raw []byte) []projectionRecord {
 	t.Helper()
 	var records []projectionRecord
@@ -1078,6 +1445,24 @@ func decodeProjectionViewHelper(t *testing.T, raw []byte) projectionView {
 		t.Fatalf("decode projection view failed: %v", err)
 	}
 	return view
+}
+
+func decodeControlPlaneEventViewsHelper(t *testing.T, raw []byte) []controlPlaneEventViewRecord {
+	t.Helper()
+	var events []controlPlaneEventViewRecord
+	if err := json.Unmarshal(raw, &events); err != nil {
+		t.Fatalf("decode control-plane event views failed: %v", err)
+	}
+	return events
+}
+
+func decodeReferenceStateHelper(t *testing.T, raw string) sessionState {
+	t.Helper()
+	var state sessionState
+	if err := json.Unmarshal([]byte(raw), &state); err != nil {
+		t.Fatalf("decode reference state helper failed: %v", err)
+	}
+	return state
 }
 
 func decodeWorkflowViewsHelper(t *testing.T, raw []byte) []workflowView {

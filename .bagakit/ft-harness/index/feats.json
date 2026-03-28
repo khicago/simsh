@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-01T18:50:25Z",
+  "updated_at": "2026-04-02T04:26:31Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -197,6 +197,15 @@
       "updated_at": "2026-03-23T17:55:42Z"
     },
     {
+      "feat_id": "f-20260401-skills-control-plane-lifecycle",
+      "title": "Skills control plane lifecycle",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-04-01T19:22:50Z"
+    },
+    {
       "feat_id": "f-20260401-skills-selection-precedence-truth",
       "title": "Skills selection and precedence truth",
       "status": "archived",
@@ -204,6 +213,15 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-04-01T18:50:25Z"
+    },
+    {
+      "feat_id": "f-20260402-skills-control-plane-observability-audit",
+      "title": "Skills control-plane observability and audit",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-04-02T04:26:31Z"
     }
   ]
 }

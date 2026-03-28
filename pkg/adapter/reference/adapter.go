@@ -95,6 +95,12 @@ const (
 	skillSelectionReasonHigherPrecedence    = "higher_precedence_selected"
 	skillSelectionReasonTieBreakPathOrder   = "tie_breaker_path_order"
 	skillSelectionReasonNoEligibleWinner    = "no_eligible_winner"
+
+	controlPlaneEventKindSkillAdded   = "skill_added"
+	controlPlaneEventKindSkillUpdated = "skill_updated"
+	controlPlaneEventKindSkillRemoved = "skill_removed"
+
+	controlPlaneVisibilityNextProjection = "next_projection_rebuild"
 )
 
 type WorkflowSpec struct {
@@ -115,14 +121,17 @@ type CuratedEntry struct {
 }
 
 type Adapter struct {
-	mu              sync.RWMutex
-	documents       map[string]projectionEntry
-	resources       map[string]projectionEntry
-	skills          map[string]skillEntry
-	curated         map[string]curatedEntry
-	workflows       []WorkflowSpec
-	workflowStatus  map[string]workflowStatusOverride
-	projectionError error
+	mu                 sync.RWMutex
+	documents          map[string]projectionEntry
+	resources          map[string]projectionEntry
+	skills             map[string]skillEntry
+	curated            map[string]curatedEntry
+	workflows          []WorkflowSpec
+	workflowStatus     map[string]workflowStatusOverride
+	controlPlaneEvents []controlPlaneEvent
+	projectionSeq      int
+	controlPlaneSeq    int
+	projectionError    error
 }
 
 type projectionEntry struct {
@@ -151,15 +160,18 @@ type projectionView struct {
 }
 
 type sessionState struct {
-	Observations   []string        `json:"observations"`
-	Freshness      string          `json:"freshness"`
-	ReadRefs       []string        `json:"read_refs,omitempty"`
-	ReadResources  []string        `json:"read_resources,omitempty"`
-	ReadSkills     []string        `json:"read_skills,omitempty"`
-	WrittenOutputs []string        `json:"written_outputs,omitempty"`
-	DeniedPaths    []string        `json:"denied_paths,omitempty"`
-	Curated        []curatedRecord `json:"curated,omitempty"`
-	Workflows      []workflowView  `json:"workflows,omitempty"`
+	Observations         []string        `json:"observations"`
+	Freshness            string          `json:"freshness"`
+	ReadRefs             []string        `json:"read_refs,omitempty"`
+	ReadResources        []string        `json:"read_resources,omitempty"`
+	ReadSkills           []string        `json:"read_skills,omitempty"`
+	WrittenOutputs       []string        `json:"written_outputs,omitempty"`
+	DeniedPaths          []string        `json:"denied_paths,omitempty"`
+	Curated              []curatedRecord `json:"curated,omitempty"`
+	Workflows            []workflowView  `json:"workflows,omitempty"`
+	ProjectionGeneration int             `json:"projection_generation,omitempty"`
+	ControlPlaneEvents   int             `json:"control_plane_events,omitempty"`
+	LastControlPlaneKind string          `json:"last_control_plane_kind,omitempty"`
 }
 
 type workflowView struct {
@@ -187,6 +199,37 @@ type skillEntry struct {
 type skillSelectionOutcome struct {
 	Selected  bool
 	Selection *SkillSelection
+}
+
+type controlPlaneEvent struct {
+	Seq                   int    `json:"seq"`
+	Op                    string `json:"op"`
+	Path                  string `json:"path"`
+	SelectionScope        string `json:"selection_scope,omitempty"`
+	Result                string `json:"result"`
+	VisibleAfter          string `json:"visible_after"`
+	VisibleFromGeneration int    `json:"visible_from_generation"`
+	SelectedBefore        bool   `json:"selected_before"`
+	SelectedAfter         bool   `json:"selected_after"`
+	WinnerBefore          string `json:"winner_before,omitempty"`
+	WinnerAfter           string `json:"winner_after,omitempty"`
+	ReasonAfter           string `json:"reason_after,omitempty"`
+}
+
+type controlPlaneEventViewRecord struct {
+	Seq                   int    `json:"seq"`
+	Op                    string `json:"op"`
+	Path                  string `json:"path"`
+	SelectionScope        string `json:"selection_scope,omitempty"`
+	Result                string `json:"result"`
+	Visibility            string `json:"visibility"`
+	VisibleAfter          string `json:"visible_after"`
+	VisibleFromGeneration int    `json:"visible_from_generation"`
+	SelectedBefore        bool   `json:"selected_before"`
+	SelectedAfter         bool   `json:"selected_after"`
+	WinnerBefore          string `json:"winner_before,omitempty"`
+	WinnerAfter           string `json:"winner_after,omitempty"`
+	ReasonAfter           string `json:"reason_after,omitempty"`
 }
 
 type curatedEntry struct {
@@ -232,10 +275,7 @@ func New(opts Options) *Adapter {
 	skills := map[string]skillEntry{}
 	for key, value := range opts.Skills {
 		name := normalizeSkillName(key)
-		skills[name] = skillEntry{
-			Content:  value,
-			Metadata: normalizeSkillMetadata(skillMetadata[name], "skill_bundle", projectionFreshnessSnapshot),
-		}
+		skills[name] = newSkillEntry(value, skillMetadata[name], "skill_bundle", projectionFreshnessSnapshot)
 	}
 	curated := map[string]curatedEntry{}
 	for _, value := range opts.Curated {
@@ -314,6 +354,57 @@ func (a *Adapter) UpsertResource(name string, content string, meta ProjectionMet
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.resources[normalizeResourceName(name)] = newProjectionEntry(content, meta, "control_plane", projectionFreshnessUpdated)
+}
+
+func (a *Adapter) UpdateSkill(name string, content string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	normalizedName := normalizeSkillName(name)
+	if a.skills == nil {
+		return
+	}
+	beforeSkills := cloneSkillEntries(a.skills)
+	entry, ok := beforeSkills[normalizedName]
+	if !ok {
+		return
+	}
+	entry.Content = content
+	entry.Metadata.Source = "control_plane"
+	entry.Metadata.Freshness = projectionFreshnessUpdated
+	a.skills[normalizedName] = entry
+	a.appendSkillControlPlaneEventLocked(controlPlaneEventKindSkillUpdated, normalizedName, beforeSkills, cloneSkillEntries(a.skills))
+}
+
+func (a *Adapter) UpsertSkill(name string, content string, meta SkillMetadata) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	beforeSkills := cloneSkillEntries(a.skills)
+	if a.skills == nil {
+		a.skills = map[string]skillEntry{}
+	}
+	normalized := normalizeSkillName(name)
+	a.skills[normalized] = newSkillEntry(content, meta, "control_plane", projectionFreshnessUpdated)
+	kind := controlPlaneEventKindSkillAdded
+	if _, existed := beforeSkills[normalized]; existed {
+		kind = controlPlaneEventKindSkillUpdated
+	}
+	a.appendSkillControlPlaneEventLocked(kind, normalized, beforeSkills, cloneSkillEntries(a.skills))
+}
+
+func (a *Adapter) RemoveSkill(name string) {
+	if normalized := normalizeSkillName(name); normalized != "" {
+		a.mu.Lock()
+		defer a.mu.Unlock()
+		if len(a.skills) == 0 {
+			return
+		}
+		beforeSkills := cloneSkillEntries(a.skills)
+		if _, ok := beforeSkills[normalized]; !ok {
+			return
+		}
+		delete(a.skills, normalized)
+		a.appendSkillControlPlaneEventLocked(controlPlaneEventKindSkillRemoved, normalized, beforeSkills, cloneSkillEntries(a.skills))
+	}
 }
 
 func (a *Adapter) RefreshDocument(name string, content string, meta ProjectionMetadata) {
@@ -401,6 +492,18 @@ func (a *Adapter) SetProjectionError(err error) {
 	a.projectionError = err
 }
 
+func (a *Adapter) nextProjectionGenerationLocked() int {
+	return a.projectionSeq + 1
+}
+
+func (a *Adapter) beginProjectionBuild() (int, []controlPlaneEvent) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.projectionSeq++
+	events := append([]controlPlaneEvent(nil), a.controlPlaneEvents...)
+	return a.projectionSeq, events
+}
+
 func (a *Adapter) UpsertCuratedEntry(entry CuratedEntry) {
 	normalized, ok := normalizeCuratedEntry(entry, "control_plane")
 	if !ok {
@@ -425,9 +528,15 @@ func (a *Adapter) RemoveCuratedEntry(id string) {
 }
 
 func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjection, error) {
+	projectionGeneration, controlPlaneEvents := a.beginProjectionBuild()
 	state.Curated = mergeCuratedRecords(state.Curated, a.curatedRecords())
 	if state.Workflows == nil {
 		state.Workflows = a.workflowViews(state)
+	}
+	state.ProjectionGeneration = projectionGeneration
+	state.ControlPlaneEvents = len(controlPlaneEvents)
+	if len(controlPlaneEvents) > 0 {
+		state.LastControlPlaneKind = controlPlaneEvents[len(controlPlaneEvents)-1].Op
 	}
 	raw, err := json.Marshal(state)
 	if err != nil {
@@ -456,7 +565,7 @@ func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjectio
 	if skillMount != nil {
 		mounts = append(mounts, skillMount)
 	}
-	memoryMount, err := mount.NewStaticMount("/memory", "memory", memoryViewFiles(state, raw, docs, resources, skills, curated))
+	memoryMount, err := mount.NewStaticMount("/memory", "memory", memoryViewFiles(state, raw, docs, resources, skills, curated, controlPlaneEvents))
 	if err != nil {
 		return contract.AdapterProjection{}, err
 	}
@@ -1063,6 +1172,98 @@ func newProjectionEntry(content string, meta ProjectionMetadata, defaultSource s
 	}
 }
 
+func newSkillEntry(content string, meta SkillMetadata, defaultSource string, defaultFreshness string) skillEntry {
+	return skillEntry{
+		Content:  content,
+		Metadata: normalizeSkillMetadata(meta, defaultSource, defaultFreshness),
+	}
+}
+
+func cloneSkillEntries(entries map[string]skillEntry) map[string]skillEntry {
+	if len(entries) == 0 {
+		return map[string]skillEntry{}
+	}
+	cloned := make(map[string]skillEntry, len(entries))
+	for name, entry := range entries {
+		cloned[name] = entry
+	}
+	return cloned
+}
+
+func (a *Adapter) appendSkillControlPlaneEventLocked(kind string, normalizedName string, beforeSkills map[string]skillEntry, afterSkills map[string]skillEntry) {
+	beforeOutcomes := deriveSkillSelectionOutcomes(beforeSkills)
+	afterOutcomes := deriveSkillSelectionOutcomes(afterSkills)
+	a.controlPlaneSeq++
+	a.controlPlaneEvents = append(a.controlPlaneEvents, controlPlaneEvent{
+		Seq:                   a.controlPlaneSeq,
+		Op:                    kind,
+		Path:                  skillSelectionWinnerPath(normalizedName),
+		SelectionScope:        skillSelectionScopeForEvent(normalizedName, beforeSkills, afterSkills),
+		Result:                "applied",
+		VisibleAfter:          controlPlaneVisibilityNextProjection,
+		VisibleFromGeneration: a.nextProjectionGenerationLocked() + len(a.controlPlaneEvents),
+		SelectedBefore:        skillSelectionSelectedBefore(normalizedName, beforeOutcomes),
+		SelectedAfter:         skillSelectionSelectedAfter(normalizedName, afterOutcomes),
+		WinnerBefore:          skillSelectionWinnerBefore(normalizedName, beforeSkills, afterSkills, beforeOutcomes),
+		WinnerAfter:           skillSelectionWinnerAfter(normalizedName, beforeSkills, afterSkills, afterOutcomes),
+		ReasonAfter:           skillSelectionReasonAfter(normalizedName, afterOutcomes),
+	})
+}
+
+func skillSelectionScopeForEvent(name string, beforeSkills map[string]skillEntry, afterSkills map[string]skillEntry) string {
+	if entry, ok := afterSkills[name]; ok {
+		return entry.Metadata.SelectionScope
+	}
+	if entry, ok := beforeSkills[name]; ok {
+		return entry.Metadata.SelectionScope
+	}
+	return ""
+}
+
+func skillSelectionSelectedBefore(name string, outcomes map[string]skillSelectionOutcome) bool {
+	if outcome, ok := outcomes[name]; ok {
+		return outcome.Selected
+	}
+	return false
+}
+
+func skillSelectionSelectedAfter(name string, outcomes map[string]skillSelectionOutcome) bool {
+	if outcome, ok := outcomes[name]; ok {
+		return outcome.Selected
+	}
+	return false
+}
+
+func skillSelectionWinnerBefore(name string, beforeSkills map[string]skillEntry, afterSkills map[string]skillEntry, outcomes map[string]skillSelectionOutcome) string {
+	return skillSelectionWinnerForScope(skillSelectionScopeForEvent(name, beforeSkills, afterSkills), beforeSkills, outcomes)
+}
+
+func skillSelectionWinnerAfter(name string, beforeSkills map[string]skillEntry, afterSkills map[string]skillEntry, outcomes map[string]skillSelectionOutcome) string {
+	return skillSelectionWinnerForScope(skillSelectionScopeForEvent(name, beforeSkills, afterSkills), afterSkills, outcomes)
+}
+
+func skillSelectionWinnerForScope(scope string, skills map[string]skillEntry, outcomes map[string]skillSelectionOutcome) string {
+	if strings.TrimSpace(scope) == "" {
+		return ""
+	}
+	for name, entry := range skills {
+		if entry.Metadata.SelectionScope != scope {
+			continue
+		}
+		if outcome, ok := outcomes[name]; ok && outcome.Selected {
+			return skillSelectionWinnerPath(name)
+		}
+	}
+	return ""
+}
+
+func skillSelectionReasonAfter(name string, outcomes map[string]skillSelectionOutcome) string {
+	if outcome, ok := outcomes[name]; ok && outcome.Selection != nil {
+		return outcome.Selection.Reason
+	}
+	return ""
+}
+
 func refreshProjectionEntry(existing projectionEntry, content string, meta ProjectionMetadata) projectionEntry {
 	source := strings.TrimSpace(meta.Source)
 	if source == "" {
@@ -1389,14 +1590,15 @@ func projectionRecordsFromMap(entries map[string]projectionEntry, root string, n
 	return out
 }
 
-func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curated []curatedRecord) map[string]string {
+func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curated []curatedRecord, events []controlPlaneEvent) map[string]string {
 	files := map[string]string{
 		"/memory/observations.md": strings.Join(state.Observations, "\n"),
 		"/memory/status.json":     string(raw),
-		"/memory/summary.md":      renderMemorySummary(state, docs, resources, skills, len(curated)),
+		"/memory/summary.md":      renderMemorySummary(state, docs, resources, skills, len(curated), events),
 		"/memory/workflows.md":    renderWorkflowSummary(state.Workflows),
 		"/memory/projections.md":  renderProjectionSummary(docs, resources, skills),
 		"/memory/curated.md":      renderCuratedSummary(curated),
+		"/memory/skills_audit.md": renderControlPlaneEventSummary(events, state.ProjectionGeneration),
 	}
 	workflowRaw, err := json.MarshalIndent(state.Workflows, "", "  ")
 	if err == nil {
@@ -1410,6 +1612,10 @@ func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, re
 	if err == nil {
 		files["/memory/curated.json"] = string(curatedRaw)
 	}
+	controlPlaneRaw, err := json.MarshalIndent(controlPlaneEventViews(events, state.ProjectionGeneration), "", "  ")
+	if err == nil {
+		files["/memory/skills_audit.json"] = string(controlPlaneRaw)
+	}
 	if len(state.ReadResources) > 0 {
 		files["/memory/resources.md"] = strings.Join(state.ReadResources, "\n")
 	}
@@ -1419,13 +1625,14 @@ func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, re
 	return files
 }
 
-func renderMemorySummary(state sessionState, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curatedCount int) string {
+func renderMemorySummary(state sessionState, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curatedCount int, events []controlPlaneEvent) string {
 	freshnessCounts := countProjectionFreshness(docs, resources, skills)
 	materializationCounts := countProjectionMaterialization(docs, resources, skills)
 	lines := []string{
 		"# Managed Memory",
 		"",
 		fmt.Sprintf("- freshness: %s", state.Freshness),
+		fmt.Sprintf("- projection_generation: %d", state.ProjectionGeneration),
 		fmt.Sprintf("- projections.documents: %d", len(docs)),
 		fmt.Sprintf("- projections.resources: %d", len(resources)),
 		fmt.Sprintf("- projections.skills: %d", len(skills)),
@@ -1436,6 +1643,11 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		fmt.Sprintf("- skill_reads: %d", len(state.ReadSkills)),
 		fmt.Sprintf("- written_outputs: %d", len(state.WrittenOutputs)),
 		fmt.Sprintf("- denied_paths: %d", len(state.DeniedPaths)),
+		fmt.Sprintf("- control_plane_events: %d", len(events)),
+	}
+	if len(events) > 0 {
+		last := events[len(events)-1]
+		lines = append(lines, fmt.Sprintf("- last_control_plane_event: %s %s", last.Op, last.Path))
 	}
 	if len(freshnessCounts) > 0 {
 		lines = append(lines, "", "## Projection Freshness")
@@ -1468,6 +1680,60 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		for _, workflow := range state.Workflows {
 			lines = append(lines, fmt.Sprintf("- [%s] %s (%s)", workflow.Status, workflow.Title, workflow.ID))
 		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func controlPlaneEventViews(events []controlPlaneEvent, projectionGeneration int) []controlPlaneEventViewRecord {
+	if len(events) == 0 {
+		return []controlPlaneEventViewRecord{}
+	}
+	views := make([]controlPlaneEventViewRecord, 0, len(events))
+	for _, event := range events {
+		visibility := "visible"
+		if projectionGeneration < event.VisibleFromGeneration {
+			visibility = "pending"
+		}
+		views = append(views, controlPlaneEventViewRecord{
+			Seq:                   event.Seq,
+			Op:                    event.Op,
+			Path:                  event.Path,
+			SelectionScope:        event.SelectionScope,
+			Result:                event.Result,
+			Visibility:            visibility,
+			VisibleAfter:          event.VisibleAfter,
+			VisibleFromGeneration: event.VisibleFromGeneration,
+			SelectedBefore:        event.SelectedBefore,
+			SelectedAfter:         event.SelectedAfter,
+			WinnerBefore:          event.WinnerBefore,
+			WinnerAfter:           event.WinnerAfter,
+			ReasonAfter:           event.ReasonAfter,
+		})
+	}
+	return views
+}
+
+func renderControlPlaneEventSummary(events []controlPlaneEvent, projectionGeneration int) string {
+	lines := []string{"# Skills Control-Plane Audit", ""}
+	views := controlPlaneEventViews(events, projectionGeneration)
+	if len(views) == 0 {
+		lines = append(lines, "- no control-plane events")
+		return strings.Join(lines, "\n") + "\n"
+	}
+	lines = append(lines, fmt.Sprintf("- projection_generation: %d", projectionGeneration))
+	lines = append(lines, fmt.Sprintf("- events: %d", len(views)), "")
+	for _, event := range views {
+		line := fmt.Sprintf("- [%d] %s %s result=%s visibility=%s visible_from=%d", event.Seq, event.Op, event.Path, event.Result, event.Visibility, event.VisibleFromGeneration)
+		if event.SelectionScope != "" {
+			line += fmt.Sprintf(" scope=%s", event.SelectionScope)
+		}
+		if event.WinnerAfter != "" {
+			line += fmt.Sprintf(" winner_after=%s", event.WinnerAfter)
+		}
+		if event.ReasonAfter != "" {
+			line += fmt.Sprintf(" reason_after=%s", event.ReasonAfter)
+		}
+		lines = append(lines, line)
 	}
 	return strings.Join(lines, "\n") + "\n"
 }

@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,9 +88,26 @@ type skillPrecedenceRecord struct {
 }
 
 type skillSelectionRecord struct {
-	Scope  string `json:"scope,omitempty"`
-	Mode   string `json:"mode,omitempty"`
-	Reason string `json:"reason,omitempty"`
+	Scope      string `json:"scope,omitempty"`
+	Mode       string `json:"mode,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	WinnerPath string `json:"winner_path,omitempty"`
+}
+
+type skillAuditRecord struct {
+	Seq                   int    `json:"seq"`
+	Op                    string `json:"op"`
+	Path                  string `json:"path"`
+	SelectionScope        string `json:"selection_scope,omitempty"`
+	Result                string `json:"result"`
+	Visibility            string `json:"visibility"`
+	VisibleAfter          string `json:"visible_after"`
+	VisibleFromGeneration int    `json:"visible_from_generation"`
+	SelectedBefore        bool   `json:"selected_before"`
+	SelectedAfter         bool   `json:"selected_after"`
+	WinnerBefore          string `json:"winner_before,omitempty"`
+	WinnerAfter           string `json:"winner_after,omitempty"`
+	ReasonAfter           string `json:"reason_after,omitempty"`
 }
 
 type projectionIndexView struct {
@@ -721,6 +740,89 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
 		return ScenarioReport{}, err
 	}
+	adapter.UpsertSkill("planning/live-hotfix", "# Live hotfix skill\n", referenceadapter.SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      "updated",
+		SelectionScope: "planning/default",
+		Eligibility:    referenceadapter.SkillEligibility{State: "eligible"},
+		Precedence:     referenceadapter.SkillPrecedence{Tier: "workspace", Rank: 0},
+	})
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillProjectionView, err := decodeProjectionIndex(controlPlaneSkillView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillAuditView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillAudit, err := decodeSkillAudit(controlPlaneSkillAuditView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillContent, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/live-hotfix/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.UpdateSkill("planning/live-hotfix", "# Live hotfix skill\nUpdated guidance.\n")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillUpdatedView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillUpdatedProjectionView, err := decodeProjectionIndex(controlPlaneSkillUpdatedView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillUpdatedAuditView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneSkillUpdatedAudit, err := decodeSkillAudit(controlPlaneSkillUpdatedAuditView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	controlPlaneUpdatedSkillContent, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/live-hotfix/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.RemoveSkill("planning/live-hotfix")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	postRemoveSkillView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	postRemoveSkillProjectionView, err := decodeProjectionIndex(postRemoveSkillView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	postRemoveSkillAuditView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	postRemoveSkillAudit, err := decodeSkillAudit(postRemoveSkillAuditView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
 	adapter.SetWorkflowStatus("draft-plan", "blocked", "awaiting review")
 	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
 		return ScenarioReport{}, err
@@ -756,12 +858,37 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	summaryText := summaryView.Result.Stdout
+	lastSummaryValue, lastSummaryOk := summaryLineValue(summaryText, "last_control_plane_event")
 	curatedViewPath := "/memory/curated.json"
 	curatedView, err := manager.Execute(context.Background(), session.SessionID, "cat "+curatedViewPath, contract.ExecutionPolicy{})
 	if err != nil {
 		return ScenarioReport{}, err
 	}
 	curatedSnapshot, err := decodeCuratedMemorySnapshot(curatedView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	skillsAuditView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if skillsAuditView.Result.ExitCode != 0 {
+		return ScenarioReport{}, fmt.Errorf("skills audit command failed: %+v", skillsAuditView.Result)
+	}
+	controlPlaneAuditHistory, err := decodeSkillAudit(skillsAuditView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	statusSnapshot, err := manager.Get(session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	rawState, ok := statusSnapshot.State.Opaque[adapter.AdapterID()]
+	if !ok {
+		return ScenarioReport{}, fmt.Errorf("missing adapter state for %q", adapter.AdapterID())
+	}
+	auditState, err := decodeSessionStateSummary(rawState)
 	if err != nil {
 		return ScenarioReport{}, err
 	}
@@ -800,6 +927,11 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	refreshedGuideProjection, refreshedGuideOK := findProjectionRecord(refreshedProjectionView.Documents, "/knowledge_base/reference/guide.md")
 	refreshedResourceProjection, refreshedResourceOK := findProjectionRecord(refreshedProjectionView.Resources, "/resources/checklists/plan.json")
 	refreshedSkillProjection, refreshedSkillOK := findProjectionRecord(refreshedProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	controlPlaneHotfixProjection, controlPlaneHotfixOK := findProjectionRecord(controlPlaneSkillProjectionView.Skills, "/skills/planning/live-hotfix/SKILL.md")
+	controlPlaneDraftProjection, controlPlaneDraftOK := findProjectionRecord(controlPlaneSkillProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	controlPlaneUpdatedProjection, controlPlaneUpdatedOK := findProjectionRecord(controlPlaneSkillUpdatedProjectionView.Skills, "/skills/planning/live-hotfix/SKILL.md")
+	postRemoveDraftProjection, postRemoveDraftOK := findProjectionRecord(postRemoveSkillProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	_, postRemoveHotfixOK := findProjectionRecord(postRemoveSkillProjectionView.Skills, "/skills/planning/live-hotfix/SKILL.md")
 	overrideWorkflow, overrideWorkflowOK := findWorkflowView(overrideWorkflowState, "draft-plan")
 	traceWorkflow, traceWorkflowOK := findWorkflowView(traceWorkflowState, "draft-plan")
 	workflowSkillBacked, workflowSkillBackedOK := findWorkflowView(workflowState, "draft-plan")
@@ -884,6 +1016,61 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		namedCheck{name: "refreshed_document_materialization_state", ok: refreshedGuideOK && projectionHasMaterializationState(refreshedGuideProjection)},
 		namedCheck{name: "refreshed_resource_materialization_state", ok: refreshedResourceOK && projectionHasMaterializationState(refreshedResourceProjection)},
 		namedCheck{name: "refreshed_skill_materialization_state", ok: refreshedSkillOK && projectionHasMaterializationState(refreshedSkillProjection)},
+		namedCheck{name: "control_plane_skill_added", ok: controlPlaneHotfixOK &&
+			controlPlaneHotfixProjection.Source == "control_plane" &&
+			controlPlaneHotfixProjection.Freshness == "updated" &&
+			skillSelected(controlPlaneHotfixProjection) &&
+			skillSelectionScope(controlPlaneHotfixProjection) == "planning/default" &&
+			skillSelectionMode(controlPlaneHotfixProjection) != ""},
+		namedCheck{name: "control_plane_skill_added_audit", ok: len(controlPlaneSkillAudit) == 1 &&
+			controlPlaneSkillAudit[0].Op == "skill_added" &&
+			controlPlaneSkillAudit[0].Visibility == "visible" &&
+			controlPlaneSkillAudit[0].VisibleAfter == "next_projection_rebuild" &&
+			controlPlaneSkillAudit[0].WinnerAfter == "/skills/planning/live-hotfix/SKILL.md"},
+		namedCheck{name: "control_plane_skill_content", ok: strings.Contains(controlPlaneSkillContent.Result.Stdout, "Live hotfix skill")},
+		namedCheck{name: "control_plane_skill_updated", ok: controlPlaneUpdatedOK &&
+			controlPlaneUpdatedProjection.Source == "control_plane" &&
+			controlPlaneUpdatedProjection.Freshness == "updated" &&
+			skillSelected(controlPlaneUpdatedProjection) &&
+			strings.Contains(controlPlaneUpdatedSkillContent.Result.Stdout, "Updated guidance")},
+		namedCheck{name: "control_plane_skill_updated_audit", ok: len(controlPlaneSkillUpdatedAudit) == 2 &&
+			controlPlaneSkillUpdatedAudit[1].Op == "skill_updated" &&
+			controlPlaneSkillUpdatedAudit[1].Visibility == "visible" &&
+			controlPlaneSkillUpdatedAudit[1].SelectedBefore &&
+			controlPlaneSkillUpdatedAudit[1].SelectedAfter &&
+			controlPlaneSkillUpdatedAudit[1].ReasonAfter != ""},
+		namedCheck{name: "control_plane_skill_reselection", ok: controlPlaneDraftOK &&
+			!skillSelected(controlPlaneDraftProjection) &&
+			skillSelectionReason(controlPlaneDraftProjection) != "" &&
+			skillSelectionWinnerPath(controlPlaneDraftProjection) == "/skills/planning/live-hotfix/SKILL.md"},
+		namedCheck{name: "control_plane_skill_removed", ok: !postRemoveHotfixOK},
+		namedCheck{name: "control_plane_skill_removed_audit", ok: len(postRemoveSkillAudit) == 3 &&
+			postRemoveSkillAudit[2].Op == "skill_removed" &&
+			!postRemoveSkillAudit[2].SelectedAfter &&
+			postRemoveSkillAudit[2].VisibleAfter == "next_projection_rebuild"},
+		namedCheck{name: "control_plane_skill_fallback_restored", ok: postRemoveDraftOK &&
+			skillSelected(postRemoveDraftProjection) &&
+			skillSelectionScope(postRemoveDraftProjection) == "planning/default" &&
+			skillSelectionWinnerPath(postRemoveDraftProjection) == ""},
+		namedCheck{name: "skills_audit_history_count", ok: len(controlPlaneAuditHistory) == 3},
+		namedCheck{name: "skills_audit_history_sequence", ok: len(controlPlaneAuditHistory) == 3 &&
+			controlPlaneAuditHistory[0].Op == "skill_added" &&
+			controlPlaneAuditHistory[1].Op == "skill_updated" &&
+			controlPlaneAuditHistory[2].Op == "skill_removed"},
+		namedCheck{name: "skills_audit_selection_alignment", ok: len(controlPlaneAuditHistory) == 3 &&
+			controlPlaneAuditHistory[0].SelectedAfter &&
+			controlPlaneAuditHistory[1].SelectedAfter &&
+			!controlPlaneAuditHistory[2].SelectedAfter},
+		namedCheck{name: "skills_audit_visibility_timing", ok: len(controlPlaneAuditHistory) == 3 &&
+			controlPlaneAuditHistory[2].VisibleAfter == "next_projection_rebuild" &&
+			controlPlaneAuditHistory[2].VisibleFromGeneration <= auditState.ProjectionGeneration},
+		namedCheck{name: "skills_audit_state_alignment", ok: len(controlPlaneAuditHistory) > 0 &&
+			auditState.ControlPlaneEvents == len(controlPlaneAuditHistory) &&
+			auditState.LastControlPlaneKind == controlPlaneAuditHistory[len(controlPlaneAuditHistory)-1].Op},
+		namedCheck{name: "memory_summary_control_plane_audit", ok: len(controlPlaneAuditHistory) > 0 &&
+			summaryCountEquals(summaryText, "control_plane_events", len(controlPlaneAuditHistory)) &&
+			lastSummaryOk &&
+			lastSummaryValue == controlPlaneAuditHistory[len(controlPlaneAuditHistory)-1].Op+" "+controlPlaneAuditHistory[len(controlPlaneAuditHistory)-1].Path},
 		namedCheck{name: "workflow_override_control_plane", ok: overrideWorkflowOK &&
 			overrideWorkflow.Status == "blocked" &&
 			overrideWorkflow.StatusSource == "control_plane" &&
@@ -899,10 +1086,10 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 			strings.Contains(memoryView.Result.Stdout, "wrote:/task_outputs/plan.txt") &&
 			strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md") &&
 			strings.Contains(memoryView.Result.Stdout, "denied:/skills/planning/draft-plan/SKILL.md")},
-		namedCheck{name: "memory_summary_counts", ok: strings.Contains(summaryView.Result.Stdout, "resource_reads: 1") &&
-			strings.Contains(summaryView.Result.Stdout, "skill_reads: 2") &&
-			strings.Contains(summaryView.Result.Stdout, "written_outputs: 1") &&
-			strings.Contains(summaryView.Result.Stdout, "projections.skills: 3")},
+		namedCheck{name: "memory_summary_counts", ok: summaryCountEquals(summaryView.Result.Stdout, "resource_reads", 1) &&
+			summaryCountAtLeast(summaryView.Result.Stdout, "skill_reads", 3) &&
+			summaryCountEquals(summaryView.Result.Stdout, "written_outputs", 1) &&
+			summaryCountEquals(summaryView.Result.Stdout, "projections.skills", 3)},
 		namedCheck{name: "curated_memory_entry", ok: curatedSnapshot.EntryCount > 0 &&
 			containsPath(curatedSnapshot.SourcePaths, "/knowledge_base/reference/guide.md") &&
 			containsPath(curatedSnapshot.SourcePaths, "/resources/checklists/plan.json") &&
@@ -1123,6 +1310,12 @@ func decodeProjectionRecordsView(raw string) ([]projectionRecordView, error) {
 	return records, err
 }
 
+func decodeSkillAudit(raw string) ([]skillAuditRecord, error) {
+	var records []skillAuditRecord
+	err := json.Unmarshal([]byte(raw), &records)
+	return records, err
+}
+
 func decodeCuratedMemorySnapshot(raw string) (curatedMemorySnapshot, error) {
 	var payload any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
@@ -1301,6 +1494,66 @@ func skillSelectionReason(record projectionRecordView) string {
 		return ""
 	}
 	return strings.TrimSpace(record.Selection.Reason)
+}
+
+func skillSelectionWinnerPath(record projectionRecordView) string {
+	if record.Selection == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Selection.WinnerPath)
+}
+
+func summaryCountEquals(raw string, key string, want int) bool {
+	got, ok := summaryCount(raw, key)
+	return ok && got == want
+}
+
+func summaryCountAtLeast(raw string, key string, min int) bool {
+	got, ok := summaryCount(raw, key)
+	return ok && got >= min
+}
+
+func summaryCount(raw string, key string) (int, bool) {
+	prefix := "- " + key + ": "
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		valueText := strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		value, err := strconv.Atoi(valueText)
+		if err != nil {
+			return 0, false
+		}
+		return value, true
+	}
+	return 0, false
+}
+
+type sessionStateSummary struct {
+	ProjectionGeneration int    `json:"projection_generation"`
+	ControlPlaneEvents   int    `json:"control_plane_events"`
+	LastControlPlaneKind string `json:"last_control_plane_kind"`
+}
+
+func decodeSessionStateSummary(raw []byte) (sessionStateSummary, error) {
+	var state sessionStateSummary
+	if err := json.Unmarshal(raw, &state); err != nil {
+		return state, err
+	}
+	return state, nil
+}
+
+func summaryLineValue(raw string, key string) (string, bool) {
+	prefix := "- " + key + ": "
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		return strings.TrimSpace(strings.TrimPrefix(line, prefix)), true
+	}
+	return "", false
 }
 
 func projectionHasMaterializationState(record projectionRecordView) bool {
