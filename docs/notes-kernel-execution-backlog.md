@@ -553,6 +553,43 @@ Optional but recommended:
 - Rollback note:
   - If the audit surface becomes too broad, keep the event schema and trim fields or views rather than falling back to prose-only logging.
 
+### K-020: Add adapter projection metrics and denial surfaces
+- Feat: `f-20260402-adapter-projection-metrics-denial-surfaces`
+- Status: done
+- Why now: Stage D still has an unfinished gap. The reference adapter now has explicit control-plane audit, but callers still lack a compact machine-readable metrics surface for projection generations and a dedicated denial or policy surface beyond raw path lists.
+- Kernel invariant: observability stays truthful and adapter-local; projection metrics do not invent cache semantics that do not exist; denial or policy views stay aligned with actual runtime truth.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `benchmarks/simsh_native_reference/README.md`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - The reference adapter exposes a compact machine-readable projection metrics surface.
+  - The reference adapter exposes a compact denial or policy surface under `/memory`.
+  - Metrics and denial views stay aligned with projection generation, control-plane audit, and observed denied paths.
+  - No fake cache-hit metric is introduced while the adapter has no real cache.
+  - Benchmark and adapter tests prove the surfaces structurally instead of relying on prose or diff heuristics.
+- Notes:
+  - Keep the slice narrow: no generic observability platform and no premature caching layer.
+  - Prefer compact counts and recent samples over large duplicated snapshots.
+  - If latency is exposed, keep it best-effort and clearly scoped to projection rebuilds rather than pretending to be end-to-end system latency.
+  - The reference adapter now exposes `/memory/projection_metrics.json|md` and `/memory/denials.json|md` as compact observability surfaces.
+  - Metrics are derived from projection generation, projection counts, freshness/materialization counts, control-plane event count, and unique denied paths; cache metrics remain explicitly unavailable until a real cache exists.
+  - Denials are classified by adapter-visible namespace (`reference`, `resources`, `skills`, `memory`, `external_or_unknown`) rather than by guessed semantic cause.
+  - Adapter tests and the native reference benchmark now prove metrics and denial views stay aligned with projection truth, control-plane audit, and denied paths.
+  - Validated with `go test ./pkg/adapter/reference -count=1`, `go test ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Rollback note:
+  - If the metrics surface starts widening into speculative telemetry, keep the truthful counts and generation fields and drop the speculative fields.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

@@ -271,6 +271,175 @@ func TestReferenceAdapterEndToEnd(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterProjectionMetricsAndDenials(t *testing.T) {
+	const (
+		docPath   = "/knowledge_base/reference/guide.md"
+		skillPath = "/skills/planning/draft-plan/SKILL.md"
+	)
+
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nmetrics\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: projectionFreshnessSnapshot},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: projectionFreshnessLive},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      projectionFreshnessLive,
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State: skillEligibilityEligible,
+				},
+				Precedence: SkillPrecedence{
+					Tier: skillPrecedenceTierWorkspace,
+					Rank: 1,
+				},
+				Selected: true,
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_projection_metrics" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat "+docPath, contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read doc failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read resource failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat "+skillPath, contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read skill failed: %v", err)
+	}
+
+	deniedDoc, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > "+docPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("denied doc write failed unexpectedly: %v", err)
+	}
+	if deniedDoc.Result.ExitCode == 0 {
+		t.Fatalf("expected doc write to be denied, got %+v", deniedDoc.Result)
+	}
+
+	deniedSkill, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > "+skillPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("denied skill write failed unexpectedly: %v", err)
+	}
+	if deniedSkill.Result.ExitCode == 0 {
+		t.Fatalf("expected skill write to be denied, got %+v", deniedSkill.Result)
+	}
+
+	metricsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projection_metrics.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projection metrics failed: %v", err)
+	}
+	if metricsResp.Result.ExitCode != 0 {
+		t.Fatalf("projection metrics command failed: %+v", metricsResp.Result)
+	}
+	denialsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/denials.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read denial view failed: %v", err)
+	}
+	if denialsResp.Result.ExitCode != 0 {
+		t.Fatalf("denials command failed: %+v", denialsResp.Result)
+	}
+	auditResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills audit failed: %v", err)
+	}
+	if auditResp.Result.ExitCode != 0 {
+		t.Fatalf("skills audit command failed: %+v", auditResp.Result)
+	}
+	statusResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/status.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read memory status failed: %v", err)
+	}
+
+	state := decodeReferenceState(t, []byte(statusResp.Result.Stdout))
+	metrics := decodeProjectionMetricsView(t, []byte(metricsResp.Result.Stdout))
+	denials := decodeDenialView(t, []byte(denialsResp.Result.Stdout))
+	events := decodeControlPlaneEventViews(t, []byte(auditResp.Result.Stdout))
+
+	if metrics.ProjectionGeneration <= 0 {
+		t.Fatalf("projection metrics generation = %d, want positive generation", metrics.ProjectionGeneration)
+	}
+	if metrics.ControlPlaneEvents != len(events) {
+		t.Fatalf("control-plane event count mismatch: metrics=%d audit=%d", metrics.ControlPlaneEvents, len(events))
+	}
+	if metrics.UniqueDeniedPaths != len(state.DeniedPaths) {
+		t.Fatalf("denied-path count mismatch: metrics=%d state=%d", metrics.UniqueDeniedPaths, len(state.DeniedPaths))
+	}
+	if denials.ProjectionGeneration <= 0 {
+		t.Fatalf("denial view projection generation = %d, want positive generation", denials.ProjectionGeneration)
+	}
+	if metrics.UniqueDeniedPaths != denials.UniqueDeniedPaths {
+		t.Fatalf("denied-path count mismatch between metrics and denial view: %d vs %d", metrics.UniqueDeniedPaths, denials.UniqueDeniedPaths)
+	}
+	if len(denials.SamplePaths) != denials.UniqueDeniedPaths {
+		t.Fatalf("denial view sample path length %d != unique count %d", len(denials.SamplePaths), denials.UniqueDeniedPaths)
+	}
+
+	for _, expected := range []string{docPath, skillPath} {
+		if !containsLine(denials.SamplePaths, expected) {
+			t.Fatalf("denial view missing %s paths=%v", expected, denials.SamplePaths)
+		}
+		if !containsLine(state.DeniedPaths, expected) {
+			t.Fatalf("state missing %s denied path", expected)
+		}
+	}
+	documents, docsOK := metrics.ProjectionCounts["documents"]
+	resources, resOK := metrics.ProjectionCounts["resources"]
+	skills, skillsOK := metrics.ProjectionCounts["skills"]
+	if !docsOK || !resOK || !skillsOK || documents != 1 || resources != 1 || skills != 1 {
+		t.Fatalf("projection counts unexpected: %+v", metrics.ProjectionCounts)
+	}
+
+	if got := metrics.FreshnessCounts[projectionFreshnessSnapshot]; got != 1 {
+		t.Fatalf("snapshot freshness count = %d, want 1", got)
+	}
+	if got := metrics.FreshnessCounts[projectionFreshnessLive]; got != 2 {
+		t.Fatalf("live freshness count = %d, want 2", got)
+	}
+
+	materialized := 0
+	for _, count := range metrics.MaterializationCounts {
+		materialized += count
+	}
+	totalRecords := metrics.ProjectionCounts["documents"] + metrics.ProjectionCounts["resources"] + metrics.ProjectionCounts["skills"]
+	if materialized != totalRecords {
+		t.Fatalf("materialization counts %d != total records %d", materialized, totalRecords)
+	}
+	if metrics.CacheHitMetricsAvailable {
+		t.Fatalf("cache hit metrics flag should be false for reference adapter")
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close session failed: %v", err)
+	}
+}
+
 func TestReferenceAdapterProjectionError(t *testing.T) {
 	adapter := New(Options{})
 	adapter.SetProjectionError(errors.New("projection unavailable"))
@@ -1207,6 +1376,17 @@ func TestReferenceAdapterSkillControlPlaneAuditEvents(t *testing.T) {
 		}
 	}
 
+	metricsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projection_metrics.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projection metrics failed: %v", err)
+	}
+	metrics := decodeProjectionMetricsView(t, []byte(metricsResp.Result.Stdout))
+	denialsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/denials.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read denials view failed: %v", err)
+	}
+	denials := decodeDenialView(t, []byte(denialsResp.Result.Stdout))
+
 	snapshot, err := manager.Get(session.SessionID)
 	if err != nil {
 		t.Fatalf("snapshot failed: %v", err)
@@ -1217,6 +1397,18 @@ func TestReferenceAdapterSkillControlPlaneAuditEvents(t *testing.T) {
 	}
 	if state.LastControlPlaneKind != removed.Op {
 		t.Fatalf("state last kind = %q, want %q", state.LastControlPlaneKind, removed.Op)
+	}
+	if state.ProjectionGeneration < removed.VisibleFromGeneration {
+		t.Fatalf("state projection generation = %d, want >=%d", state.ProjectionGeneration, removed.VisibleFromGeneration)
+	}
+	if metrics.ControlPlaneEvents != len(events) || metrics.ProjectionCounts["skills"] != 0 || metrics.ProjectionGeneration > state.ProjectionGeneration {
+		t.Fatalf("projection metrics = %+v, want events=%d skills=0 generation<=%d", metrics, len(events), state.ProjectionGeneration)
+	}
+	if metrics.CacheHitMetricsAvailable {
+		t.Fatalf("projection metrics cache flag = %+v, want unavailable", metrics)
+	}
+	if denials.UniqueDeniedPaths != 0 || denials.ProjectionGeneration > state.ProjectionGeneration {
+		t.Fatalf("denials view = %+v, want generation<=%d unique=0", denials, state.ProjectionGeneration)
 	}
 
 	summaryResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
@@ -1234,6 +1426,14 @@ func TestReferenceAdapterSkillControlPlaneAuditEvents(t *testing.T) {
 		t.Fatalf("summary missing last_control_plane_event line")
 	} else if lastValue != expectedLast {
 		t.Fatalf("summary last_control_plane_event = %q, want %q", lastValue, expectedLast)
+	}
+
+	metricsSummaryResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projection_metrics.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projection metrics summary failed: %v", err)
+	}
+	if !strings.Contains(metricsSummaryResp.Result.Stdout, "projection_generation: ") || !strings.Contains(metricsSummaryResp.Result.Stdout, "cache_hit_metrics_available: false") {
+		t.Fatalf("projection metrics summary = %q, want generation and cache flag", metricsSummaryResp.Result.Stdout)
 	}
 }
 
@@ -1830,6 +2030,24 @@ func decodeProjectionView(t *testing.T, raw []byte) projectionView {
 	var view projectionView
 	if err := json.Unmarshal(raw, &view); err != nil {
 		t.Fatalf("decode projection view failed: %v", err)
+	}
+	return view
+}
+
+func decodeProjectionMetricsView(t *testing.T, raw []byte) projectionMetricsView {
+	t.Helper()
+	var view projectionMetricsView
+	if err := json.Unmarshal(raw, &view); err != nil {
+		t.Fatalf("decode projection metrics view failed: %v", err)
+	}
+	return view
+}
+
+func decodeDenialView(t *testing.T, raw []byte) denialView {
+	t.Helper()
+	var view denialView
+	if err := json.Unmarshal(raw, &view); err != nil {
+		t.Fatalf("decode denial view failed: %v", err)
 	}
 	return view
 }

@@ -82,6 +82,7 @@ Keep write/update flows explicit and auditable via dedicated commands/APIs (not 
 - Unscoped skills stay in compatibility mode: they may surface explicit selected or not-selected state, but the adapter must not invent competition from path layout alone.
 - A minimal current reference control-plane shape for skills is: explicit adapter-local `upsert/update/remove` APIs, read-only `/skills` projection refresh on the next projection rebuild, and reselection through the same SSOT derivation path rather than ad hoc mutation rules.
 - A minimal current reference audit shape for skill control-plane mutations is: `/memory/skills_audit.json` for ordered machine-readable events, `/memory/skills_audit.md` for compact human review, and explicit projection-generation visibility timing instead of implicit diff-based inference.
+- A minimal current reference metrics and denial shape is: `/memory/projection_metrics.json` plus `/memory/projection_metrics.md` for compact counts and generation data, and `/memory/denials.json` plus `/memory/denials.md` for unique denied-path samples and namespace buckets. Cache-hit metrics stay explicitly unavailable until a real cache exists.
 - Add load-time gating for skills (required bins/env/config/os), but keep fallback predictable.
 - Handle missing memory/resource files gracefully (`not found` should be a normal result path, not a hard failure).
 - Apply limits from day one (scan count, loaded entries, prompt injection size, debounce/watch intervals).

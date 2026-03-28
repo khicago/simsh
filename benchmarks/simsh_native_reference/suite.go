@@ -116,6 +116,24 @@ type projectionIndexView struct {
 	Skills    []projectionRecordView `json:"skills,omitempty"`
 }
 
+type projectionMetricsView struct {
+	ProjectionGeneration     int            `json:"projection_generation"`
+	ProjectionBuildMS        int64          `json:"projection_build_ms"`
+	ProjectionCounts         map[string]int `json:"projection_counts"`
+	FreshnessCounts          map[string]int `json:"freshness_counts,omitempty"`
+	MaterializationCounts    map[string]int `json:"materialization_counts,omitempty"`
+	ControlPlaneEvents       int            `json:"control_plane_events"`
+	UniqueDeniedPaths        int            `json:"unique_denied_paths"`
+	CacheHitMetricsAvailable bool           `json:"cache_hit_metrics_available"`
+}
+
+type denialView struct {
+	ProjectionGeneration int            `json:"projection_generation"`
+	UniqueDeniedPaths    int            `json:"unique_denied_paths"`
+	ByNamespace          map[string]int `json:"by_namespace"`
+	SamplePaths          []string       `json:"sample_paths,omitempty"`
+}
+
 type workflowViewRecord struct {
 	ID           string   `json:"id"`
 	Status       string   `json:"status"`
@@ -858,6 +876,28 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	projectionMetricsViewResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projection_metrics.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if projectionMetricsViewResp.Result.ExitCode != 0 {
+		return ScenarioReport{}, fmt.Errorf("projection metrics command failed: %+v", projectionMetricsViewResp.Result)
+	}
+	projectionMetrics, err := decodeProjectionMetricsView(projectionMetricsViewResp.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	denialsViewResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/denials.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if denialsViewResp.Result.ExitCode != 0 {
+		return ScenarioReport{}, fmt.Errorf("denials command failed: %+v", denialsViewResp.Result)
+	}
+	denialsView, err := decodeDenialView(denialsViewResp.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
 	summaryText := summaryView.Result.Stdout
 	lastSummaryValue, lastSummaryOk := summaryLineValue(summaryText, "last_control_plane_event")
 	curatedViewPath := "/memory/curated.json"
@@ -892,6 +932,10 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	documentCount := projectionMetrics.ProjectionCounts["documents"]
+	resourceCount := projectionMetrics.ProjectionCounts["resources"]
+	skillCount := projectionMetrics.ProjectionCounts["skills"]
+	denialSamples := denialsView.SamplePaths
 
 	readTracePassed, readTraceTotal := evaluateTrace(readGuide.Result.Trace, traceExpectation{
 		requested: []string{"/knowledge_base/reference/guide.md"},
@@ -1071,6 +1115,16 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 			summaryCountEquals(summaryText, "control_plane_events", len(controlPlaneAuditHistory)) &&
 			lastSummaryOk &&
 			lastSummaryValue == controlPlaneAuditHistory[len(controlPlaneAuditHistory)-1].Op+" "+controlPlaneAuditHistory[len(controlPlaneAuditHistory)-1].Path},
+		namedCheck{name: "projection_metrics_view", ok: projectionMetrics.ProjectionGeneration > 0 &&
+			projectionMetrics.ControlPlaneEvents == len(controlPlaneAuditHistory) &&
+			projectionMetrics.ProjectionCounts["skills"] == 3 &&
+			!projectionMetrics.CacheHitMetricsAvailable},
+		namedCheck{name: "denials_view", ok: denialsView.ProjectionGeneration > 0 &&
+			denialsView.UniqueDeniedPaths >= 2 &&
+			denialsView.ByNamespace["reference"] >= 1 &&
+			denialsView.ByNamespace["skills"] >= 1 &&
+			containsPath(denialsView.SamplePaths, "/knowledge_base/reference/guide.md") &&
+			containsPath(denialsView.SamplePaths, "/skills/planning/draft-plan/SKILL.md")},
 		namedCheck{name: "workflow_override_control_plane", ok: overrideWorkflowOK &&
 			overrideWorkflow.Status == "blocked" &&
 			overrideWorkflow.StatusSource == "control_plane" &&
@@ -1095,6 +1149,14 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 			containsPath(curatedSnapshot.SourcePaths, "/resources/checklists/plan.json") &&
 			containsPath(curatedSnapshot.SourcePaths, "/task_outputs/plan.txt") &&
 			containsPath(curatedSnapshot.SourcePaths, "/skills/planning/draft-plan/SKILL.md")},
+		namedCheck{name: "projection_metrics_generation_alignment", ok: projectionMetrics.ProjectionGeneration > 0 && denialsView.ProjectionGeneration > 0},
+		namedCheck{name: "projection_metrics_counts", ok: documentCount == 1 && resourceCount == 1 && skillCount == 3},
+		namedCheck{name: "projection_metrics_denial_alignment", ok: projectionMetrics.UniqueDeniedPaths == len(auditState.DeniedPaths) && projectionMetrics.UniqueDeniedPaths == denialsView.UniqueDeniedPaths},
+		namedCheck{name: "projection_metrics_denial_paths", ok: len(denialSamples) == denialsView.UniqueDeniedPaths &&
+			containsPath(denialSamples, "/knowledge_base/reference/guide.md") &&
+			containsPath(denialSamples, "/skills/planning/draft-plan/SKILL.md")},
+		namedCheck{name: "projection_metrics_cache_flag", ok: !projectionMetrics.CacheHitMetricsAvailable},
+		namedCheck{name: "projection_metrics_materialization_consistency", ok: sumCounts(projectionMetrics.MaterializationCounts) == documentCount+resourceCount+skillCount},
 	)
 
 	notes := []string{}
@@ -1316,6 +1378,18 @@ func decodeSkillAudit(raw string) ([]skillAuditRecord, error) {
 	return records, err
 }
 
+func decodeProjectionMetricsView(raw string) (projectionMetricsView, error) {
+	var view projectionMetricsView
+	err := json.Unmarshal([]byte(raw), &view)
+	return view, err
+}
+
+func decodeDenialView(raw string) (denialView, error) {
+	var view denialView
+	err := json.Unmarshal([]byte(raw), &view)
+	return view, err
+}
+
 func decodeCuratedMemorySnapshot(raw string) (curatedMemorySnapshot, error) {
 	var payload any
 	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
@@ -1530,10 +1604,19 @@ func summaryCount(raw string, key string) (int, bool) {
 	return 0, false
 }
 
+func sumCounts(counts map[string]int) int {
+	total := 0
+	for _, value := range counts {
+		total += value
+	}
+	return total
+}
+
 type sessionStateSummary struct {
-	ProjectionGeneration int    `json:"projection_generation"`
-	ControlPlaneEvents   int    `json:"control_plane_events"`
-	LastControlPlaneKind string `json:"last_control_plane_kind"`
+	ProjectionGeneration int      `json:"projection_generation"`
+	ControlPlaneEvents   int      `json:"control_plane_events"`
+	LastControlPlaneKind string   `json:"last_control_plane_kind"`
+	DeniedPaths          []string `json:"denied_paths,omitempty"`
 }
 
 func decodeSessionStateSummary(raw []byte) (sessionStateSummary, error) {

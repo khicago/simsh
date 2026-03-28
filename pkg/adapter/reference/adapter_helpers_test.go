@@ -1429,6 +1429,115 @@ func TestSkillControlPlaneEventsMaintainOrderAndSelectionTransitions(t *testing.
 	}
 }
 
+func TestProjectionMetricsViewTracksProjectionTruth(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{"guide.md": "# Guide\n"},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: projectionFreshnessSnapshot},
+		},
+		Skills: map[string]string{"planning/fallback": "# Fallback\n"},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/fallback": {
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: skillEligibilityEligible},
+				Precedence:     SkillPrecedence{Tier: skillPrecedenceTierBundled, Rank: 80},
+			},
+		},
+	})
+
+	projection, err := adapter.buildProjection(sessionState{
+		Freshness:   "observed",
+		DeniedPaths: []string{"/skills/planning/fallback/SKILL.md"},
+	})
+	if err != nil {
+		t.Fatalf("buildProjection(metrics) error = %v", err)
+	}
+
+	metricsRaw := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/projection_metrics.json")
+	metrics := decodeProjectionMetricsViewHelper(t, []byte(metricsRaw))
+	if metrics.ProjectionGeneration != 1 || metrics.ControlPlaneEvents != 0 || metrics.UniqueDeniedPaths != 1 {
+		t.Fatalf("projection metrics = %+v, want generation=1 events=0 denials=1", metrics)
+	}
+	if metrics.CacheHitMetricsAvailable {
+		t.Fatalf("cache-hit metrics should be unavailable without a real cache: %+v", metrics)
+	}
+	if metrics.ProjectionCounts["documents"] != 1 || metrics.ProjectionCounts["skills"] != 1 || metrics.ProjectionCounts["resources"] != 0 {
+		t.Fatalf("projection counts = %+v, want documents=1 skills=1 resources=0", metrics.ProjectionCounts)
+	}
+	if metrics.FreshnessCounts[projectionFreshnessSnapshot] != 2 {
+		t.Fatalf("freshness counts = %+v, want snapshot=2", metrics.FreshnessCounts)
+	}
+
+	summary := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/projection_metrics.md")
+	if !strings.Contains(summary, "projection_generation: 1") || !strings.Contains(summary, "cache_hit_metrics_available: false") {
+		t.Fatalf("projection metrics summary = %q, want generation and cache flag", summary)
+	}
+}
+
+func TestBuildProjectionMetricsViewDedupsDeniedPaths(t *testing.T) {
+	state := sessionState{
+		ProjectionGeneration: 7,
+		DeniedPaths: []string{
+			"/knowledge_base/reference/guide.md",
+			"/knowledge_base/reference/guide.md",
+			"/skills/planning/draft-plan/SKILL.md",
+		},
+	}
+	metrics := buildProjectionMetricsView(state, nil, nil, nil, nil)
+	expectedUnique := len(dedupeLines(state.DeniedPaths))
+	if metrics.UniqueDeniedPaths != expectedUnique {
+		t.Fatalf("unique denied paths = %d, want %d", metrics.UniqueDeniedPaths, expectedUnique)
+	}
+	if metrics.ProjectionGeneration != state.ProjectionGeneration {
+		t.Fatalf("projection generation = %d, want %d", metrics.ProjectionGeneration, state.ProjectionGeneration)
+	}
+	if metrics.ControlPlaneEvents != 0 {
+		t.Fatalf("control plane events = %d, want 0", metrics.ControlPlaneEvents)
+	}
+	if metrics.CacheHitMetricsAvailable {
+		t.Fatalf("cache hit metrics should be unavailable: %+v", metrics)
+	}
+}
+
+func TestDenialViewClassifiesNamespacesAndDedupesPaths(t *testing.T) {
+	adapter := New(Options{})
+	projection, err := adapter.buildProjection(sessionState{
+		Freshness: "observed",
+		DeniedPaths: []string{
+			"/knowledge_base/reference/guide.md",
+			"/skills/planning/draft-plan/SKILL.md",
+			"/memory/curated.json",
+			"/skills/planning/draft-plan/SKILL.md",
+			"/outside/path.txt",
+		},
+	})
+	if err != nil {
+		t.Fatalf("buildProjection(denials) error = %v", err)
+	}
+
+	denialsRaw := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/denials.json")
+	denials := decodeDenialViewHelper(t, []byte(denialsRaw))
+	if denials.ProjectionGeneration != 1 || denials.UniqueDeniedPaths != 4 {
+		t.Fatalf("denial view = %+v, want generation=1 unique=4", denials)
+	}
+	if denials.ByNamespace["reference"] != 1 || denials.ByNamespace["skills"] != 1 || denials.ByNamespace["memory"] != 1 || denials.ByNamespace["external_or_unknown"] != 1 {
+		t.Fatalf("denial namespace counts = %+v, want one per namespace bucket", denials.ByNamespace)
+	}
+	if !reflect.DeepEqual(denials.SamplePaths, []string{
+		"/knowledge_base/reference/guide.md",
+		"/memory/curated.json",
+		"/outside/path.txt",
+		"/skills/planning/draft-plan/SKILL.md",
+	}) {
+		t.Fatalf("denial sample paths = %#v, want deduped sorted paths", denials.SamplePaths)
+	}
+
+	denialSummary := mustReadFromMounts(t, []contract.VirtualMount{projection.Memory.Mount}, "/memory/denials.md")
+	if !strings.Contains(denialSummary, "unique_denied_paths: 4") || !strings.Contains(denialSummary, "external_or_unknown: 1") {
+		t.Fatalf("denial summary = %q, want unique count and namespace summary", denialSummary)
+	}
+}
+
 func decodeProjectionRecordsHelper(t *testing.T, raw []byte) []projectionRecord {
 	t.Helper()
 	var records []projectionRecord
@@ -1454,6 +1563,24 @@ func decodeControlPlaneEventViewsHelper(t *testing.T, raw []byte) []controlPlane
 		t.Fatalf("decode control-plane event views failed: %v", err)
 	}
 	return events
+}
+
+func decodeProjectionMetricsViewHelper(t *testing.T, raw []byte) projectionMetricsView {
+	t.Helper()
+	var metrics projectionMetricsView
+	if err := json.Unmarshal(raw, &metrics); err != nil {
+		t.Fatalf("decode projection metrics failed: %v", err)
+	}
+	return metrics
+}
+
+func decodeDenialViewHelper(t *testing.T, raw []byte) denialView {
+	t.Helper()
+	var view denialView
+	if err := json.Unmarshal(raw, &view); err != nil {
+		t.Fatalf("decode denial view failed: %v", err)
+	}
+	return view
 }
 
 func decodeReferenceStateHelper(t *testing.T, raw string) sessionState {

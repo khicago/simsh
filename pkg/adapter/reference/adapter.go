@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/khicago/simsh/pkg/contract"
 	"github.com/khicago/simsh/pkg/mount"
@@ -170,8 +171,27 @@ type sessionState struct {
 	Curated              []curatedRecord `json:"curated,omitempty"`
 	Workflows            []workflowView  `json:"workflows,omitempty"`
 	ProjectionGeneration int             `json:"projection_generation,omitempty"`
+	ProjectionBuildMS    int64           `json:"projection_build_ms,omitempty"`
 	ControlPlaneEvents   int             `json:"control_plane_events,omitempty"`
 	LastControlPlaneKind string          `json:"last_control_plane_kind,omitempty"`
+}
+
+type projectionMetricsView struct {
+	ProjectionGeneration     int            `json:"projection_generation"`
+	ProjectionBuildMS        int64          `json:"projection_build_ms"`
+	ProjectionCounts         map[string]int `json:"projection_counts"`
+	FreshnessCounts          map[string]int `json:"freshness_counts,omitempty"`
+	MaterializationCounts    map[string]int `json:"materialization_counts,omitempty"`
+	ControlPlaneEvents       int            `json:"control_plane_events"`
+	UniqueDeniedPaths        int            `json:"unique_denied_paths"`
+	CacheHitMetricsAvailable bool           `json:"cache_hit_metrics_available"`
+}
+
+type denialView struct {
+	ProjectionGeneration int            `json:"projection_generation"`
+	UniqueDeniedPaths    int            `json:"unique_denied_paths"`
+	ByNamespace          map[string]int `json:"by_namespace"`
+	SamplePaths          []string       `json:"sample_paths,omitempty"`
 }
 
 type workflowView struct {
@@ -528,6 +548,7 @@ func (a *Adapter) RemoveCuratedEntry(id string) {
 }
 
 func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjection, error) {
+	startedAt := time.Now()
 	projectionGeneration, controlPlaneEvents := a.beginProjectionBuild()
 	state.Curated = mergeCuratedRecords(state.Curated, a.curatedRecords())
 	if state.Workflows == nil {
@@ -538,14 +559,15 @@ func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjectio
 	if len(controlPlaneEvents) > 0 {
 		state.LastControlPlaneKind = controlPlaneEvents[len(controlPlaneEvents)-1].Op
 	}
-	raw, err := json.Marshal(state)
-	if err != nil {
-		return contract.AdapterProjection{}, err
-	}
 	docs := a.documentRecords()
 	resources := a.resourceRecords()
 	skills := a.skillRecords()
 	curated := a.curatedRecords()
+	state.ProjectionBuildMS = time.Since(startedAt).Milliseconds()
+	raw, err := json.Marshal(state)
+	if err != nil {
+		return contract.AdapterProjection{}, err
+	}
 	knowledgeMount, err := a.knowledgeMount(docs)
 	if err != nil {
 		return contract.AdapterProjection{}, err
@@ -1592,13 +1614,15 @@ func projectionRecordsFromMap(entries map[string]projectionEntry, root string, n
 
 func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curated []curatedRecord, events []controlPlaneEvent) map[string]string {
 	files := map[string]string{
-		"/memory/observations.md": strings.Join(state.Observations, "\n"),
-		"/memory/status.json":     string(raw),
-		"/memory/summary.md":      renderMemorySummary(state, docs, resources, skills, len(curated), events),
-		"/memory/workflows.md":    renderWorkflowSummary(state.Workflows),
-		"/memory/projections.md":  renderProjectionSummary(docs, resources, skills),
-		"/memory/curated.md":      renderCuratedSummary(curated),
-		"/memory/skills_audit.md": renderControlPlaneEventSummary(events, state.ProjectionGeneration),
+		"/memory/observations.md":       strings.Join(state.Observations, "\n"),
+		"/memory/status.json":           string(raw),
+		"/memory/summary.md":            renderMemorySummary(state, docs, resources, skills, len(curated), events),
+		"/memory/projection_metrics.md": renderProjectionMetricsSummary(state, docs, resources, skills, events),
+		"/memory/denials.md":            renderDenialSummary(state),
+		"/memory/workflows.md":          renderWorkflowSummary(state.Workflows),
+		"/memory/projections.md":        renderProjectionSummary(docs, resources, skills),
+		"/memory/curated.md":            renderCuratedSummary(curated),
+		"/memory/skills_audit.md":       renderControlPlaneEventSummary(events, state.ProjectionGeneration),
 	}
 	workflowRaw, err := json.MarshalIndent(state.Workflows, "", "  ")
 	if err == nil {
@@ -1608,9 +1632,17 @@ func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, re
 	if err == nil {
 		files["/memory/projections.json"] = string(projectionRaw)
 	}
+	projectionMetricsRaw, err := json.MarshalIndent(buildProjectionMetricsView(state, docs, resources, skills, events), "", "  ")
+	if err == nil {
+		files["/memory/projection_metrics.json"] = string(projectionMetricsRaw)
+	}
 	curatedRaw, err := json.MarshalIndent(curated, "", "  ")
 	if err == nil {
 		files["/memory/curated.json"] = string(curatedRaw)
+	}
+	denialsRaw, err := json.MarshalIndent(buildDenialView(state), "", "  ")
+	if err == nil {
+		files["/memory/denials.json"] = string(denialsRaw)
 	}
 	controlPlaneRaw, err := json.MarshalIndent(controlPlaneEventViews(events, state.ProjectionGeneration), "", "  ")
 	if err == nil {
@@ -1633,6 +1665,7 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		"",
 		fmt.Sprintf("- freshness: %s", state.Freshness),
 		fmt.Sprintf("- projection_generation: %d", state.ProjectionGeneration),
+		fmt.Sprintf("- projection_build_ms: %d", state.ProjectionBuildMS),
 		fmt.Sprintf("- projections.documents: %d", len(docs)),
 		fmt.Sprintf("- projections.resources: %d", len(resources)),
 		fmt.Sprintf("- projections.skills: %d", len(skills)),
@@ -1680,6 +1713,94 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 		for _, workflow := range state.Workflows {
 			lines = append(lines, fmt.Sprintf("- [%s] %s (%s)", workflow.Status, workflow.Title, workflow.ID))
 		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func buildProjectionMetricsView(state sessionState, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, events []controlPlaneEvent) projectionMetricsView {
+	uniqueDenied := dedupeLines(state.DeniedPaths)
+	return projectionMetricsView{
+		ProjectionGeneration:     state.ProjectionGeneration,
+		ProjectionBuildMS:        state.ProjectionBuildMS,
+		ProjectionCounts:         countProjectionNamespaces(docs, resources, skills),
+		FreshnessCounts:          countProjectionFreshness(docs, resources, skills),
+		MaterializationCounts:    countProjectionMaterialization(docs, resources, skills),
+		ControlPlaneEvents:       len(events),
+		UniqueDeniedPaths:        len(uniqueDenied),
+		CacheHitMetricsAvailable: false,
+	}
+}
+
+func renderProjectionMetricsSummary(state sessionState, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, events []controlPlaneEvent) string {
+	metrics := buildProjectionMetricsView(state, docs, resources, skills, events)
+	lines := []string{
+		"# Projection Metrics",
+		"",
+		fmt.Sprintf("- projection_generation: %d", metrics.ProjectionGeneration),
+		fmt.Sprintf("- projection_build_ms: %d", metrics.ProjectionBuildMS),
+		fmt.Sprintf("- projections.documents: %d", metrics.ProjectionCounts["documents"]),
+		fmt.Sprintf("- projections.resources: %d", metrics.ProjectionCounts["resources"]),
+		fmt.Sprintf("- projections.skills: %d", metrics.ProjectionCounts["skills"]),
+		fmt.Sprintf("- control_plane_events: %d", metrics.ControlPlaneEvents),
+		fmt.Sprintf("- unique_denied_paths: %d", metrics.UniqueDeniedPaths),
+		fmt.Sprintf("- cache_hit_metrics_available: %t", metrics.CacheHitMetricsAvailable),
+	}
+	if len(metrics.FreshnessCounts) > 0 {
+		lines = append(lines, "", "## Freshness")
+		for _, freshness := range []string{
+			projectionFreshnessLive,
+			projectionFreshnessSnapshot,
+			projectionFreshnessStale,
+			projectionFreshnessUpdated,
+			projectionFreshnessGenerated,
+		} {
+			if count := metrics.FreshnessCounts[freshness]; count > 0 {
+				lines = append(lines, fmt.Sprintf("- %s: %d", freshness, count))
+			}
+		}
+	}
+	if len(metrics.MaterializationCounts) > 0 {
+		lines = append(lines, "", "## Materialization")
+		for _, stateValue := range []string{
+			projectionMaterializationMaterialized,
+			projectionMaterializationPartial,
+			projectionMaterializationFailed,
+		} {
+			if count := metrics.MaterializationCounts[stateValue]; count > 0 {
+				lines = append(lines, fmt.Sprintf("- %s: %d", stateValue, count))
+			}
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func buildDenialView(state sessionState) denialView {
+	unique := dedupeLines(state.DeniedPaths)
+	return denialView{
+		ProjectionGeneration: state.ProjectionGeneration,
+		UniqueDeniedPaths:    len(unique),
+		ByNamespace:          countDenialsByNamespace(unique),
+		SamplePaths:          append([]string(nil), unique...),
+	}
+}
+
+func renderDenialSummary(state sessionState) string {
+	view := buildDenialView(state)
+	lines := []string{"# Denials", ""}
+	if len(view.SamplePaths) == 0 {
+		lines = append(lines, "- no denied paths")
+		return strings.Join(lines, "\n") + "\n"
+	}
+	lines = append(lines, fmt.Sprintf("- projection_generation: %d", view.ProjectionGeneration))
+	lines = append(lines, fmt.Sprintf("- unique_denied_paths: %d", view.UniqueDeniedPaths), "")
+	for _, namespace := range []string{"reference", "resources", "skills", "memory", "external_or_unknown"} {
+		if count := view.ByNamespace[namespace]; count > 0 {
+			lines = append(lines, fmt.Sprintf("- %s: %d", namespace, count))
+		}
+	}
+	lines = append(lines, "", "## Sample Paths")
+	for _, pathValue := range view.SamplePaths {
+		lines = append(lines, fmt.Sprintf("- %s", pathValue))
 	}
 	return strings.Join(lines, "\n") + "\n"
 }
@@ -1785,6 +1906,39 @@ func countProjectionMaterialization(groups ...[]projectionRecord) map[string]int
 	}
 	if len(counts) == 0 {
 		return nil
+	}
+	return counts
+}
+
+func countProjectionNamespaces(docs []projectionRecord, resources []projectionRecord, skills []projectionRecord) map[string]int {
+	return map[string]int{
+		"documents": len(docs),
+		"resources": len(resources),
+		"skills":    len(skills),
+	}
+}
+
+func countDenialsByNamespace(paths []string) map[string]int {
+	counts := map[string]int{
+		"reference":           0,
+		"resources":           0,
+		"skills":              0,
+		"memory":              0,
+		"external_or_unknown": 0,
+	}
+	for _, pathValue := range paths {
+		switch {
+		case strings.HasPrefix(pathValue, "/knowledge_base/reference/"):
+			counts["reference"]++
+		case strings.HasPrefix(pathValue, "/resources/"):
+			counts["resources"]++
+		case strings.HasPrefix(pathValue, "/skills/"):
+			counts["skills"]++
+		case strings.HasPrefix(pathValue, "/memory/"):
+			counts["memory"]++
+		default:
+			counts["external_or_unknown"]++
+		}
 	}
 	return counts
 }

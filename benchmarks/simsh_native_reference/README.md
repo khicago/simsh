@@ -18,6 +18,7 @@ Current scenario classes:
   plus explicit `/skills` selection-provenance assertions (scope, mode, and loser/ineligible reason) and deterministic precedence outcomes
   plus structured control-plane audit coverage via `/memory/skills_audit.json` and `/memory/skills_audit.md` so every add/update/remove event, visibility timing, and `/memory/summary.md` alignment is machine-checked
   plus a generic curated-memory entry assertion with explicit source-path references
+  plus structured projection metrics (`/memory/projection_metrics.json`/`.md`) and denial surfaces (`/memory/denials.json`/`.md`) that prove projection generation, freshness/materialization counts, and denied-path metadata stay aligned with the control-plane audit
 - cancel and timeout interruption
 
 Current metric gates:

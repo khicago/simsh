@@ -90,6 +90,7 @@ Ship contract tests and at least one end-to-end adapter-backed workload that pro
 - A minimal current reference shape is: explicit adapter-defined selection scope on competing skills, derived `selection` provenance in namespace indexes and `/memory/projections.json`, and no path-derived fallback competition semantics.
 - If adapters evolve skill entries over time, they SHOULD do so through explicit adapter-local control-plane APIs such as add/update/remove, with visibility taking effect on the next projection rebuild rather than through writable `/skills` mounts.
 - If adapters audit control-plane mutations, they SHOULD do so through compact machine-readable event views with explicit visibility timing, not through free-form logs or inferred projection diffs.
+- If adapters expose projection metrics or denial surfaces, those views SHOULD be derived from existing projection/audit/trace truth and MUST NOT invent unavailable semantics such as cache-hit ratios when no cache exists.
 
 ## Memory Lifecycle Protocol
 Adapters that expose session memory SHOULD implement a standard lifecycle even if the internal storage differs.
