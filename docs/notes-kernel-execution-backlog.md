@@ -170,7 +170,7 @@ Optional but recommended:
 
 ### K-006: Harden builtin ACI contracts and machine-friendly output modes
 - Feat: `f-20260322-builtin-aci-dual-readable-query-tooling`
-- Status: in_progress
+- Status: done
 - Why now: The kernel now has stronger path semantics, trace fidelity, and a baseline reference benchmark. The next agent-leverage gap is the builtin surface itself: many default commands are still text-first and syntax-first even though `simsh` is meant to be an agent-native runtime.
 - Kernel invariant: builtin commands and manuals should minimize parse cost, confirmation cost, failure-attribution cost, and token cost for agent callers; command summaries should be derived from explicit contracts rather than prose inference.
 - Design bias:
@@ -203,9 +203,123 @@ Optional but recommended:
   - The design review recommends treating `ls -l` and `frontmatter stat` as the reusable pattern for future output contracts: compact default text plus explicit `--fmt` machine formats.
   - The same review also recommends investing in structure-aware query tools, not only more serialized output modes, so agents can write structured files and then query just the relevant subset.
   - The requirements baseline sharpens this further: default outputs stay dual-readable, structured output is explicit and opt-in, pipe-friendly commands keep their composition value, and JSON/local-search tooling should improve in the same wave.
-  - The first implementation wave should prioritize contract metadata, the worst current parse-cost offenders, and the first JSON/local-search query upgrades before broader command polish.
+  - The first implementation wave prioritized contract metadata, the worst parse-cost offenders, structured mutation confirmation, and the first JSON/local-search query upgrades before broader command polish.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260322-builtin-aci-dual-readable-query-tooling/`.
 - Rollback note:
   - If a default-format change causes excessive compatibility risk, keep the new machine formats and metadata while leaving the old text form behind a compatibility mode; do not roll back the explicit contract layer.
+
+### K-007: Harden effective-core default workspace behavior
+- Feat: `f-20260323-effective-core-default-workspace-hardening`
+- Status: done
+- Why now: Strict core contracts are now relatively mature, but the agent actually experiences `simsh` through the default workspace surface. The remaining leverage is in `engine + builtin + default mounts` behavior, especially where pipe composability, structured modes, and summary/confirmation contracts can still drift without regressions.
+- Kernel invariant: the default workspace must stay dual-readable, pipe-aware, and failure-explicit; engine-level command dispatch and builtin output contracts must not regress silently.
+- Files to touch:
+  - `pkg/engine/engine_test.go`
+  - `pkg/builtin/coverage_test.go`
+  - selected default-workspace docs if output contracts or priorities need clarification
+- Validation command:
+  - `go test ./pkg/engine ./pkg/builtin`
+- Done gate:
+  - High-value default workspace behaviors have regression tests for both normal and failure paths.
+  - Pipe-friendly commands keep their composition semantics while structured modes remain explicit and additive.
+  - Default inspection and confirmation surfaces do not require agent callers to recover meaning from ambiguous text.
+- Notes:
+  - Prioritize `find -exec`, `man --list`, mutation confirmation modes, and any other engine-level seams where default ACI regressions would be expensive for agents.
+  - Prefer tests that exercise the integrated default workspace over isolated helper coverage.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260323-effective-core-default-workspace-hardening/`.
+- Rollback note:
+  - If a change starts widening the command surface instead of hardening it, stop and keep only the regression coverage or documentation tightening.
+
+### K-008: Validate the adapter seam with a committed reference workload
+- Feat: `f-20260323-adapter-backed-workload-validation`
+- Status: done
+- Why now: The adapter contract is already documented and lightly tested, but the next promotion gate is stronger evidence that a real adapter-backed workload survives session lifecycle, projection updates, and managed `/memory` views without special-casing core semantics.
+- Kernel invariant: adapter-backed projections and memory views must remain deterministic, lifecycle-aware, and visibly downstream from kernel contracts.
+- Files to touch:
+  - `benchmarks/simsh_native_reference/`
+  - `pkg/adapter/reference/adapter_test.go`
+  - adapter-architecture docs only if the validation contract itself changes
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+- Done gate:
+  - At least one committed reference workload exercises create/observe/checkpoint/resume/close with adapter-projected `/knowledge_base/reference` and managed `/memory`.
+  - The workload asserts both business-visible behavior and the trace/session evidence it depends on.
+  - The benchmark/reference suite treats adapter validation as a first-class scenario, not an implicit side-effect of unrelated tests.
+- Notes:
+  - This should build on the existing reference adapter, not invent a heavier product layer.
+  - Keep `/memory` as an adapter-managed view, not a writable scratch escape hatch.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260323-adapter-backed-workload-validation/`.
+- Rollback note:
+  - If the benchmark-level workload proves too broad, keep the scenario contract and move the heaviest assertions down into dedicated adapter/runtime tests rather than dropping adapter validation entirely.
+
+### K-009: Make adapter-side projections and managed memory views more realistic
+- Feat: `f-20260323-realistic-adapter-projections-managed-memory-views`
+- Status: done
+- Why now: The seam is now validated, so the next step is to make at least one adapter behave more like a realistic non-core harness layer. The reference adapter should move beyond a single mirrored document tree and a flat observations log toward richer resource projection, managed `/memory` views, and adapter-backed workflow state.
+- Kernel invariant: richer adapter behavior must stay downstream from core contracts; `/memory` remains a managed read-only view, and resource projection remains explicit and deterministic.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+- Done gate:
+  - The reference adapter can project both source-oriented documents and separate resource trees through stable virtual paths.
+  - `/memory` exposes richer managed views than a flat log, including workflow/status-level material useful to an agent or harness.
+  - Adapter-backed workflow state advances through trace consumption without turning `/memory` into an uncontrolled write path.
+  - The richer projection model is covered by adapter tests and at least one committed benchmark/reference scenario.
+- Notes:
+  - Keep this implementation realistic but still generic enough to serve as a seam validator rather than a product-specific framework.
+  - Prefer explicit projected files and workflow summaries over hidden state or imperative side channels.
+  - The reference adapter now projects `/resources`, richer `/memory` workflow views, and adapter-derived workflow state; the feat is archived under `.bagakit/ft-harness/feats-archived/f-20260323-realistic-adapter-projections-managed-memory-views/`.
+- Rollback note:
+  - If the richer view starts to leak product semantics into core-facing tests, keep the projection model and trim the domain-specific presentation rather than reverting the managed-memory idea itself.
+
+### K-010: Add projection metadata and a minimal adapter control plane
+- Feat: `f-20260323-adapter-projection-metadata-control-plane`
+- Status: done
+- Why now: Once the reference adapter can project multiple namespaces and managed workflow views, the next realism gap is missing metadata and explicit update seams. Projected objects should expose source/freshness metadata, and adapter-side updates should go through explicit control-plane methods rather than implicit mutation assumptions.
+- Kernel invariant: adapter metadata and control-plane behavior must remain downstream from core contracts; metadata should surface through deterministic projected files, not hidden runtime channels.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+- Done gate:
+  - Projected documents and resources expose explicit source/freshness metadata via stable sidecars or summary views.
+  - The reference adapter exposes a minimal control-plane API for upserting projected documents, resources, and workflows.
+  - Managed `/memory` views include projection metadata summaries that an agent or harness can read without special adapter knowledge.
+  - Adapter tests and the benchmark/reference suite cover the metadata and control-plane path.
+- Notes:
+  - Keep the control plane adapter-local; do not add new core-runtime contracts for this.
+  - Prefer read-only projected metadata files over embedding mutable semantics in path writeability.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260323-adapter-projection-metadata-control-plane/`.
+- Rollback note:
+  - If metadata surfacing becomes too noisy, keep the sidecar/index files and simplify their shape rather than dropping projection metadata entirely.
+
+### K-011: Close runtime truth gaps found by post-implementation audit
+- Feat: `f-20260323-runtime-audit-follow-up-hardening`
+- Status: in_progress
+- Why now: Recent audit findings highlighted three remaining trust gaps: output redirection atomicity under write limits, canonical metadata lookup in the reference adapter constructor, and benchmark success semantics that could still count business-only success without full evidence.
+- Kernel invariant: runtime, adapter, and benchmark contracts must agree on truth; no partial side effects, no dual naming of the same projected object, and no success metrics that ignore missing evidence.
+- Files to touch:
+  - `pkg/engine/script_runner.go`
+  - `pkg/engine/engine_test.go`
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `benchmarks/simsh_native_reference/`
+- Validation command:
+  - `go test ./pkg/engine ./pkg/adapter/reference ./benchmarks/simsh_native_reference`
+  - `go test ./...`
+- Done gate:
+  - Multi-output redirection does not leave partial filesystem side effects when the last payload violates write limits.
+  - Reference adapter metadata binds to canonical normalized names, not raw input keys.
+  - Benchmark session/async success requires evidence-complete scenarios whenever trace or assertion checks are defined.
+- Notes:
+  - Prefer global fixes over case-by-case patches: payload-dependent redirection preflight, canonical metadata maps, and one benchmark success helper.
+- Rollback note:
+  - If any fix changes intended contract semantics, update the benchmark/tests/docs together rather than keeping mismatched behavior and evidence.
 
 ## Backlog Rules
 

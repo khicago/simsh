@@ -2,26 +2,29 @@
   "selection_strategy": "status_confidence_evidence_priority",
   "resume_command": "bash .bagakit/long-run/check_and_resume.sh",
   "next_row": {
-    "id": "bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
-    "title": "Session lifecycle and policy ceiling / Implement session lifecycle contract and policy ceiling",
+    "id": "manual-20260324-lint-check-gate",
+    "title": "Restore lint/check gate and remove stale orchestrator helpers",
     "status": "todo",
-    "system": "bagakit-ft",
-    "source_ref": ".bagakit/ft-harness/feats/f-20260301-session-lifecycle-policy-ceiling/tasks.json",
-    "commands": [],
-    "confidence": 0.7,
+    "system": "manual-default",
+    "source_ref": "Makefile",
+    "commands": [
+      "make lint",
+      "make check"
+    ],
+    "confidence": 0.93,
     "evidence": [
-      "feat_status=proposal",
-      "task_status=todo",
-      "selected_task=T-001"
+      "`make lint` fails on SA1012 at pkg/adapter/localfs/adapter_behavior_test.go:238 because the test passes a nil context.",
+      "`make lint` fails on SA4000 at pkg/engine/engine_test.go:1952 because the jsonl assertion compares the same expression twice.",
+      "`make lint` fails on U1000 for three unused helpers in pkg/engine/orchestrator.go:536-557, and `make check` inherits the same failure."
     ],
     "evidence_count": 3
   },
   "next_feature": {
-    "id": "EXEC::bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001",
-    "title": "Session lifecycle and policy ceiling / Implement session lifecycle contract and policy ceiling",
+    "id": "EXEC::manual-20260324-lint-check-gate",
+    "title": "Restore lint/check gate and remove stale orchestrator helpers",
     "status": "todo",
-    "confidence": 0.7,
+    "confidence": 0.93,
     "evidence_count": 3
   },
-  "footer_line": "- LongRun: Item=bagakit-ft:f-20260301-session-lifecycle-policy-ceiling:T-001; Status=todo; Confidence=0.70; Evidence=feat_status=proposal | task_status=todo | selected_task=T-001; Next=bash .bagakit/long-run/check_and_resume.sh"
+  "footer_line": "- LongRun: Item=manual-20260324-lint-check-gate; Status=todo; Confidence=0.93; Evidence=`make lint` fails on SA1012 at pkg/adapter/localfs/adapter_behavior_test.go:238 because the test passes a nil context. | `make lint` fails on SA4000 at pkg/engine/engine_test.go:1952 because the jsonl assertion compares the same expression twice. | `make lint` fails on U1000 for three unused helpers in pkg/engine/orchestrator.go:536-557, and `make check` inherits the same failure.; Next=bash .bagakit/long-run/check_and_resume.sh"
 }

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	referenceadapter "github.com/khicago/simsh/pkg/adapter/reference"
 	"github.com/khicago/simsh/pkg/contract"
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
 	"github.com/khicago/simsh/pkg/fs"
@@ -36,17 +37,20 @@ type GateResult struct {
 }
 
 type ScenarioReport struct {
-	Name              string   `json:"name"`
-	Category          string   `json:"category"`
-	Success           bool     `json:"success"`
-	SessionScoped     bool     `json:"session_scoped"`
-	AsyncCandidate    bool     `json:"async_candidate"`
-	PatchWorkflow     bool     `json:"patch_workflow"`
-	DurationMS        int64    `json:"duration_ms"`
-	TraceChecksPassed int      `json:"trace_checks_passed"`
-	TraceChecksTotal  int      `json:"trace_checks_total"`
-	TraceCompleteness float64  `json:"trace_completeness"`
-	Notes             []string `json:"notes,omitempty"`
+	Name                  string   `json:"name"`
+	Category              string   `json:"category"`
+	Success               bool     `json:"success"`
+	SessionScoped         bool     `json:"session_scoped"`
+	AsyncCandidate        bool     `json:"async_candidate"`
+	PatchWorkflow         bool     `json:"patch_workflow"`
+	DurationMS            int64    `json:"duration_ms"`
+	TraceChecksPassed     int      `json:"trace_checks_passed"`
+	TraceChecksTotal      int      `json:"trace_checks_total"`
+	TraceCompleteness     *float64 `json:"trace_completeness,omitempty"`
+	AssertionChecksPassed int      `json:"assertion_checks_passed,omitempty"`
+	AssertionChecksTotal  int      `json:"assertion_checks_total,omitempty"`
+	AssertionCompleteness *float64 `json:"assertion_completeness,omitempty"`
+	Notes                 []string `json:"notes,omitempty"`
 }
 
 type SuiteReport struct {
@@ -85,6 +89,7 @@ func runSuite() (SuiteReport, error) {
 		runMountBoundaryScenario,
 		runCommandNamespaceScenario,
 		runTracePlanningScenario,
+		runAdapterProjectionScenario,
 		runCancelTimeoutScenario,
 	}
 
@@ -216,13 +221,16 @@ func runRelativeNavigationScenario() (ScenarioReport, error) {
 		requested: []string{"/task_outputs/project/docs/readme.md"},
 		read:      []string{"/task_outputs/project/docs/readme.md"},
 	})
+	assertionPassed, assertionTotal := countChecks(
+		setup.Result.ExitCode == 0,
+		pwdResult.Result.ExitCode == 0,
+		strings.TrimSpace(pwdResult.Result.Stdout) == "/task_outputs/project",
+		readResult.Result.ExitCode == 0,
+		strings.TrimSpace(readResult.Result.Stdout) == "hello",
+		readResult.Session.State.WorkingDir == "/task_outputs/project",
+	)
 	notes := []string{}
-	success := setup.Result.ExitCode == 0 &&
-		pwdResult.Result.ExitCode == 0 &&
-		strings.TrimSpace(pwdResult.Result.Stdout) == "/task_outputs/project" &&
-		readResult.Result.ExitCode == 0 &&
-		strings.TrimSpace(readResult.Result.Stdout) == "hello" &&
-		readResult.Session.State.WorkingDir == "/task_outputs/project"
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "session-relative navigation or cwd persistence failed")
 	}
@@ -237,7 +245,10 @@ func runRelativeNavigationScenario() (ScenarioReport, error) {
 		DurationMS:        duration,
 		TraceChecksPassed: tracePassed,
 		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratio(tracePassed, traceTotal),
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -269,8 +280,12 @@ func runInspectEditWriteScenario() (ScenarioReport, error) {
 			return v >= len("beta\n")
 		},
 	})
+	assertionPassed, assertionTotal := countChecks(
+		result.ExitCode == 0,
+		strings.TrimSpace(result.Stdout) == "beta",
+	)
 	notes := []string{}
-	success := result.ExitCode == 0 && strings.TrimSpace(result.Stdout) == "beta"
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "inspect/edit/write loop did not produce final reviewable output")
 	}
@@ -284,7 +299,10 @@ func runInspectEditWriteScenario() (ScenarioReport, error) {
 		DurationMS:        time.Since(start).Milliseconds(),
 		TraceChecksPassed: tracePassed,
 		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratio(tracePassed, traceTotal),
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -308,8 +326,9 @@ func runMountBoundaryScenario() (ScenarioReport, error) {
 		requested: []string{"/sys/bin/new.txt"},
 		denied:    []string{"/sys/bin/new.txt"},
 	})
+	assertionPassed, assertionTotal := countChecks(result.ExitCode != 0)
 	notes := []string{}
-	success := result.ExitCode != 0 && containsPath(result.Trace.DeniedPaths, "/sys/bin/new.txt")
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "mount or synthetic boundary was not denied as expected")
 	}
@@ -323,7 +342,10 @@ func runMountBoundaryScenario() (ScenarioReport, error) {
 		DurationMS:        time.Since(start).Milliseconds(),
 		TraceChecksPassed: tracePassed,
 		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratio(tracePassed, traceTotal),
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -364,22 +386,15 @@ func runCommandNamespaceScenario() (ScenarioReport, error) {
 	dispatchResult := stack.ExecuteResult(context.Background(), "cd /bin; ./report_tool")
 	actionableError := stack.ExecuteResult(context.Background(), "cd /task_outputs; man ./missing.txt")
 
-	passed, total := 0, 4
-	if whichResult.ExitCode == 0 && strings.TrimSpace(whichResult.Stdout) == "/sys/bin/cat" {
-		passed++
-	}
-	if manResult.ExitCode == 0 && strings.Contains(manResult.Stdout, "cat [-n] PATH") {
-		passed++
-	}
-	if dispatchResult.ExitCode == 0 && strings.Contains(dispatchResult.Stdout, "report ok") {
-		passed++
-	}
-	if actionableError.ExitCode != 0 && strings.Contains(actionableError.Stdout, "not a command path") {
-		passed++
-	}
+	assertionPassed, assertionTotal := countChecks(
+		whichResult.ExitCode == 0 && strings.TrimSpace(whichResult.Stdout) == "/sys/bin/cat",
+		manResult.ExitCode == 0 && strings.Contains(manResult.Stdout, "cat [-n] PATH"),
+		dispatchResult.ExitCode == 0 && strings.Contains(dispatchResult.Stdout, "report ok"),
+		actionableError.ExitCode != 0 && strings.Contains(actionableError.Stdout, "not a command path"),
+	)
 
 	notes := []string{}
-	success := passed == total
+	success := scenarioSucceeded(0, 0, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "command namespace normalization or actionable path-like error handling regressed")
 	}
@@ -391,9 +406,11 @@ func runCommandNamespaceScenario() (ScenarioReport, error) {
 		AsyncCandidate:    true,
 		PatchWorkflow:     false,
 		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: passed,
-		TraceChecksTotal:  total,
-		TraceCompleteness: ratio(passed, total),
+		TraceChecksPassed: 0,
+		TraceChecksTotal:  0,
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -420,8 +437,12 @@ func runTracePlanningScenario() (ScenarioReport, error) {
 		bytesRead:    func(v int) bool { return v > 0 },
 		bytesWritten: func(v int) bool { return v > 0 },
 	})
+	assertionPassed, assertionTotal := countChecks(
+		result.ExitCode == 0,
+		strings.TrimSpace(result.Stdout) == "hello",
+	)
 	notes := []string{}
-	success := result.ExitCode == 0 && strings.TrimSpace(result.Stdout) == "hello"
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "trace-planning scenario failed to produce readable output")
 	}
@@ -435,7 +456,152 @@ func runTracePlanningScenario() (ScenarioReport, error) {
 		DurationMS:        time.Since(start).Milliseconds(),
 		TraceChecksPassed: tracePassed,
 		TraceChecksTotal:  traceTotal,
-		TraceCompleteness: ratio(tracePassed, traceTotal),
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
+		Notes:             notes,
+	}, nil
+}
+
+func runAdapterProjectionScenario() (ScenarioReport, error) {
+	root := mustTempHostRoot()
+	defer os.RemoveAll(root)
+
+	adapter := referenceadapter.New(referenceadapter.Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]referenceadapter.ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]referenceadapter.ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Workflows: []referenceadapter.WorkflowSpec{
+			{
+				ID:              "draft-plan",
+				Title:           "Draft plan",
+				Summary:         "Read the planning checklist and write the first plan draft.",
+				ResourcePaths:   []string{"/resources/checklists/plan.json"},
+				ExpectedOutputs: []string{"/task_outputs/plan.txt"},
+			},
+		},
+	})
+	manager := newFullSessionManager()
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: root,
+		Profile:  contract.ProfileBashPlus,
+		Policy:   fullPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	start := time.Now()
+	readGuide, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	readResource, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	projectionsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	workflowsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	writeOutput, err := manager.Execute(context.Background(), session.SessionID, "echo plan > /task_outputs/plan.txt", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	deniedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	resumed, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	memoryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/observations.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	summaryView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	readTracePassed, readTraceTotal := evaluateTrace(readGuide.Result.Trace, traceExpectation{
+		requested: []string{"/knowledge_base/reference/guide.md"},
+		read:      []string{"/knowledge_base/reference/guide.md"},
+	})
+	resourceTracePassed, resourceTraceTotal := evaluateTrace(readResource.Result.Trace, traceExpectation{
+		requested: []string{"/resources/checklists/plan.json"},
+		read:      []string{"/resources/checklists/plan.json"},
+	})
+	writeTracePassed, writeTraceTotal := evaluateTrace(writeOutput.Result.Trace, traceExpectation{
+		requested: []string{"/task_outputs/plan.txt"},
+		written:   []string{"/task_outputs/plan.txt"},
+	})
+	denyTracePassed, denyTraceTotal := evaluateTrace(deniedWrite.Result.Trace, traceExpectation{
+		requested: []string{"/knowledge_base/reference/guide.md"},
+		denied:    []string{"/knowledge_base/reference/guide.md"},
+	})
+	tracePassed := readTracePassed + resourceTracePassed + writeTracePassed + denyTracePassed
+	traceTotal := readTraceTotal + resourceTraceTotal + writeTraceTotal + denyTraceTotal
+	assertionPassed, assertionTotal := countChecks(
+		strings.Contains(readGuide.Result.Stdout, "# Guide"),
+		strings.Contains(readResource.Result.Stdout, "\"steps\""),
+		strings.Contains(projectionsView.Result.Stdout, "\"source\": \"knowledge_sync\"") &&
+			strings.Contains(projectionsView.Result.Stdout, "\"freshness\": \"live\""),
+		strings.Contains(workflowsView.Result.Stdout, "[in_progress] Draft plan (draft-plan)"),
+		writeOutput.Result.ExitCode == 0,
+		deniedWrite.Result.ExitCode != 0,
+		len(checkpoint.State.Opaque[adapter.AdapterID()]) > 0,
+		len(resumed.State.Opaque[adapter.AdapterID()]) > 0,
+		strings.Contains(memoryView.Result.Stdout, "read-ref:/knowledge_base/reference/guide.md") &&
+		strings.Contains(memoryView.Result.Stdout, "read-resource:/resources/checklists/plan.json") &&
+		strings.Contains(memoryView.Result.Stdout, "wrote:/task_outputs/plan.txt") &&
+		strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md"),
+		strings.Contains(summaryView.Result.Stdout, "resource_reads: 1") &&
+		strings.Contains(summaryView.Result.Stdout, "written_outputs: 1"),
+	)
+
+	notes := []string{}
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
+	if !success {
+		notes = append(notes, "adapter-backed projection or managed /memory lifecycle regressed")
+	}
+	return ScenarioReport{
+		Name:              "adapter_projection_memory_lifecycle",
+		Category:          "adapter_backed_projection_validation",
+		Success:           success,
+		SessionScoped:     true,
+		AsyncCandidate:    true,
+		PatchWorkflow:     false,
+		DurationMS:        time.Since(start).Milliseconds(),
+		TraceChecksPassed: tracePassed,
+		TraceChecksTotal:  traceTotal,
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -466,15 +632,16 @@ func runCancelTimeoutScenario() (ScenarioReport, error) {
 	defer timeoutCancel()
 	timedOut := stack.ExecuteResult(timeoutCtx, "cat /knowledge_base/doc.txt")
 
-	passed, total := 0, 2
-	if canceled.Trace.Canceled && canceled.ExitCode != 0 {
-		passed++
-	}
-	if timedOut.Trace.TimedOut && timedOut.ExitCode != 0 {
-		passed++
-	}
+	tracePassed, traceTotal := evaluateTrace(canceled.Trace, traceExpectation{canceled: boolPtr(true)})
+	tracePassed2, traceTotal2 := evaluateTrace(timedOut.Trace, traceExpectation{timedOut: boolPtr(true)})
+	tracePassed += tracePassed2
+	traceTotal += traceTotal2
+	assertionPassed, assertionTotal := countChecks(
+		canceled.ExitCode != 0,
+		timedOut.ExitCode != 0,
+	)
 	notes := []string{}
-	success := passed == total
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "cancel or timeout flags were not surfaced as expected")
 	}
@@ -486,9 +653,12 @@ func runCancelTimeoutScenario() (ScenarioReport, error) {
 		AsyncCandidate:    true,
 		PatchWorkflow:     false,
 		DurationMS:        time.Since(start).Milliseconds(),
-		TraceChecksPassed: passed,
-		TraceChecksTotal:  total,
-		TraceCompleteness: ratio(passed, total),
+		TraceChecksPassed: tracePassed,
+		TraceChecksTotal:  traceTotal,
+		TraceCompleteness: ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:             notes,
 	}, nil
 }
@@ -568,6 +738,38 @@ func ratio(passed int, total int) float64 {
 		return 1.0
 	}
 	return float64(passed) / float64(total)
+}
+
+func ratioPtr(passed int, total int) *float64 {
+	if total == 0 {
+		return nil
+	}
+	value := ratio(passed, total)
+	return &value
+}
+
+func countChecks(checks ...bool) (int, int) {
+	passed := 0
+	for _, ok := range checks {
+		if ok {
+			passed++
+		}
+	}
+	return passed, len(checks)
+}
+
+func scenarioSucceeded(tracePassed int, traceTotal int, assertionPassed int, assertionTotal int) bool {
+	if assertionTotal > 0 && assertionPassed != assertionTotal {
+		return false
+	}
+	if traceTotal > 0 && tracePassed != traceTotal {
+		return false
+	}
+	return true
+}
+
+func boolPtr(value bool) *bool {
+	return &value
 }
 
 func mustTempHostRoot() string {

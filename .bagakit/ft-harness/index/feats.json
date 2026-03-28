@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-22T16:57:06Z",
+  "updated_at": "2026-03-23T17:55:42Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -150,6 +150,51 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-03-22T09:08:50Z"
+    },
+    {
+      "feat_id": "f-20260323-adapter-backed-workload-validation",
+      "title": "Adapter-backed workload validation",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-23T06:26:52Z"
+    },
+    {
+      "feat_id": "f-20260323-adapter-projection-metadata-control-plane",
+      "title": "Adapter projection metadata and control plane",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-23T14:18:02Z"
+    },
+    {
+      "feat_id": "f-20260323-effective-core-default-workspace-hardening",
+      "title": "Effective-core default workspace hardening",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-23T06:26:52Z"
+    },
+    {
+      "feat_id": "f-20260323-realistic-adapter-projections-managed-memory-views",
+      "title": "Realistic adapter projections and managed memory views",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-23T12:12:33Z"
+    },
+    {
+      "feat_id": "f-20260323-runtime-audit-follow-up-hardening",
+      "title": "Runtime audit follow-up hardening",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-03-23T17:55:42Z"
     }
   ]
 }

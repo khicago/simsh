@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260323-effective-core-default-workspace-hardening",
+  "updated_at": "2026-03-23T06:26:52Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Harden default-workspace engine regressions",
+      "status": "done",
+      "summary": "Add high-value engine regressions around find -exec batching/failure and man --list external catalog rows.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-23T06:18:33Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-23T06:18:03Z",
+      "finished_at": "2026-03-23T06:20:43Z",
+      "updated_at": "2026-03-23T06:20:43Z",
+      "notes": []
+    }
+  ]
+}

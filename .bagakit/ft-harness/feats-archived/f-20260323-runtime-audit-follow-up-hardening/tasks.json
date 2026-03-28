@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260323-runtime-audit-follow-up-hardening",
+  "updated_at": "2026-03-23T17:55:42Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Eliminate remaining runtime truth gaps",
+      "status": "done",
+      "summary": "Fix redirection atomicity under write limits, canonicalize adapter projection metadata lookup, and require evidence-complete benchmark success.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-23T17:54:14Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-23T17:45:40Z",
+      "finished_at": "2026-03-23T17:55:24Z",
+      "updated_at": "2026-03-23T17:55:24Z",
+      "notes": []
+    }
+  ]
+}

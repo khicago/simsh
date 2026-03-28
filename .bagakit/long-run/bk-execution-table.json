@@ -5,12 +5,13 @@
   },
   "detection": {
     "status": "ready",
-    "last_reviewed_at": "2026-03-11T00:00:00Z",
+    "last_reviewed_at": "2026-03-24T00:00:00Z",
     "reviewed_by": "codex",
     "upstream_systems": [
-      "bagakit-ft"
+      "bagakit-ft",
+      "manual"
     ],
-    "notes": "Detected active bagakit-ft backlog under .bagakit/ft-harness; use feat/task state as execution SSOT for the March 1 proposal chain."
+    "notes": "Archived bagakit-ft rows remain historical implementation evidence. The active backlog is now a manual review-derived kernel hardening/test plan created on 2026-03-24 to restore green quality gates and close uncovered core risks."
   },
   "adapters": [
     {
@@ -56,13 +57,141 @@
     {
       "name": "manual-default",
       "kind": "manual",
-      "enabled": false,
+      "enabled": true,
       "root": ".",
-      "weight": 60,
+      "weight": 120,
       "detect": {
         "all": []
       },
-      "rows": []
+      "rows": [
+        {
+          "id": "manual-20260324-lint-check-gate",
+          "title": "Restore lint/check gate and remove stale orchestrator helpers",
+          "source_ref": "Makefile",
+          "status": "todo",
+          "priority": 10,
+          "why_now": "`make check` is currently red on staticcheck findings, so the project's default evidence gate is already broken before any new kernel work begins.",
+          "acceptance_criteria": [
+            "`make lint` exits 0 with no SA1012/SA4000/U1000 findings.",
+            "`make check` exits 0 after the cleanup.",
+            "The fixed assertions still verify the intended behavior instead of weakening test coverage."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/localfs/adapter_behavior_test.go",
+            "pkg/engine/engine_test.go",
+            "pkg/engine/orchestrator.go"
+          ],
+          "commands": [
+            "make lint",
+            "make check"
+          ],
+          "confidence": 0.93,
+          "evidence": [
+            "`make lint` fails on SA1012 at pkg/adapter/localfs/adapter_behavior_test.go:238 because the test passes a nil context.",
+            "`make lint` fails on SA4000 at pkg/engine/engine_test.go:1952 because the jsonl assertion compares the same expression twice.",
+            "`make lint` fails on U1000 for three unused helpers in pkg/engine/orchestrator.go:536-557, and `make check` inherits the same failure."
+          ],
+          "risks": [
+            "Keep the change surgical: restore the gate without changing command-dispatch semantics.",
+            "If any removed helper is still conceptually needed, reintroduce it only with a live call site and regression coverage."
+          ]
+        },
+        {
+          "id": "manual-20260324-agentfs-pathguard-direct-tests",
+          "title": "Add direct package tests for agentfs zone behavior and pathguard escapes",
+          "source_ref": "pkg/adapter/agentfs/filespace_core.go",
+          "status": "todo",
+          "priority": 20,
+          "why_now": "The default workspace trust story depends on `agentfs` and `pathguard`, but those packages still have zero direct package coverage even though they own zone resolution and path-escape prevention.",
+          "acceptance_criteria": [
+            "`go test ./pkg/adapter/agentfs ./pkg/adapter/internal/pathguard` passes with new direct tests.",
+            "Tests cover writable vs read-only zones, path normalization, metadata shaping, and symlink or missing-ancestor escape rejection.",
+            "Integration sanity remains green under `go test ./pkg/fs ./pkg/engine`."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/agentfs/filespace_core_test.go",
+            "pkg/adapter/internal/pathguard/pathguard_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/agentfs ./pkg/adapter/internal/pathguard",
+            "go test ./pkg/fs ./pkg/engine"
+          ],
+          "confidence": 0.82,
+          "evidence": [
+            "Coverage output shows `pkg/adapter/agentfs` at 0.0% even though `pkg/fs.NewAIFilesystem` delegates the default runtime zones to it.",
+            "Coverage output shows `pkg/adapter/internal/pathguard` at 0.0% even though `agentfs.toHostPath()` relies on it for escape prevention.",
+            "Current `pkg/fs` tests exercise some integration regressions, but low-level `DescribePath`, `PathEnv`, zone walking, and `resolveWithExistingPrefix()` invariants are not package-local locked."
+          ],
+          "risks": [
+            "Avoid duplicating the full integration harness; target the low-level invariants that can regress silently.",
+            "If direct tests expose a real bug, patch the production code in the same smallest closure instead of papering over the failure."
+          ]
+        },
+        {
+          "id": "manual-20260324-shell-parser-redirection-regressions",
+          "title": "Harden parser and redirection regressions around heredoc and edge-case script syntax",
+          "source_ref": "pkg/engine/script_parser_v2.go",
+          "status": "todo",
+          "priority": 30,
+          "why_now": "The parser and script runner are core kernel surfaces, but heredoc branches and several parser failure paths remain effectively unexercised, which makes shell-level regressions easy to miss.",
+          "acceptance_criteria": [
+            "New engine tests cover heredoc success plus failure cases such as missing delimiters or unclosed quotes.",
+            "Redirection edge tests cover write or append behavior without introducing partial side effects or unexpected exit-code changes.",
+            "`go test ./pkg/engine ./pkg/sh` passes, and `go test ./...` stays green."
+          ],
+          "files_to_touch": [
+            "pkg/engine/engine_test.go",
+            "pkg/engine/script_parser_v2.go",
+            "pkg/engine/script_runner.go"
+          ],
+          "commands": [
+            "go test ./pkg/engine ./pkg/sh",
+            "go test ./..."
+          ],
+          "confidence": 0.74,
+          "evidence": [
+            "A repo search over engine tests shows no heredoc-specific coverage even though the parser implements `<<` support.",
+            "Coverage output leaves `readHereDocBody()` and multiple parser error branches only partially covered.",
+            "These branches live in the kernel execution path, so a parser regression would hit the common inspect-edit-test loop directly."
+          ],
+          "risks": [
+            "Keep the shell surface stable; start with tests and only change semantics when a failing regression proves the need.",
+            "Do not broaden shell compatibility beyond the documented subset while adding coverage."
+          ]
+        },
+        {
+          "id": "manual-20260324-http-cli-entry-regressions",
+          "title": "Close regression gaps in HTTP and CLI entry surfaces",
+          "source_ref": "pkg/service/httpapi/execute_endpoint.go",
+          "status": "todo",
+          "priority": 40,
+          "why_now": "Entry adapters are not the architecture center, but they are still public integration surfaces; current coverage misses serve-mode branches, service wrappers, and include-meta fallback edges.",
+          "acceptance_criteria": [
+            "`go test ./cmd/simsh-cli ./pkg/service/httpapi ./pkg/service` passes with new regression coverage.",
+            "Tests cover session error/status mapping and at least one `include_meta` path that exercises mount or synthetic-path metadata fallback behavior.",
+            "CLI tests cover serve-mode option normalization or root fallback without relying on a long-lived network listener."
+          ],
+          "files_to_touch": [
+            "cmd/simsh-cli/main_test.go",
+            "pkg/service/httpapi/handler_test.go",
+            "pkg/service/service_test.go"
+          ],
+          "commands": [
+            "go test ./cmd/simsh-cli ./pkg/service/httpapi ./pkg/service",
+            "make test"
+          ],
+          "confidence": 0.67,
+          "evidence": [
+            "Coverage output shows 0.0% on `pkg/service/service.go`, which is a public wrapper surface for library-style callers.",
+            "Coverage output shows 0.0% on `cmd/simsh-cli` serve-mode helpers such as `runServe()` and root-resolution branches.",
+            "`describePathMetaViaLS()` in `pkg/service/httpapi/execute_endpoint.go` remains unexecuted, leaving the metadata fallback path effectively unverified."
+          ],
+          "risks": [
+            "Keep tests deterministic and non-blocking; do not add network flake just to raise coverage.",
+            "If fallback metadata is dead code, either prove it with tests or remove it explicitly rather than leaving an unowned branch."
+          ]
+        }
+      ]
     }
   ],
   "maintenance": {

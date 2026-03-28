@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "feat_id": "f-20260323-adapter-backed-workload-validation",
+  "title": "Adapter-backed workload validation",
+  "slug": "adapter-backed-workload-validation",
+  "goal": "Validate the adapter seam with a committed reference workload that exercises projection and managed-memory lifecycle semantics.",
+  "status": "archived",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-03-23T04:27:30Z",
+  "updated_at": "2026-03-23T06:26:52Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-23T06:23:40Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260323-adapter-backed-workload-validation/artifacts/gate-20260323T062340Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-03-23T04:27:30Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-03-23T06:22:02Z",
+      "action": "workspace_assigned",
+      "detail": "proposal_only -> current_tree; root_branch=main"
+    },
+    {
+      "at": "2026-03-23T06:23:10Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-23T06:23:40Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-03-23T06:25:53Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-03-23T06:26:52Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-03-23T06:26:52Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
+}

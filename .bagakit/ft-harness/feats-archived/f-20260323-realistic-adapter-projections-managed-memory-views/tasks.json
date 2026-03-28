@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260323-realistic-adapter-projections-managed-memory-views",
+  "updated_at": "2026-03-23T12:12:33Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Upgrade the reference adapter projection model",
+      "status": "done",
+      "summary": "Project richer resources and managed /memory workflow views through the reference adapter, then validate them in adapter and benchmark tests.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-03-23T12:10:54Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-03-23T11:58:38Z",
+      "finished_at": "2026-03-23T12:12:03Z",
+      "updated_at": "2026-03-23T12:12:03Z",
+      "notes": []
+    }
+  ]
+}

@@ -147,7 +147,7 @@ func runLSTarget(runtime engine.CommandRuntime, target string, includeDots bool,
 	}
 	if !isDir {
 		if longFormat {
-			return formatLongRows([]contract.LSLongRow{buildLongRow(runtime, target, target)}, longFormatStyle), 0
+			return formatLongRows(runtime, []contract.LSLongRow{buildLongRow(runtime, target, target)}, longFormatStyle), 0
 		}
 		return target, 0
 	}
@@ -221,10 +221,10 @@ func renderLSOutput(runtime engine.CommandRuntime, target string, children []str
 	for _, child := range children {
 		rows = append(rows, buildLongRow(runtime, child, child))
 	}
-	return formatLongRows(rows, longFormatStyle), 0
+	return formatLongRows(runtime, rows, longFormatStyle), 0
 }
 
-func formatLongRows(rows []contract.LSLongRow, style lsLongFormat) string {
+func formatLongRows(runtime engine.CommandRuntime, rows []contract.LSLongRow, style lsLongFormat) string {
 	switch style {
 	case lsLongFormatMarkdown:
 		return formatMarkdownLongRows(rows)
@@ -233,6 +233,12 @@ func formatLongRows(rows []contract.LSLongRow, style lsLongFormat) string {
 	default:
 		out := make([]string, 0, len(rows))
 		for _, row := range rows {
+			if runtime.Ops.FormatLSLongRow != nil {
+				if formatted, handled := runtime.Ops.FormatLSLongRow(runtime.Ctx, row); handled {
+					out = append(out, strings.TrimRight(formatted, "\n"))
+					continue
+				}
+			}
 			out = append(out, formatDefaultLongRow(row))
 		}
 		return strings.Join(out, "\n")
@@ -344,6 +350,7 @@ type lsJSONRow struct {
 	Access       string   `json:"access"`
 	Kind         string   `json:"kind"`
 	Lines        int      `json:"lines"`
+	DisplayPath  string   `json:"display_path,omitempty"`
 	Path         string   `json:"path"`
 	Capabilities []string `json:"capabilities"`
 }
@@ -363,6 +370,7 @@ func formatJSONLongRows(rows []contract.LSLongRow) string {
 			Access:       contract.NormalizePathAccess(strings.TrimSpace(row.Access)),
 			Kind:         longRowKind(row),
 			Lines:        row.LineCount,
+			DisplayPath:  row.DisplayPath,
 			Path:         row.Path,
 			Capabilities: contract.NormalizePathCapabilities(row.Capabilities),
 		})

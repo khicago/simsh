@@ -106,15 +106,16 @@ Recommended shape:
 {
   "columns": ["mode", "access", "kind", "lines", "path"],
   "entries": [
-    {"mode":"d","access":"ro","kind":"virtual_dir","lines":-1,"path":"/sys","capabilities":["list","describe","search"]},
-    {"mode":"d","access":"ro","kind":"sys_bin_dir","lines":-1,"path":"/sys/bin","capabilities":["list","describe","search"]},
-    {"mode":"-","access":"ro","kind":"sys_binary","lines":-1,"path":"/sys/bin/ls","capabilities":["read","describe"]}
+    {"mode":"d","access":"ro","kind":"virtual_dir","lines":-1,"display_path":"/sys","path":"/sys","capabilities":["list","describe","search"]},
+    {"mode":"d","access":"ro","kind":"sys_bin_dir","lines":-1,"display_path":"/sys/bin","path":"/sys/bin","capabilities":["list","describe","search"]},
+    {"mode":"-","access":"ro","kind":"sys_binary","lines":-1,"display_path":"/sys/bin/ls","path":"/sys/bin/ls","capabilities":["read","describe"]}
   ]
 }
 ```
 
 Notes:
 - JSON SHOULD include `capabilities` even if text/md formats hide it by default.
+- JSON SHOULD include both `display_path` and `path` so row labels such as `.` and `..` remain explicit without losing absolute-path semantics.
 - `lines=-1` is allowed to mean "unknown/unavailable".
 
 ## API: `/v1/execute` Metadata (opt-in)

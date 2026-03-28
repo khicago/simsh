@@ -104,12 +104,20 @@ func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, o
 		if code != 0 {
 			return execOutput{stdout: errMsg, stderr: pipelineStderr, code: code}
 		}
+		errMsg, code = preflightOutputRedirections(ctx, command.args[0], command.redirs, ops)
+		if code != 0 {
+			return execOutput{stdout: errMsg, stderr: pipelineStderr, code: code}
+		}
 
 		result := e.runCommand(ctx, command.args, input, inputAvailable, ops)
 		pipelineStderr = appendOutputText(pipelineStderr, result.stderr)
 		if result.code != 0 {
 			result.stderr = pipelineStderr
 			return result
+		}
+		errMsg, code = preflightOutputRedirectionPayload(ctx, command.redirs, result.stdout, ops)
+		if code != 0 {
+			return execOutput{stdout: errMsg, stderr: pipelineStderr, code: code}
 		}
 
 		var out string
@@ -167,62 +175,127 @@ func applyInputRedirections(ctx context.Context, commandName string, redirs []co
 	return currentInput, currentHasInput, "", 0
 }
 
+func preflightOutputRedirections(ctx context.Context, commandName string, redirs []commandRedirect, ops contract.Ops) (string, int) {
+	if err := executionContextErr(ctx); err != nil {
+		return contextExecOutput(err).stdout, contract.ExitCodeGeneral
+	}
+	for _, redir := range redirs {
+		if redir.kind != redirectOutputWrite && redir.kind != redirectOutputAppend {
+			continue
+		}
+		markTraceRequestedPath(ctx, redir.target)
+		if !ops.Policy.AllowWrite() {
+			markTraceDeniedPath(ctx, redir.target)
+			return "redirection: write is not allowed by policy", contract.ExitCodeUnsupported
+		}
+		if isNullDevice(redir.target) {
+			continue
+		}
+		pathValue, err := ops.RequireAbsolutePath(redir.target)
+		if err != nil {
+			return fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeUsage
+		}
+		if redir.kind == redirectOutputAppend && ops.AppendFile == nil {
+			markTraceDeniedPath(ctx, redir.target)
+			return "redirection: append is not supported", contract.ExitCodeUnsupported
+		}
+		if ops.CheckPathOp != nil {
+			if err := ops.CheckPathOp(ctx, contract.PathOpWrite, pathValue); err != nil {
+				if errors.Is(err, contract.ErrUnsupported) {
+					markTraceDeniedPath(ctx, redir.target)
+					if redir.kind == redirectOutputAppend {
+						return "redirection: append is not supported", contract.ExitCodeUnsupported
+					}
+					return "redirection: write is not supported", contract.ExitCodeUnsupported
+				}
+				return fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
+			}
+		}
+	}
+	return "", 0
+}
+
 func applyOutputRedirections(ctx context.Context, commandName string, redirs []commandRedirect, output string, ops contract.Ops) (string, string, int) {
 	if err := executionContextErr(ctx); err != nil {
 		return "", contextExecOutput(err).stdout, contract.ExitCodeGeneral
 	}
-	lastOutputRedir := -1
-	for idx, redir := range redirs {
+	outputRedirs := make([]commandRedirect, 0, len(redirs))
+	for _, redir := range redirs {
+		if redir.kind == redirectOutputWrite || redir.kind == redirectOutputAppend {
+			outputRedirs = append(outputRedirs, redir)
+		}
+	}
+	if len(outputRedirs) == 0 {
+		return output, "", 0
+	}
+	lastOutputRedir := len(outputRedirs) - 1
+	for idx, redir := range outputRedirs {
 		if err := executionContextErr(ctx); err != nil {
 			return "", contextExecOutput(err).stdout, contract.ExitCodeGeneral
 		}
-		if redir.kind == redirectOutputWrite || redir.kind == redirectOutputAppend {
-			lastOutputRedir = idx
+		payload := ""
+		if idx == lastOutputRedir {
+			payload = output
 		}
-	}
-	if lastOutputRedir == -1 {
-		return output, "", 0
-	}
+		if isNullDevice(redir.target) {
+			continue
+		}
+		pathValue, err := ops.RequireAbsolutePath(redir.target)
+		if err != nil {
+			return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeUsage
+		}
 
-	markTraceRequestedPath(ctx, redirs[lastOutputRedir].target)
-	if !ops.Policy.AllowWrite() {
-		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
-		return "", "redirection: write is not allowed by policy", contract.ExitCodeUnsupported
-	}
-	if ops.Policy.WriteMode == contract.WriteModeWriteLimited && ops.Policy.MaxWriteBytes > 0 && len(output) > ops.Policy.MaxWriteBytes {
-		markTraceDeniedPath(ctx, redirs[lastOutputRedir].target)
-		return "", fmt.Sprintf("redirection: write exceeds limit (%d bytes)", ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral
-	}
-
-	redir := redirs[lastOutputRedir]
-	if isNullDevice(redir.target) {
-		return "", "", 0
-	}
-	pathValue, err := ops.RequireAbsolutePath(redir.target)
-	if err != nil {
-		return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeUsage
-	}
-
-	switch redir.kind {
-	case redirectOutputWrite:
-		if err := ops.WriteFile(ctx, pathValue, output); err != nil {
-			if errors.Is(err, contract.ErrUnsupported) {
-				return "", "redirection: write is not supported", contract.ExitCodeUnsupported
+		switch redir.kind {
+		case redirectOutputWrite:
+			if err := ops.WriteFile(ctx, pathValue, payload); err != nil {
+				if errors.Is(err, contract.ErrUnsupported) {
+					markTraceDeniedPath(ctx, redir.target)
+					return "", "redirection: write is not supported", contract.ExitCodeUnsupported
+				}
+				return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
 			}
-			return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
-		}
-	case redirectOutputAppend:
-		if ops.AppendFile == nil {
-			return "", "redirection: append is not supported", contract.ExitCodeUnsupported
-		}
-		if err := ops.AppendFile(ctx, pathValue, output); err != nil {
-			if errors.Is(err, contract.ErrUnsupported) {
+		case redirectOutputAppend:
+			if ops.AppendFile == nil {
+				markTraceDeniedPath(ctx, redir.target)
 				return "", "redirection: append is not supported", contract.ExitCodeUnsupported
 			}
-			return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
+			if err := ops.AppendFile(ctx, pathValue, payload); err != nil {
+				if errors.Is(err, contract.ErrUnsupported) {
+					markTraceDeniedPath(ctx, redir.target)
+					return "", "redirection: append is not supported", contract.ExitCodeUnsupported
+				}
+				return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
+			}
 		}
 	}
 	return "", "", 0
+}
+
+func preflightOutputRedirectionPayload(ctx context.Context, redirs []commandRedirect, output string, ops contract.Ops) (string, int) {
+	if err := executionContextErr(ctx); err != nil {
+		return contextExecOutput(err).stdout, contract.ExitCodeGeneral
+	}
+	if ops.Policy.WriteMode != contract.WriteModeWriteLimited || ops.Policy.MaxWriteBytes <= 0 {
+		return "", 0
+	}
+	outputRedirs := make([]commandRedirect, 0, len(redirs))
+	for _, redir := range redirs {
+		if redir.kind == redirectOutputWrite || redir.kind == redirectOutputAppend {
+			outputRedirs = append(outputRedirs, redir)
+		}
+	}
+	if len(outputRedirs) == 0 {
+		return "", 0
+	}
+	last := outputRedirs[len(outputRedirs)-1]
+	if isNullDevice(last.target) {
+		return "", 0
+	}
+	if len(output) <= ops.Policy.MaxWriteBytes {
+		return "", 0
+	}
+	markTraceDeniedPath(ctx, last.target)
+	return fmt.Sprintf("redirection: write exceeds limit (%d bytes)", ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral
 }
 
 func appendOutputText(base string, addition string) string {

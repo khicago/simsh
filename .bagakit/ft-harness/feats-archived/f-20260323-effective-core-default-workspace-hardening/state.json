@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "feat_id": "f-20260323-effective-core-default-workspace-hardening",
+  "title": "Effective-core default workspace hardening",
+  "slug": "effective-core-default-workspace-hardening",
+  "goal": "Raise default-workspace confidence in engine+builtin behavior without expanding product surface.",
+  "status": "archived",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-03-23T04:23:26Z",
+  "updated_at": "2026-03-23T06:26:52Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-03-23T06:18:33Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260323-effective-core-default-workspace-hardening/artifacts/gate-20260323T061833Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-03-23T04:23:26Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-03-23T06:18:03Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-03-23T06:18:33Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-03-23T06:20:43Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-03-23T06:26:52Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-03-23T06:26:52Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
+}

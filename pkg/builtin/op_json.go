@@ -191,17 +191,9 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 		return string(raw), 0
 	default:
 		if rawOutput {
-			raw, err := json.Marshal(v)
-			if err != nil {
-				return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
-			}
-			return string(raw), 0
+			return compactJSONString(v), 0
 		}
-		raw, err := json.MarshalIndent(v, "", "  ")
-		if err != nil {
-			return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
-		}
-		return string(raw), 0
+		return prettyJSONString(v), 0
 	}
 }
 
@@ -245,17 +237,13 @@ func summarizeJSONValue(value any) (kind string, size int, keys []string) {
 func renderJSONStat(rows []jsonStatRow, format jsonStatFormat) string {
 	switch format {
 	case jsonStatFormatJSON:
-		raw, err := json.Marshal(struct {
+		return compactJSONString(struct {
 			Columns []string      `json:"columns"`
 			Entries []jsonStatRow `json:"entries"`
 		}{
 			Columns: []string{"valid", "kind", "size", "keys", "path"},
 			Entries: rows,
 		})
-		if err != nil {
-			return "{}"
-		}
-		return string(raw)
 	case jsonStatFormatMD:
 		lines := []string{
 			"| valid | kind | size | keys | path |",
@@ -350,12 +338,12 @@ func expandJSONTargets(runtime engine.CommandRuntime, label string, targets []st
 
 func compactJSONString(value any) string {
 	raw, _ := json.Marshal(value)
-	return string(raw)
+	return normalizeJSONBytes(string(raw))
 }
 
 func prettyJSONString(value any) string {
 	raw, _ := json.MarshalIndent(value, "", "  ")
-	return string(raw)
+	return normalizeJSONBytes(string(raw))
 }
 
 func normalizeJSONBytes(raw string) string {

@@ -14,6 +14,7 @@ Current scenario classes:
 - mount and synthetic capability boundaries
 - command namespace consistency
 - trace-consumable planning
+- adapter-backed projection and managed-memory lifecycle
 - cancel and timeout interruption
 
 Current metric gates:
@@ -21,6 +22,10 @@ Current metric gates:
 - session success `>= 0.80`
 - reviewable patch latency median `<= 15m`
 - async completion success `>= 0.60`
+
+Metric note:
+- `trace_completeness` only counts trace assertions.
+- Scenario/business assertions are tracked separately inside each scenario report and do not dilute the trace gate.
 
 Run it with:
 

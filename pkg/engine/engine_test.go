@@ -18,10 +18,11 @@ import (
 )
 
 type testFS struct {
-	root     string
-	files    map[string]string
-	dirs     map[string]struct{}
-	external []contract.ExternalCommand
+	root                string
+	files               map[string]string
+	dirs                map[string]struct{}
+	external            []contract.ExternalCommand
+	externalInvocations []string
 }
 
 func newTestFS() *testFS {
@@ -179,6 +180,7 @@ func (f *testFS) ReadExternalManual(ctx context.Context, command string) (string
 
 func (f *testFS) RunExternalCommand(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
 	_ = ctx
+	f.externalInvocations = append(f.externalInvocations, req.Command+" "+strings.Join(req.Args, " "))
 	if req.Command == "report_tool" {
 		if len(req.Args) > 0 {
 			switch strings.TrimSpace(req.Args[0]) {
@@ -500,6 +502,7 @@ func TestEngineLSLongFormatJSON(t *testing.T) {
 			Access       string   `json:"access"`
 			Kind         string   `json:"kind"`
 			Lines        int      `json:"lines"`
+			DisplayPath  string   `json:"display_path"`
 			Path         string   `json:"path"`
 			Capabilities []string `json:"capabilities"`
 		} `json:"entries"`
@@ -517,6 +520,9 @@ func TestEngineLSLongFormatJSON(t *testing.T) {
 			if row.Mode != "d" || row.Access != "ro" || row.Kind != "sys_bin_dir" {
 				t.Fatalf("unexpected /sys/bin row: %+v", row)
 			}
+			if row.DisplayPath != "/sys/bin" {
+				t.Fatalf("expected display_path to preserve row label: %+v", row)
+			}
 			if len(row.Capabilities) == 0 {
 				t.Fatalf("expected capabilities for /sys/bin row: %+v", row)
 			}
@@ -524,6 +530,38 @@ func TestEngineLSLongFormatJSON(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("expected /sys/bin entry in json output: %q", out)
+	}
+}
+
+func TestEngineLSLongFormatJSONDotEntriesExposeDisplayPath(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := readOnlyOps(fs)
+
+	out, code := eng.Execute(context.Background(), "ls -al --fmt json /workspace", ops)
+	if code != 0 {
+		t.Fatalf("ls -al --fmt json /workspace failed: code=%d out=%q", code, out)
+	}
+	var resp struct {
+		Entries []struct {
+			DisplayPath string `json:"display_path"`
+			Path        string `json:"path"`
+		} `json:"entries"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("unmarshal json failed: %v out=%q", err, out)
+	}
+	foundDot := false
+	for _, row := range resp.Entries {
+		if row.DisplayPath == "." {
+			foundDot = true
+			if row.Path != "/workspace" {
+				t.Fatalf("expected dot entry to keep absolute path /workspace, got %+v", row)
+			}
+		}
+	}
+	if !foundDot {
+		t.Fatalf("expected dot entry in json output: %+v", resp)
 	}
 }
 
@@ -762,6 +800,88 @@ func TestEngineScriptOpsAndRedirectionPolicy(t *testing.T) {
 	}
 }
 
+func TestEngineRedirectionPreflightBlocksCommandExecution(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := writableOps(fs)
+
+	out, code := eng.Execute(context.Background(), "report_tool --warn > /sys/bin/blocked.txt", ops)
+	if code == 0 {
+		t.Fatalf("expected unsupported redirection to fail: out=%q", out)
+	}
+	if !strings.Contains(out, "redirection: write is not supported") {
+		t.Fatalf("expected explicit redirection failure, got %q", out)
+	}
+	if len(fs.externalInvocations) != 0 {
+		t.Fatalf("expected command not to execute when redirection preflight fails, got invocations=%v", fs.externalInvocations)
+	}
+}
+
+func TestEngineMultipleOutputRedirectionsPreserveEarlierSideEffects(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := writableOps(fs)
+
+	out, code := eng.Execute(context.Background(), "echo hi > /workspace/first.txt > /workspace/second.txt", ops)
+	if code != 0 || out != "" {
+		t.Fatalf("expected multiple redirections to succeed with empty stdout: code=%d out=%q", code, out)
+	}
+	if got := fs.files["/workspace/first.txt"]; got != "" {
+		t.Fatalf("expected first redirection target to be truncated empty, got %q", got)
+	}
+	if got := fs.files["/workspace/second.txt"]; got != "hi" {
+		t.Fatalf("expected final redirection target to receive output, got %q", got)
+	}
+
+	out, code = eng.Execute(context.Background(), "echo hi > /workspace/null-first.txt > /dev/null", ops)
+	if code != 0 || out != "" {
+		t.Fatalf("expected redirection to /dev/null to succeed with empty stdout: code=%d out=%q", code, out)
+	}
+	if got := fs.files["/workspace/null-first.txt"]; got != "" {
+		t.Fatalf("expected earlier target before /dev/null to be created empty, got %q", got)
+	}
+}
+
+func TestEngineWriteLimitedOutputRedirectionsRemainAtomic(t *testing.T) {
+	eng := newTestEngine()
+
+	tests := []struct {
+		name    string
+		command string
+		targets []string
+	}{
+		{
+			name:    "write then write",
+			command: "echo hi > /workspace/a.txt > /workspace/b.txt",
+			targets: []string{"/workspace/a.txt", "/workspace/b.txt"},
+		},
+		{
+			name:    "write then append",
+			command: "echo hi > /workspace/a.txt >> /workspace/b.txt",
+			targets: []string{"/workspace/a.txt", "/workspace/b.txt"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			fs := newTestFS()
+			ops := writeLimitedOps(fs, 1)
+			out, code := eng.Execute(context.Background(), tt.command, ops)
+			if code == 0 {
+				t.Fatalf("expected write-limited redirection failure: out=%q", out)
+			}
+			if !strings.Contains(out, "redirection: write exceeds limit (1 bytes)") {
+				t.Fatalf("unexpected redirection error: %q", out)
+			}
+			for _, target := range tt.targets {
+				if _, ok := fs.files[target]; ok {
+					t.Fatalf("expected no partial side effects on %s, files=%v", target, fs.files)
+				}
+			}
+		})
+	}
+}
+
 func TestEngineProfileGatesCapabilities(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()
@@ -783,6 +903,7 @@ func TestEngineProfileGatesCapabilities(t *testing.T) {
 func TestEngineExtendedBuiltins(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()
+	fs.mustWrite("/workspace/guide.md", "hello\nagent\n")
 	ops := contract.OpsFromFilesystem(fs)
 	ops.Policy = contract.ExecutionPolicy{
 		WriteMode:        contract.WriteModeFull,
@@ -811,6 +932,22 @@ func TestEngineExtendedBuiltins(t *testing.T) {
 	out, code = eng.Execute(context.Background(), "find /workspace -name \"*.md\" -exec grep -l hello {} \\;", ops)
 	if code != 0 || !strings.Contains(out, "/workspace/readme.md") {
 		t.Fatalf("find -exec failed: code=%d out=%q", code, out)
+	}
+
+	out, code = eng.Execute(context.Background(), "find /workspace -name \"*.md\" -exec echo {} +", ops)
+	if code != 0 {
+		t.Fatalf("find -exec + failed: code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "/workspace/readme.md") || !strings.Contains(out, "/workspace/guide.md") {
+		t.Fatalf("find -exec + should batch both markdown paths: out=%q", out)
+	}
+
+	out, code = eng.Execute(context.Background(), "find /workspace -name \"*.md\" -exec report_tool --fail {} +", ops)
+	if code == 0 {
+		t.Fatalf("expected find -exec external failure to propagate: out=%q", out)
+	}
+	if !strings.Contains(out, "report failed") {
+		t.Fatalf("expected external failure output from find -exec: out=%q", out)
 	}
 
 	out, code = eng.Execute(context.Background(), "echo alpha | tee /workspace/new.txt", ops)
@@ -1680,6 +1817,9 @@ func TestManListMode(t *testing.T) {
 			t.Fatalf("expected %q in man --list output: %q", cmd, out)
 		}
 	}
+	if !strings.Contains(out, "External:") || !strings.Contains(out, "report_tool") {
+		t.Fatalf("expected external command section in man --list output: %q", out)
+	}
 	for _, header := range []string{"stdin", "pipe", "structured"} {
 		if !strings.Contains(out, header) {
 			t.Fatalf("expected list header %q in man --list output: %q", header, out)
@@ -1696,7 +1836,7 @@ func TestManListJSONMode(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("man --list --fmt json failed: code=%d out=%q", code, out)
 	}
-	for _, expected := range []string{`"builtins"`, `"name": "ls"`, `"stdin_mode": "none"`} {
+	for _, expected := range []string{`"builtins"`, `"name": "ls"`, `"stdin_mode": "none"`, `"external"`, `"name": "report_tool"`} {
 		if !strings.Contains(out, expected) {
 			t.Fatalf("expected %q in man --list --fmt json output: %q", expected, out)
 		}

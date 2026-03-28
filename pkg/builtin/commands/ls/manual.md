@@ -55,6 +55,7 @@ List a specific file (returns the path):
 - Access is `ro|rw` derived from SSOT path metadata (mount-backed + synthetic mount parents are `ro`).
 - Line count shows `-` when unavailable.
 - `ls -l` prints a legend line once at the end: `# columns: mode access kind lines path`
+- `ls -l --fmt json` keeps absolute `path` values and also includes `display_path` so rows like `.` and `..` remain machine-visible without losing their resolved target.
 
 ## SEE ALSO
 

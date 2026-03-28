@@ -13,7 +13,7 @@
   },
   "agent": {
     "hint": "bash",
-    "command": ""
+    "command": "codexL exec --dangerously-bypass-approvals-and-sandbox {prompt_text}"
   },
   "analysis_paths": [
     "pkg",
