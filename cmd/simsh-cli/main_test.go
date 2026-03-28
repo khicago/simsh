@@ -56,6 +56,41 @@ func TestParseCLIOptionsInvalidMount(t *testing.T) {
 	}
 }
 
+func TestRunServeReportsImmediateListenFailure(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+
+	opts := cliOptions{
+		mode:       modeServe,
+		rootDir:    "",
+		policy:     string(contract.WriteModeReadOnly),
+		profile:    string(contract.ProfileCoreStrict),
+		mounts:     []string{"test"},
+		listenAddr: "127.0.0.1",
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := runServe(opts, &stdout, &stderr)
+	if code != contract.ExitCodeGeneral {
+		t.Fatalf("runServe(...) code = %d, want %d stderr=%q", code, contract.ExitCodeGeneral, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "simsh serve listening on 127.0.0.1") {
+		t.Fatalf("stdout = %q, want serve banner", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "root="+wd) {
+		t.Fatalf("stdout = %q, want cwd root fallback %q", stdout.String(), wd)
+	}
+	if !strings.Contains(stdout.String(), "mounts=test") {
+		t.Fatalf("stdout = %q, want mounts banner", stdout.String())
+	}
+	if !strings.Contains(stderr.String(), "missing port in address") {
+		t.Fatalf("stderr = %q, want immediate listen failure", stderr.String())
+	}
+}
+
 func TestRunRunModeLineREPLUsesSessionLifecycle(t *testing.T) {
 	tmp := t.TempDir()
 	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")

@@ -244,6 +244,23 @@ func (f *aiFilesystem) ResolveSearchPaths(ctx context.Context, target string, re
 		return nil, err
 	}
 	if !isDir {
+		_, hostPath, err := f.resolvePath(target)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(hostPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil, fmt.Errorf("%s: No such file or directory", target)
+			}
+			return nil, err
+		}
+		if info.IsDir() {
+			if !recursive {
+				return nil, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
+			}
+			return f.CollectFilesUnder(ctx, target)
+		}
 		if _, _, ok := f.resolveZone(target); !ok {
 			return nil, fmt.Errorf("%s: No such file or directory", target)
 		}

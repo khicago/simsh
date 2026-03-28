@@ -158,3 +158,31 @@ func TestApplySessionAdaptersNoopWithoutAdapters(t *testing.T) {
 		t.Fatalf("applySessionAdapters(nil adapters) mounts = %#v, want empty", mounts)
 	}
 }
+
+func TestApplySessionAdaptersRejectsBlankAdapterID(t *testing.T) {
+	session := contract.Session{SessionID: "sess_blank_adapter"}
+	gotSession, mounts, err := applySessionAdapters(context.Background(), session, []contract.SessionAdapter{nil, &blankIDSessionAdapter{}}, adapterPhaseCreate, contract.ExecutionResult{})
+	if err == nil || !strings.Contains(err.Error(), "session adapter id is required") {
+		t.Fatalf("applySessionAdapters(blank id) error = %v, want blank adapter id error", err)
+	}
+	if gotSession.SessionID != session.SessionID {
+		t.Fatalf("applySessionAdapters(blank id) session = %#v, want %#v", gotSession, session)
+	}
+	if len(mounts) != 0 {
+		t.Fatalf("applySessionAdapters(blank id) mounts = %#v, want empty", mounts)
+	}
+}
+
+func TestInvokeAdapterPhaseRejectsUnsupportedPhase(t *testing.T) {
+	projection, err := invokeAdapterPhase(context.Background(), &testMemoryAdapter{}, adapterPhase("explode"), contract.Session{SessionID: "sess_phase"}, contract.ExecutionResult{})
+	if err == nil || !strings.Contains(err.Error(), `unsupported adapter phase "explode"`) {
+		t.Fatalf("invokeAdapterPhase(unsupported) error = %v, want unsupported phase error", err)
+	}
+	if !reflect.DeepEqual(projection, contract.AdapterProjection{}) {
+		t.Fatalf("invokeAdapterPhase(unsupported) = %#v, want empty projection", projection)
+	}
+}
+
+type blankIDSessionAdapter struct{ testMemoryAdapter }
+
+func (a *blankIDSessionAdapter) AdapterID() string { return "   " }

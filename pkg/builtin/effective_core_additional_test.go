@@ -213,6 +213,9 @@ func TestFindParseArgsEdgeCases(t *testing.T) {
 }
 
 func TestManHelpers(t *testing.T) {
+	if got, ok := parseManListFormat("text"); !ok || got != "text" {
+		t.Fatalf("parseManListFormat(text) = (%q, %t), want (text, true)", got, ok)
+	}
 	if got, ok := parseManListFormat("json"); !ok || got != "json" {
 		t.Fatalf("parseManListFormat(json) = (%q, %t), want (json, true)", got, ok)
 	}
@@ -265,6 +268,25 @@ func TestManHelpers(t *testing.T) {
 	}
 	if got := renderListValue(" "); got != "-" {
 		t.Fatalf("renderListValue(blank) = %q, want %q", got, "-")
+	}
+
+	listText, code := runManList(runtime, "text")
+	if code != 0 {
+		t.Fatalf("runManList(text) code = %d, want 0 output=%q", code, listText)
+	}
+	for _, want := range []string{
+		"Builtins:",
+		"alpha",
+		"zeta",
+		"External:",
+		"aaa",
+		"first external",
+		"zzz",
+		"(no description)",
+	} {
+		if !strings.Contains(listText, want) {
+			t.Fatalf("runManList(text) missing %q in output:\n%s", want, listText)
+		}
 	}
 }
 

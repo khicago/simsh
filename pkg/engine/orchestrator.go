@@ -533,30 +533,6 @@ func normalizeAbsolutePath(raw string) string {
 	return cleaned
 }
 
-func isVirtualSysBinExecutable(pathValue string) bool {
-	pathValue = normalizeAbsolutePath(pathValue)
-	return contract.IsCommandPathUnder(pathValue, contract.VirtualSystemBinDir)
-}
-
-func commandNameFromSysBinPath(pathValue string) string {
-	pathValue = normalizeAbsolutePath(pathValue)
-	if !contract.IsCommandPathUnder(pathValue, contract.VirtualSystemBinDir) {
-		return ""
-	}
-	return strings.TrimPrefix(pathValue, contract.VirtualSystemBinDir+"/")
-}
-
-func normalizeBuiltinCommandName(raw string) string {
-	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" {
-		return ""
-	}
-	if contract.IsCommandPathUnder(trimmed, contract.VirtualSystemBinDir) {
-		return commandNameFromSysBinPath(trimmed)
-	}
-	return trimmed
-}
-
 func normalizeExternalCommandName(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {

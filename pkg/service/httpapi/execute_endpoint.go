@@ -409,10 +409,6 @@ func extractAbsPaths(command string, normalize func(string) (string, error)) []s
 				token = pathValue
 			}
 		}
-		if strings.TrimSpace(token) == "/" {
-			// Skip root unless explicitly passed (common in shells to imply cwd).
-			continue
-		}
 		if _, ok := seen[token]; ok {
 			continue
 		}

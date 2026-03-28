@@ -882,6 +882,111 @@ func TestEngineWriteLimitedOutputRedirectionsRemainAtomic(t *testing.T) {
 	}
 }
 
+func TestEngineHeredocParserAndRedirectionRegressions(t *testing.T) {
+	eng := newTestEngine()
+
+	t.Run("heredoc write path executes through engine", func(t *testing.T) {
+		fs := newTestFS()
+		ops := writableOps(fs)
+		script := `cat <<EOF > /workspace/heredoc.txt
+alpha
+beta
+EOF
+cat /workspace/heredoc.txt`
+
+		out, code := eng.Execute(context.Background(), script, ops)
+		if code != 0 {
+			t.Fatalf("expected heredoc script to succeed: code=%d out=%q", code, out)
+		}
+		if out != "alpha\nbeta\n" {
+			t.Fatalf("unexpected heredoc output: %q", out)
+		}
+		if got := fs.files["/workspace/heredoc.txt"]; got != "alpha\nbeta\n" {
+			t.Fatalf("unexpected heredoc file content: %q", got)
+		}
+	})
+
+	t.Run("parser failures keep current engine contract", func(t *testing.T) {
+		tests := []struct {
+			name    string
+			command string
+			wantOut string
+		}{
+			{
+				name:    "missing heredoc delimiter",
+				command: "cat <<",
+				wantOut: "execute: heredoc delimiter is required",
+			},
+			{
+				name: "unterminated heredoc",
+				command: `cat <<EOF
+hello`,
+				wantOut: `execute: unterminated heredoc, missing delimiter "EOF"`,
+			},
+			{
+				name:    "unclosed quote",
+				command: `echo "unterminated`,
+				wantOut: "execute: unclosed quote",
+			},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				out, code := eng.Execute(context.Background(), tt.command, readOnlyOps(newTestFS()))
+				if code != contract.ExitCodeUsage {
+					t.Fatalf("expected usage exit code %d, got %d out=%q", contract.ExitCodeUsage, code, out)
+				}
+				if out != tt.wantOut {
+					t.Fatalf("unexpected parser error output: got %q want %q", out, tt.wantOut)
+				}
+			})
+		}
+	})
+
+	t.Run("heredoc append and write-limited preflight remain stable", func(t *testing.T) {
+		t.Run("append preserves exit code and final content", func(t *testing.T) {
+			fs := newTestFS()
+			ops := writableOps(fs)
+			script := `cat <<EOF >> /workspace/todo.txt
+next item
+EOF
+cat /workspace/todo.txt`
+
+			out, code := eng.Execute(context.Background(), script, ops)
+			if code != 0 {
+				t.Fatalf("expected heredoc append to succeed: code=%d out=%q", code, out)
+			}
+			if out != "todo item\nnext item\n" {
+				t.Fatalf("unexpected appended output: %q", out)
+			}
+			if got := fs.files["/workspace/todo.txt"]; got != "todo item\nnext item\n" {
+				t.Fatalf("unexpected appended file content: %q", got)
+			}
+		})
+
+		t.Run("write-limited failure leaves no partial side effects", func(t *testing.T) {
+			fs := newTestFS()
+			ops := writeLimitedOps(fs, 1)
+			script := `cat <<EOF > /workspace/a.txt >> /workspace/b.txt
+hi
+EOF`
+
+			out, code := eng.Execute(context.Background(), script, ops)
+			if code != contract.ExitCodeGeneral {
+				t.Fatalf("expected general failure exit code %d, got %d out=%q", contract.ExitCodeGeneral, code, out)
+			}
+			if out != "redirection: write exceeds limit (1 bytes)" {
+				t.Fatalf("unexpected write-limited error: %q", out)
+			}
+			for _, target := range []string{"/workspace/a.txt", "/workspace/b.txt"} {
+				if _, ok := fs.files[target]; ok {
+					t.Fatalf("expected no partial side effects on %s, files=%v", target, fs.files)
+				}
+			}
+		})
+	})
+}
+
 func TestEngineProfileGatesCapabilities(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()
@@ -1949,8 +2054,8 @@ func TestPipelineIntegration(t *testing.T) {
 		if code != 0 {
 			t.Fatalf("find --fmt jsonl failed: code=%d out=%q", code, out)
 		}
-		if !strings.Contains(out, `"path":"/workspace/readme.md"`) && !strings.Contains(out, `"path":"/workspace/readme.md"`) {
-			t.Fatalf("expected readme path in jsonl output: %q", out)
+		if !strings.Contains(out, `"path":"/workspace/readme.md"`) || !strings.Contains(out, `"kind":"file"`) {
+			t.Fatalf("expected jsonl output to include readme file entry: %q", out)
 		}
 	})
 

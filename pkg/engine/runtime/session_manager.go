@@ -165,19 +165,23 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	nextSession.State = mergeSessionState(nextSession.State, runtime)
 	if len(current.base.Adapters) > 0 {
 		var adapterErr error
-		nextSession, current.adapterMounts, adapterErr = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseObserve, result)
+		var adapterMounts []contract.VirtualMount
+		nextSession, adapterMounts, adapterErr = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseObserve, result)
 		if adapterErr != nil {
 			return SessionExecution{}, adapterErr
 		}
-		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
-		if err != nil {
-			return SessionExecution{}, err
+		rebuiltRuntime, rebuildErr := New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, adapterMounts))
+		if rebuildErr != nil {
+			return SessionExecution{}, rebuildErr
 		}
+		current.adapterMounts = adapterMounts
+		current.runtime = rebuiltRuntime
 	} else if runtime != current.runtime {
-		current.runtime, err = New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
-		if err != nil {
-			return SessionExecution{}, err
+		rebuiltRuntime, rebuildErr := New(runtimeOptionsFromSession(current.base, nextSession, nextSession.PolicyCeiling, current.adapterMounts))
+		if rebuildErr != nil {
+			return SessionExecution{}, rebuildErr
 		}
+		current.runtime = rebuiltRuntime
 	}
 	current.snapshot = nextSession.Clone()
 	return SessionExecution{
@@ -200,10 +204,12 @@ func (m *SessionManager) Checkpoint(ctx context.Context, sessionID string) (cont
 	nextSession.UpdatedAt = m.now()
 	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
 	if len(current.base.Adapters) > 0 {
-		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
+		var adapterMounts []contract.VirtualMount
+		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
 		if err != nil {
 			return contract.Session{}, err
 		}
+		current.adapterMounts = adapterMounts
 	}
 	current.snapshot = nextSession.Clone()
 	current.checkpoint = current.snapshot.Clone()
@@ -252,10 +258,12 @@ func (m *SessionManager) Close(ctx context.Context, sessionID string) (contract.
 	nextSession.UpdatedAt = m.now()
 	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
 	if len(current.base.Adapters) > 0 {
-		nextSession, current.adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
+		var adapterMounts []contract.VirtualMount
+		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
 		if err != nil {
 			return contract.Session{}, err
 		}
+		current.adapterMounts = adapterMounts
 	}
 	current.snapshot = nextSession.Clone()
 	current.checkpoint = current.snapshot.Clone()

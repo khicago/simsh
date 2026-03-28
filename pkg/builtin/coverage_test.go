@@ -61,12 +61,18 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	mvTarget := rt.abs("workspace", "moved.txt")
 	newFile := rt.abs("workspace", "new.txt")
 	emptyDir := rt.abs("workspace", "empty-dir")
+	nestedDir := rt.abs("workspace", "nested")
+	deeperDir := rt.abs("workspace", "nested", "deeper")
+	nestedFile := rt.abs("workspace", "nested", "deeper", "notes.txt")
 
 	if out, code := rt.exec("mkdir -p " + rt.abs("workspace")); code != 0 {
 		t.Fatalf("setup mkdir failed: code=%d out=%q", code, out)
 	}
 	if out, code := rt.exec("mkdir -p " + emptyDir); code != 0 {
 		t.Fatalf("setup empty dir failed: code=%d out=%q", code, out)
+	}
+	if out, code := rt.exec("mkdir -p " + deeperDir); code != 0 {
+		t.Fatalf("setup nested dir failed: code=%d out=%q", code, out)
 	}
 	if out, code := rt.exec("mkdir -p " + rt.abs("workspace", "rmdir-confirm")); code != 0 {
 		t.Fatalf("setup rmdir-confirm dir failed: code=%d out=%q", code, out)
@@ -104,6 +110,9 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 	if err := rt.ops.WriteFile(context.Background(), rt.abs("workspace", ".hidden.txt"), "hidden\n"); err != nil {
 		t.Fatalf("setup write hidden file failed: %v", err)
 	}
+	if err := rt.ops.WriteFile(context.Background(), nestedFile, "nested\n"); err != nil {
+		t.Fatalf("setup write nested file failed: %v", err)
+	}
 
 	tests := []struct {
 		name string
@@ -116,6 +125,45 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, readme) {
 					t.Fatalf("ls failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "ls-recursive-long",
+			cmd:  "ls -R -l " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 {
+					t.Fatalf("ls -R -l failed: code=%d out=%q", code, out)
+				}
+				for _, want := range []string{
+					rt.abs("workspace") + ":",
+					nestedDir + ":",
+					deeperDir + ":",
+					"- rw file 1 " + nestedFile,
+					"# columns: mode access kind lines path",
+				} {
+					if !strings.Contains(out, want) {
+						t.Fatalf("ls -R -l missing %q in output:\n%s", want, out)
+					}
+				}
+			},
+		},
+		{
+			name: "ls-long-md",
+			cmd:  "ls -al --fmt md " + deeperDir,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 {
+					t.Fatalf("ls -al --fmt md failed: code=%d out=%q", code, out)
+				}
+				for _, want := range []string{
+					"| mode | access | kind | lines | path |",
+					"| d | rw | dir | - | . |",
+					"| d | rw | dir | - | .. |",
+					"| - | rw | file | 1 | " + nestedFile + " |",
+				} {
+					if !strings.Contains(out, want) {
+						t.Fatalf("ls -al --fmt md missing %q in output:\n%s", want, out)
+					}
 				}
 			},
 		},
@@ -308,6 +356,42 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || strings.TrimSpace(out) != "{\"author\":\"simsh\"}" {
 					t.Fatalf("json get --raw failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-stat-invalid-format",
+			cmd:  "json stat --fmt yaml " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != contract.ExitCodeUsage || !strings.Contains(out, `json stat: unsupported --fmt value "yaml"`) {
+					t.Fatalf("json stat invalid format failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-stat-no-files",
+			cmd:  "json stat " + emptyDir,
+			want: func(t *testing.T, out string, code int) {
+				if code != contract.ExitCodeGeneral || !strings.Contains(out, "json stat: no files found") {
+					t.Fatalf("json stat empty dir failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-bad-flag",
+			cmd:  "json get --bad --path meta " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != contract.ExitCodeUsage || !strings.Contains(out, "json get: unsupported flag --bad") {
+					t.Fatalf("json get bad flag failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-directory",
+			cmd:  "json get --path meta " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != contract.ExitCodeUsage || !strings.Contains(out, "json get: "+rt.abs("workspace")+": is a directory") {
+					t.Fatalf("json get directory failed: code=%d out=%q", code, out)
 				}
 			},
 		},
@@ -522,6 +606,26 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != 0 || !strings.Contains(out, "\"builtins\"") || !strings.Contains(out, "\"name\": \"ls\"") {
 					t.Fatalf("man --list --fmt json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "man-list-text",
+			cmd:  "man --list",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 {
+					t.Fatalf("man --list failed: code=%d out=%q", code, out)
+				}
+				for _, want := range []string{
+					"Builtins:",
+					"name",
+					"stdin",
+					"structured",
+					"ls",
+				} {
+					if !strings.Contains(out, want) {
+						t.Fatalf("man --list missing %q in output:\n%s", want, out)
+					}
 				}
 			},
 		},

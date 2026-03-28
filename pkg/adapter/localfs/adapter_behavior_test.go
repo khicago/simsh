@@ -235,8 +235,8 @@ func TestDescribePathOverrideAndHelperFunctions(t *testing.T) {
 	if pathWithinRoot("/workspace", "/elsewhere/docs/a.txt") {
 		t.Errorf("pathWithinRoot(%q, %q) = true, want false", "/workspace", "/elsewhere/docs/a.txt")
 	}
-	if err := checkContext(nil); err != nil {
-		t.Errorf("checkContext(nil) error = %v, want nil", err)
+	if err := checkContext(context.TODO()); err != nil {
+		t.Errorf("checkContext(non-canceled) error = %v, want nil", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()

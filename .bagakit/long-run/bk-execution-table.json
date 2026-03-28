@@ -5,13 +5,13 @@
   },
   "detection": {
     "status": "ready",
-    "last_reviewed_at": "2026-03-24T00:00:00Z",
+    "last_reviewed_at": "2026-03-24T05:55:00Z",
     "reviewed_by": "codex",
     "upstream_systems": [
       "bagakit-ft",
       "manual"
     ],
-    "notes": "Archived bagakit-ft rows remain historical implementation evidence. The active backlog is now a manual review-derived kernel hardening/test plan created on 2026-03-24 to restore green quality gates and close uncovered core risks."
+    "notes": "Archived bagakit-ft rows remain historical implementation evidence. The active backlog is now a manual review-derived follow-up plan refreshed on 2026-03-24 after re-reading the kernel architecture/backlog docs, re-checking targeted package coverage (`pkg/builtin` 66.8%, `pkg/service/httpapi` 71.1%, `pkg/engine/runtime` 87.1%), and observing repeated low-space interruptions in the default evidence gate."
   },
   "adapters": [
     {
@@ -68,7 +68,7 @@
           "id": "manual-20260324-lint-check-gate",
           "title": "Restore lint/check gate and remove stale orchestrator helpers",
           "source_ref": "Makefile",
-          "status": "todo",
+          "status": "done",
           "priority": 10,
           "why_now": "`make check` is currently red on staticcheck findings, so the project's default evidence gate is already broken before any new kernel work begins.",
           "acceptance_criteria": [
@@ -85,11 +85,11 @@
             "make lint",
             "make check"
           ],
-          "confidence": 0.93,
+          "confidence": 0.99,
           "evidence": [
-            "`make lint` fails on SA1012 at pkg/adapter/localfs/adapter_behavior_test.go:238 because the test passes a nil context.",
-            "`make lint` fails on SA4000 at pkg/engine/engine_test.go:1952 because the jsonl assertion compares the same expression twice.",
-            "`make lint` fails on U1000 for three unused helpers in pkg/engine/orchestrator.go:536-557, and `make check` inherits the same failure."
+            "`go test ./pkg/adapter/localfs ./pkg/engine` passes after switching the localfs helper test to a non-canceled context and tightening the JSONL assertion to path plus file kind.",
+            "`make lint` exits 0 after removing the duplicated assertion and the three caller-free orchestrator helpers.",
+            "`make check` exits 0, restoring the repository's default gate with both tests and staticcheck green."
           ],
           "risks": [
             "Keep the change surgical: restore the gate without changing command-dispatch semantics.",
@@ -100,7 +100,7 @@
           "id": "manual-20260324-agentfs-pathguard-direct-tests",
           "title": "Add direct package tests for agentfs zone behavior and pathguard escapes",
           "source_ref": "pkg/adapter/agentfs/filespace_core.go",
-          "status": "todo",
+          "status": "done",
           "priority": 20,
           "why_now": "The default workspace trust story depends on `agentfs` and `pathguard`, but those packages still have zero direct package coverage even though they own zone resolution and path-escape prevention.",
           "acceptance_criteria": [
@@ -116,11 +116,11 @@
             "go test ./pkg/adapter/agentfs ./pkg/adapter/internal/pathguard",
             "go test ./pkg/fs ./pkg/engine"
           ],
-          "confidence": 0.82,
+          "confidence": 0.99,
           "evidence": [
-            "Coverage output shows `pkg/adapter/agentfs` at 0.0% even though `pkg/fs.NewAIFilesystem` delegates the default runtime zones to it.",
-            "Coverage output shows `pkg/adapter/internal/pathguard` at 0.0% even though `agentfs.toHostPath()` relies on it for escape prevention.",
-            "Current `pkg/fs` tests exercise some integration regressions, but low-level `DescribePath`, `PathEnv`, zone walking, and `resolveWithExistingPrefix()` invariants are not package-local locked."
+            "`pkg/adapter/agentfs/filespace_core_test.go` covers root-zone listing, `PathEnv()` normalization and dedupe, read-write vs read-only `DescribePath()` metadata, read-only write preflight, and direct plus nested symlink escape rejection through package-local helpers.",
+            "`pkg/adapter/internal/pathguard/pathguard_test.go` covers safe missing descendants, direct and nested symlink escape rejection, and `resolveWithExistingPrefix()` preserving the unresolved suffix after resolving an existing symlink ancestor.",
+            "`go test ./pkg/adapter/agentfs ./pkg/adapter/internal/pathguard` and `go test ./pkg/fs ./pkg/engine` both exit 0 on the 2026-03-24 rerun."
           ],
           "risks": [
             "Avoid duplicating the full integration harness; target the low-level invariants that can regress silently.",
@@ -131,7 +131,7 @@
           "id": "manual-20260324-shell-parser-redirection-regressions",
           "title": "Harden parser and redirection regressions around heredoc and edge-case script syntax",
           "source_ref": "pkg/engine/script_parser_v2.go",
-          "status": "todo",
+          "status": "done",
           "priority": 30,
           "why_now": "The parser and script runner are core kernel surfaces, but heredoc branches and several parser failure paths remain effectively unexercised, which makes shell-level regressions easy to miss.",
           "acceptance_criteria": [
@@ -148,11 +148,11 @@
             "go test ./pkg/engine ./pkg/sh",
             "go test ./..."
           ],
-          "confidence": 0.74,
+          "confidence": 0.99,
           "evidence": [
-            "A repo search over engine tests shows no heredoc-specific coverage even though the parser implements `<<` support.",
-            "Coverage output leaves `readHereDocBody()` and multiple parser error branches only partially covered.",
-            "These branches live in the kernel execution path, so a parser regression would hit the common inspect-edit-test loop directly."
+            "`pkg/engine/engine_test.go` now covers heredoc success through `eng.Execute(...)`, parser failures for missing delimiter, unterminated heredoc, and unclosed quote, plus heredoc-driven append and write-limited redirection behavior without partial side effects.",
+            "`go test ./pkg/engine ./pkg/sh` exits 0 after the new regression coverage is added.",
+            "An initial `go test ./...` hit `go: creating work dir ... no space left on device`; after `go clean -cache -testcache` freed Go build cache space, the rerun of `go test ./...` exited 0."
           ],
           "risks": [
             "Keep the shell surface stable; start with tests and only change semantics when a failing regression proves the need.",
@@ -163,7 +163,7 @@
           "id": "manual-20260324-http-cli-entry-regressions",
           "title": "Close regression gaps in HTTP and CLI entry surfaces",
           "source_ref": "pkg/service/httpapi/execute_endpoint.go",
-          "status": "todo",
+          "status": "done",
           "priority": 40,
           "why_now": "Entry adapters are not the architecture center, but they are still public integration surfaces; current coverage misses serve-mode branches, service wrappers, and include-meta fallback edges.",
           "acceptance_criteria": [
@@ -180,15 +180,244 @@
             "go test ./cmd/simsh-cli ./pkg/service/httpapi ./pkg/service",
             "make test"
           ],
-          "confidence": 0.67,
+          "confidence": 0.99,
           "evidence": [
-            "Coverage output shows 0.0% on `pkg/service/service.go`, which is a public wrapper surface for library-style callers.",
-            "Coverage output shows 0.0% on `cmd/simsh-cli` serve-mode helpers such as `runServe()` and root-resolution branches.",
-            "`describePathMetaViaLS()` in `pkg/service/httpapi/execute_endpoint.go` remains unexecuted, leaving the metadata fallback path effectively unverified."
+            "`cmd/simsh-cli/main_test.go` adds a deterministic `runServe()` regression that uses the missing-port address `127.0.0.1`, asserts the cwd root fallback plus mount banner, and exits through `contract.ExitCodeGeneral` without opening a long-lived listener.",
+            "`pkg/service/httpapi/handler_test.go` adds direct helper coverage for `statusForSessionError()` and mounted-path fallback coverage for `describePathMetaViaLS()` via `/test/core-strict/cases/echo-basic.sh` with `EnableTestCorpus=true`.",
+            "`pkg/service/service_test.go` covers uninitialized service errors, the command-required fast path, `OpsFactory` error propagation, and a real-engine success path; `go test ./cmd/simsh-cli ./pkg/service/httpapi ./pkg/service` and `make test` both exit 0."
           ],
           "risks": [
             "Keep tests deterministic and non-blocking; do not add network flake just to raise coverage.",
             "If fallback metadata is dead code, either prove it with tests or remove it explicitly rather than leaving an unowned branch."
+          ]
+        },
+        {
+          "id": "manual-20260324-agentfs-mutation-write-limit-regressions",
+          "title": "Cover agentfs mutation and write-limit invariants directly",
+          "source_ref": "pkg/adapter/agentfs/filespace_core.go",
+          "status": "done",
+          "priority": 50,
+          "why_now": "The default workspace still depends on `agentfs` for trusted writes, but direct package coverage remains only 41.5% and every mutator path (`WriteFile`, `AppendFile`, `EditFile`, `MakeDir`, `RemoveFile`) is still uncovered.",
+          "acceptance_criteria": [
+            "`go test ./pkg/adapter/agentfs` passes with direct tests covering writable-zone writes/appends/edits/removes plus read-only rejection in `/knowledge_base`.",
+            "Tests prove write-limit failures reject oversize write, append, and edit payloads without leaving partial on-disk mutations.",
+            "`go test ./pkg/fs ./pkg/engine` remains green so the low-level coverage hardening preserves integrated runtime behavior."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/agentfs/filespace_core.go",
+            "pkg/adapter/agentfs/filespace_core_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/agentfs",
+            "go test ./pkg/fs ./pkg/engine"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/adapter/agentfs/filespace_core_test.go` now directly covers writable-zone `WriteFile`, `AppendFile`, `EditFile`, `MakeDir`, and `RemoveFile` behavior, including host-path assertions and directory-removal rejection.",
+            "The same direct suite proves `/knowledge_base` rejects write, append, edit, mkdir, and remove mutations with `contract.ErrUnsupported` while preserving pre-existing file content.",
+            "`go test ./pkg/adapter/agentfs` and `go test ./pkg/fs ./pkg/engine` both exited 0 on the 2026-03-24 rerun after adding no-partial-mutation checks for oversize write, append, and edit failures."
+          ],
+          "risks": [
+            "If a new direct test exposes a production bug, fix the filesystem semantics in the same closure instead of weakening the assertion.",
+            "Keep the scope at package-local invariants; do not duplicate the larger integration suite already owned by `pkg/fs` and `pkg/engine`."
+          ]
+        },
+        {
+          "id": "manual-20260324-agentfs-search-path-regressions",
+          "title": "Cover agentfs search and path-resolution edge cases",
+          "source_ref": "pkg/adapter/agentfs/filespace_core.go",
+          "status": "done",
+          "priority": 60,
+          "why_now": "Agent inspect/search loops rely on `agentfs` path normalization and search expansion, but `RequireAbsolutePath`, `ResolveSearchPaths`, `CollectFilesUnder`, `toVirtualPath`, and `NewDefaultFilesystem` are still uncovered direct behavior.",
+          "acceptance_criteria": [
+            "`go test ./pkg/adapter/agentfs` passes with direct tests for `RequireAbsolutePath`, file-vs-directory `ResolveSearchPaths`, recursive root search, and `CollectFilesUnder` sorted cross-zone output.",
+            "Tests cover `toVirtualPath`/zone-root normalization and prove search/path results stay rooted under allowed zones only.",
+            "`go test ./pkg/fs ./pkg/engine/runtime` remains green after the new search/path regressions are added."
+          ],
+          "files_to_touch": [
+            "pkg/adapter/agentfs/filespace_core.go",
+            "pkg/adapter/agentfs/filespace_core_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/adapter/agentfs",
+            "go test ./pkg/fs ./pkg/engine/runtime"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/adapter/agentfs/filespace_core_test.go` now directly covers `RequireAbsolutePath`, file-vs-directory `ResolveSearchPaths`, missing zone-local targets, recursive root search, sorted cross-zone `CollectFilesUnder`, `toVirtualPath`, and deterministic `NewDefaultFilesystem` cwd fallback plus zone layout.",
+            "`pkg/adapter/agentfs/filespace_core.go` now checks host-path existence inside `ResolveSearchPaths`, so a missing file under an allowed zone returns `No such file or directory` instead of being surfaced as a searchable file path.",
+            "`go test ./pkg/adapter/agentfs` and `go test ./pkg/fs ./pkg/engine/runtime` both exited 0 on the 2026-03-24 rerun after the new search/path regressions landed."
+          ],
+          "risks": [
+            "Avoid coupling tests to incidental helper ordering beyond the documented sorted-output contract.",
+            "If search-path behavior is unclear, tighten the contract in tests first and only then change production code."
+          ]
+        },
+        {
+          "id": "manual-20260324-console-simshd-smoke-tests",
+          "title": "Add deterministic smoke coverage for TUI and simshd entry wrappers",
+          "source_ref": "pkg/cmd/console_tui.go",
+          "status": "done",
+          "priority": 70,
+          "why_now": "Entry surfaces are downstream from the kernel, but they are still public operator paths; `pkg/cmd` and `cmd/simshd` both remain at 0.0% package coverage, so launcher drift can go unnoticed until manual use.",
+          "acceptance_criteria": [
+            "`go test ./pkg/cmd ./cmd/simshd ./cmd/simsh-cli` passes with deterministic tests that exercise console-model render/state transitions without needing a real TTY.",
+            "The `simshd` launcher is covered through a testable helper or equivalent seam that validates root fallback, profile/policy parsing, and listen-address normalization without holding a long-lived listener open.",
+            "The new tests preserve the documented architecture rule that CLI/TUI and HTTP wrappers stay thin over shared runtime code."
+          ],
+          "files_to_touch": [
+            "pkg/cmd/console_tui.go",
+            "pkg/cmd/console_tui_test.go",
+            "cmd/simshd/main.go",
+            "cmd/simshd/main_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/cmd ./cmd/simshd ./cmd/simsh-cli",
+            "make test"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/cmd/console_tui_test.go` now covers `newConsoleModel(...)`, `Update(...)`, and `View()` state transitions, including loading-to-resized rendering, blank input, `exit`/`quit`, command dispatch via `tea.BatchMsg`, `executeResultMsg` handling, and `Ctrl+L` transcript clearing without starting a real Bubble Tea program.",
+            "`cmd/simshd/main.go` now routes through a package-local `flag.NewFlagSet` launcher seam, and `cmd/simshd/main_test.go` validates cwd root fallback, invalid profile or policy rejection, `-P` overriding `-listen`, and `EnableTestMount` wiring into `httpapi.Config` with a stubbed serve path.",
+            "`go test ./pkg/cmd ./cmd/simshd ./cmd/simsh-cli` and `make test` both exited 0 on 2026-03-24 after the new entry-surface regression coverage landed."
+          ],
+          "risks": [
+            "Keep tests model-level and deterministic; avoid flaky terminal or network integration coverage just to move the percentage.",
+            "If testability requires refactoring, extract thin seams instead of pushing more runtime logic into entry commands."
+          ]
+        },
+        {
+          "id": "manual-20260324-builtin-ls-man-json-edge-regressions",
+          "title": "Close `ls`/`man`/`json` edge-case regressions in the default workspace",
+          "source_ref": "pkg/builtin/op_listing.go",
+          "status": "done",
+          "priority": 80,
+          "why_now": "The default workspace is the agent's main surface, yet `pkg/builtin` still sits at 66.8% coverage and the least-covered logic is concentrated in `ls`, `man`, and `json`, which drive directory inspection, command discovery, and structured querying.",
+          "acceptance_criteria": [
+            "`go test ./pkg/builtin ./pkg/engine` passes with new regression coverage for recursive or formatted listing paths, `man --list` text or external fallback behavior, and `json stat/get` directory plus invalid-argument branches.",
+            "Tests cover at least one `ls -R -l` path plus one `ls -l --fmt md|json` path that exercises metadata defaults or formatter fallback, so agent-visible listing contracts stop depending on mostly untested helpers.",
+            "The new coverage proves `json stat/get` keeps stable usage or general exit codes for invalid formats, directory targets, and expansion-no-files cases without weakening current happy-path behavior."
+          ],
+          "files_to_touch": [
+            "pkg/builtin/coverage_test.go",
+            "pkg/builtin/effective_core_additional_test.go",
+            "pkg/builtin/op_listing.go",
+            "pkg/builtin/op_help_manual.go",
+            "pkg/builtin/op_json.go"
+          ],
+          "commands": [
+            "go test ./pkg/builtin ./pkg/engine",
+            "go test ./pkg/builtin -cover"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/builtin/coverage_test.go` now adds direct command-level regressions for `ls -R -l`, `ls -al --fmt md`, `man --list`, `json stat` invalid-format/no-files paths, and `json get` bad-flag/directory paths without widening builtin semantics.",
+            "`pkg/builtin/effective_core_additional_test.go` now covers `runManList(\"text\")` with sorted builtin rows plus external blank-summary fallback rendering as `(no description)`.",
+            "Validation passed with `gofmt -w pkg/builtin/coverage_test.go pkg/builtin/effective_core_additional_test.go pkg/builtin/op_listing.go pkg/builtin/op_help_manual.go pkg/builtin/op_json.go`, `go test ./pkg/builtin -run 'TestBuiltinCommandCoverage|TestLSLongFormatHonorsCustomFormatterAndJSONDisplayPath|TestJSONFormattingHelpersAndTargetExpansion|TestManHelpers'`, `go test ./pkg/builtin ./pkg/engine`, and `go test ./pkg/builtin -cover`, with `pkg/builtin` coverage rising to 70.2%."
+          ],
+          "risks": [
+            "Prefer tests first; only change builtin behavior if the new regressions expose a real contract bug.",
+            "Keep the surface dual-readable and additive; do not turn this closure into a second output-format redesign.",
+            "Default `ls` hidden-file visibility in recursive listings remains unchanged and is still an undocumented seam; this pass intentionally avoided freezing that behavior without a clearer contract."
+          ]
+        },
+        {
+          "id": "manual-20260324-session-manager-adapter-failure-edges",
+          "title": "Harden session-manager lifecycle and adapter failure edges",
+          "source_ref": "pkg/engine/runtime/session_manager.go",
+          "status": "done",
+          "priority": 90,
+          "why_now": "Session lifecycle is a core kernel contract, and `pkg/engine/runtime` still leaves the lowest coverage in `Execute` and `Resume` precisely where policy narrowing, adapter phases, and closed-session recovery interact.",
+          "acceptance_criteria": [
+            "`go test ./pkg/engine/runtime ./pkg/adapter/reference` passes with new tests for create, checkpoint, resume, or close adapter failures, blank or missing session ids, and runtime rebuild behavior after adapter-managed mounts change.",
+            "Tests prove adapter-phase failures do not partially rewrite session snapshot or checkpoint state, and closed or missing sessions keep returning stable typed errors.",
+            "Coverage for `pkg/engine/runtime` improves from the current 87.1% with direct exercise of the current low branches in `Execute`, `Resume`, and `invokeAdapterPhase`."
+          ],
+          "files_to_touch": [
+            "pkg/engine/runtime/session_manager_test.go",
+            "pkg/engine/runtime/runtime_core_additional_test.go",
+            "pkg/engine/runtime/session_adapters.go",
+            "pkg/engine/runtime/session_manager.go"
+          ],
+          "commands": [
+            "go test ./pkg/engine/runtime ./pkg/adapter/reference",
+            "go test ./pkg/engine/runtime -cover"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/engine/runtime/session_manager_test.go` now covers blank-id and blank-command handling, create/checkpoint/close/resume adapter failures, active-session resume no-op behavior, and read-only runtime rebuilds that keep adapter-projected `/memory` mounts available after failure.",
+            "`pkg/engine/runtime/runtime_core_additional_test.go` now rejects blank adapter IDs and unsupported adapter phases directly, lifting `applySessionAdapters` and `invokeAdapterPhase` coverage to 100.0%.",
+            "`pkg/engine/runtime/session_manager.go` now stages adapter mount updates until adapter hooks and any runtime rebuild both succeed, so observe/checkpoint/close failures no longer clear stored adapter mounts on the way out.",
+            "`go test ./pkg/engine/runtime -run 'TestSessionManager|TestApplySessionAdapters|TestInvokeAdapterPhase'`, `go test ./pkg/engine/runtime ./pkg/adapter/reference`, and `go test ./pkg/engine/runtime -cover` all exit 0, and runtime coverage rises from 87.1% to 93.8%."
+          ],
+          "risks": [
+            "The remaining uncovered `Execute` branches are mostly lock-loss or runtime-construction fault paths that need contrived injection rather than more lifecycle contract expansion.",
+            "Future adapters can still fail runtime reconstruction by returning invalid mounts; this pass preserves prior state on failure but does not add a broader mount-validation layer."
+          ]
+        },
+        {
+          "id": "manual-20260324-http-meta-request-edge-hardening",
+          "title": "Close HTTP execute or session metadata edge cases and request parsing gaps",
+          "source_ref": "pkg/service/httpapi/execute_endpoint.go",
+          "status": "done",
+          "priority": 100,
+          "why_now": "The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
+          "acceptance_criteria": [
+            "`go test ./pkg/service/httpapi ./pkg/service` passes with new tests for empty or null session POST bodies, invalid JSON bodies, metadata fallback or defaulting branches, and shell tokenization edge cases.",
+            "An explicit `include_meta` request that names `/` or other quoted or escaped absolute paths keeps the intended path in `meta.paths`, so metadata extraction matches the command the caller actually sent.",
+            "Coverage for `pkg/service/httpapi` improves from the current 71.1% while preserving existing success-path and session-lifecycle behavior."
+          ],
+          "files_to_touch": [
+            "pkg/service/httpapi/handler_test.go",
+            "pkg/service/httpapi/execute_endpoint.go",
+            "pkg/service/service_test.go"
+          ],
+          "commands": [
+            "go test ./pkg/service/httpapi ./pkg/service",
+            "go test ./pkg/service/httpapi -cover"
+          ],
+          "confidence": 0.99,
+          "evidence": [
+            "`pkg/service/httpapi/handler_test.go` now covers empty and `null` session bodies, invalid execute JSON bodies, blank commands, session override rejection, direct `describePathMeta(...)` defaults, and explicit-root `include_meta` behavior.",
+            "`pkg/service/httpapi/execute_endpoint.go` now preserves explicit `/` tokens in `extractAbsPaths()` so `meta.paths` matches caller-named root paths without changing dedupe or sort behavior.",
+            "`go test ./pkg/service/httpapi ./pkg/service` exits 0 after the regressions land.",
+            "`go test ./pkg/service/httpapi -cover` exits 0 and reports 79.3% coverage, up from 71.1%."
+          ],
+          "risks": [
+            "Keep the handler thin; prefer small parsing or metadata fixes over pushing runtime semantics into HTTP-only code.",
+            "If root-path metadata is intentionally excluded, document and test that contract explicitly instead of leaving code and comments contradictory."
+          ]
+        },
+        {
+          "id": "manual-20260324-long-run-temp-space-preflight",
+          "title": "Make long-run preflight resilient to transient temp-space failures",
+          "source_ref": ".bagakit/long-run/.gen/check_and_resume.sh",
+          "status": "todo",
+          "priority": 110,
+          "why_now": "The current long-run loop can misclassify actionable work as blocked when temporary-file creation fails transiently, and this repo is currently operating with less than 200 MiB free on `/System/Volumes/Data`, which makes that noise recurring rather than hypothetical.",
+          "acceptance_criteria": [
+            "`bash .bagakit/long-run/check_and_resume.sh` surfaces low-space or temp-file failures as a retryable preflight outcome with a deterministic hint instead of only a raw shell failure.",
+            "A rerun after a successful tiny-write sanity check keeps `next-action.json` and `feature-list.json` consistent instead of leaving the loop in a spurious no-next-action state.",
+            "`bash .bagakit/long-run/ralphloop.sh preflight --json` or equivalent runner guidance documents the exact retry path for temp-space anomalies."
+          ],
+          "files_to_touch": [
+            ".bagakit/long-run/.gen/check_and_resume.sh",
+            ".bagakit/long-run/.gen/ralphloop.sh",
+            ".bagakit/long-run/.gen/initializer_prompt.md"
+          ],
+          "commands": [
+            "bash .bagakit/long-run/check_and_resume.sh",
+            "bash .bagakit/long-run/ralphloop.sh preflight --json"
+          ],
+          "confidence": 0.74,
+          "evidence": [
+            "`make lint`, `make check`, and several package-local test runs in this session all failed at least once with `no space left on device` before succeeding again after cache cleanup or retry.",
+            "`docs/.bagakit/inbox/howto-long-run-preflight-rerun.md` already records a concrete initializer incident where a second `check_and_resume.sh` run selected the same row cleanly after a transient temp-file failure.",
+            "The generated `check_and_resume.sh` currently runs validation directly and stops on the first shell failure without classifying low-space issues as retryable loop noise."
+          ],
+          "risks": [
+            "Keep the runner orchestration-only; do not bury project-specific repair logic inside long-run scripts.",
+            "If temp-space failures are actually durable, the new preflight must still stop the loop clearly instead of silently masking the problem."
           ]
         }
       ]

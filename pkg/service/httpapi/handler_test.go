@@ -2,15 +2,21 @@ package httpapi
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
+
+	"github.com/khicago/simsh/pkg/contract"
+	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
 )
 
 func TestExecuteHandler(t *testing.T) {
@@ -54,6 +60,70 @@ func TestExecuteHandler(t *testing.T) {
 	}
 }
 
+func TestSessionHandlerOptionalJSONBody(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	cases := []struct {
+		name           string
+		body           string
+		hasBody        bool
+		wantStatusCode int
+		wantBody       string
+	}{
+		{
+			name:           "empty body uses defaults",
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "literal null uses defaults",
+			body:           "null",
+			hasBody:        true,
+			wantStatusCode: http.StatusOK,
+		},
+		{
+			name:           "invalid json rejected",
+			body:           "{",
+			hasBody:        true,
+			wantStatusCode: http.StatusBadRequest,
+			wantBody:       "invalid json body",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var body io.Reader
+			if tc.hasBody {
+				body = strings.NewReader(tc.body)
+			}
+			resp := postBody(t, ts.URL+"/v1/sessions", body)
+			defer resp.Body.Close()
+
+			if resp.StatusCode != tc.wantStatusCode {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+			}
+			if tc.wantStatusCode != http.StatusOK {
+				raw, _ := io.ReadAll(resp.Body)
+				if !strings.Contains(string(raw), tc.wantBody) {
+					t.Fatalf("unexpected body %q, want substring %q", string(raw), tc.wantBody)
+				}
+				return
+			}
+
+			var out sessionResponse
+			if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+				t.Fatalf("decode failed: %v", err)
+			}
+			if out.Session.SessionID == "" {
+				t.Fatalf("expected session_id in response: %+v", out)
+			}
+		})
+	}
+}
+
 func TestExecuteHandlerDefaultRCFiles(t *testing.T) {
 	tmp := t.TempDir()
 	rcPath := filepath.Join(tmp, "task_outputs", "simshrc")
@@ -92,6 +162,53 @@ func TestExecuteHandlerDefaultRCFiles(t *testing.T) {
 	}
 	if out.ExitCode != 0 || strings.TrimSpace(out.Output) != "HTTP_BOOT=enabled" {
 		t.Fatalf("expected rc export in env output: code=%d out=%q", out.ExitCode, out.Output)
+	}
+}
+
+func TestExecuteHandlerInvalidJSONBody(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	resp := postBody(t, ts.URL+"/v1/execute", strings.NewReader("{"))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(raw), "invalid json body") {
+		t.Fatalf("unexpected body %q", string(raw))
+	}
+}
+
+func TestExecuteHandlerCommandRequired(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{"command": " \n\t "})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+
+	var out struct {
+		Output   string `json:"output"`
+		Stdout   string `json:"stdout"`
+		ExitCode int    `json:"exit_code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.ExitCode != contract.ExitCodeUsage {
+		t.Fatalf("unexpected exit code %d, want %d", out.ExitCode, contract.ExitCodeUsage)
+	}
+	if out.Output != "execute: command is required" || out.Stdout != out.Output {
+		t.Fatalf("unexpected usage payload: %+v", out)
 	}
 }
 
@@ -337,13 +454,210 @@ func TestExecuteHandlerIncludeMetaQuotedPath(t *testing.T) {
 	}
 }
 
+func TestExecuteHandlerIncludeMetaExplicitRootPath(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	resp := postJSON(t, ts.URL+"/v1/execute", map[string]any{
+		"command":      "ls -l /",
+		"include_meta": true,
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+
+	var out struct {
+		ExitCode int `json:"exit_code"`
+		Meta     *struct {
+			Paths []pathMeta `json:"paths"`
+		} `json:"meta"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.ExitCode != 0 {
+		t.Fatalf("unexpected exit code %d", out.ExitCode)
+	}
+	if out.Meta == nil || len(out.Meta.Paths) == 0 {
+		t.Fatalf("expected meta.paths, got %+v", out.Meta)
+	}
+
+	for _, row := range out.Meta.Paths {
+		if row.Path == "/" {
+			if row.Mode != "d" || row.Access != contract.PathAccessReadOnly || row.Kind == "" {
+				t.Fatalf("unexpected root metadata: %+v", row)
+			}
+			if len(row.Capabilities) == 0 {
+				t.Fatalf("expected capabilities for root metadata: %+v", row)
+			}
+			return
+		}
+	}
+	t.Fatalf("expected explicit root path in meta.paths, got %+v", out.Meta.Paths)
+}
+
+func TestStatusForSessionError(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want int
+	}{
+		{
+			name: "session not found",
+			err:  fmt.Errorf("wrapped: %w", runtimeengine.ErrSessionNotFound),
+			want: http.StatusNotFound,
+		},
+		{
+			name: "session closed",
+			err:  fmt.Errorf("wrapped: %w", runtimeengine.ErrSessionClosed),
+			want: http.StatusConflict,
+		},
+		{
+			name: "policy ceiling",
+			err:  fmt.Errorf("wrapped: %w", contract.ErrPolicyCeilingExceeded),
+			want: http.StatusBadRequest,
+		},
+		{
+			name: "deadline exceeded",
+			err:  context.DeadlineExceeded,
+			want: http.StatusRequestTimeout,
+		},
+		{
+			name: "canceled",
+			err:  context.Canceled,
+			want: http.StatusRequestTimeout,
+		},
+		{
+			name: "default",
+			err:  fmt.Errorf("boom"),
+			want: http.StatusInternalServerError,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := statusForSessionError(tc.err); got != tc.want {
+				t.Fatalf("statusForSessionError(%v) = %d, want %d", tc.err, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDescribePathMetaViaLSMountedPath(t *testing.T) {
+	env, err := runtimeengine.New(runtimeengine.Options{
+		HostRoot:         t.TempDir(),
+		Profile:          contract.ProfileCoreStrict,
+		Policy:           contract.DefaultPolicy(),
+		EnableTestCorpus: true,
+	})
+	if err != nil {
+		t.Fatalf("runtimeengine.New(...) error = %v", err)
+	}
+
+	row, ok := describePathMetaViaLS(context.Background(), env, "/test/core-strict/cases/echo-basic.sh")
+	if !ok {
+		t.Fatal("describePathMetaViaLS(...) = !ok, want mounted-path metadata")
+	}
+	if row.Path != "/test/core-strict/cases/echo-basic.sh" {
+		t.Fatalf("describePathMetaViaLS(...).Path = %q, want %q", row.Path, "/test/core-strict/cases/echo-basic.sh")
+	}
+	if row.Access == "" {
+		t.Fatalf("describePathMetaViaLS(...).Access empty: %+v", row)
+	}
+	if row.Kind == "" {
+		t.Fatalf("describePathMetaViaLS(...).Kind empty: %+v", row)
+	}
+	if row.Mode == "" {
+		t.Fatalf("describePathMetaViaLS(...).Mode empty: %+v", row)
+	}
+}
+
+func TestDescribePathMetaDefaults(t *testing.T) {
+	cases := []struct {
+		name       string
+		policy     contract.ExecutionPolicy
+		described  contract.PathMeta
+		wantAccess string
+		wantKind   string
+		wantMode   string
+		wantCaps   []string
+	}{
+		{
+			name:       "read only dir defaults from policy and shape",
+			policy:     contract.DefaultPolicy(),
+			described:  contract.PathMeta{Exists: true, IsDir: true},
+			wantAccess: contract.PathAccessReadOnly,
+			wantKind:   "dir",
+			wantMode:   "d",
+			wantCaps:   []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+		},
+		{
+			name:       "write policy defaults file access to rw",
+			policy:     contract.ExecutionPolicy{WriteMode: contract.WriteModeWriteLimited},
+			described:  contract.PathMeta{Exists: true},
+			wantAccess: contract.PathAccessReadWrite,
+			wantKind:   "file",
+			wantMode:   "-",
+			wantCaps:   []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+		},
+		{
+			name:   "read only strips write capabilities",
+			policy: contract.DefaultPolicy(),
+			described: contract.PathMeta{
+				Exists: true,
+				Kind:   "custom",
+				Access: contract.PathAccessReadWrite,
+				Capabilities: []string{
+					contract.PathCapabilityDescribe,
+					contract.PathCapabilityRead,
+					contract.PathCapabilityWrite,
+					contract.PathCapabilityAppend,
+					contract.PathCapabilityEdit,
+					contract.PathCapabilityMkdir,
+					contract.PathCapabilityRemove,
+				},
+			},
+			wantAccess: contract.PathAccessReadOnly,
+			wantKind:   "custom",
+			wantMode:   "-",
+			wantCaps:   []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			ops := contract.Ops{
+				Policy: tc.policy,
+				DescribePath: func(context.Context, string) (contract.PathMeta, error) {
+					return tc.described, nil
+				},
+			}
+
+			got, ok := describePathMeta(context.Background(), ops, "/task_outputs/example")
+			if !ok {
+				t.Fatal("describePathMeta(...) = !ok, want metadata")
+			}
+			if got.Access != tc.wantAccess || got.Kind != tc.wantKind || got.Mode != tc.wantMode {
+				t.Fatalf("unexpected metadata row: %+v", got)
+			}
+			if !slices.Equal(got.Capabilities, tc.wantCaps) {
+				t.Fatalf("unexpected capabilities %v, want %v", got.Capabilities, tc.wantCaps)
+			}
+		})
+	}
+}
+
 func TestExtractAbsPathsParsesShellStyleTokens(t *testing.T) {
 	paths := extractAbsPaths(
 		`cat "/task_outputs/a b.txt" && ls -l /sys/bin;/bin/date >/task_outputs/out.txt /`,
 		func(p string) (string, error) { return p, nil },
 	)
 	sort.Strings(paths)
-	expected := []string{"/bin/date", "/sys/bin", "/task_outputs/a b.txt", "/task_outputs/out.txt"}
+	expected := []string{"/", "/bin/date", "/sys/bin", "/task_outputs/a b.txt", "/task_outputs/out.txt"}
 	if len(paths) != len(expected) {
 		t.Fatalf("unexpected paths len=%d paths=%v", len(paths), paths)
 	}
@@ -515,6 +829,69 @@ func TestExecuteHandlerRejectsSessionPolicyEscalation(t *testing.T) {
 	}
 }
 
+func TestExecuteHandlerRejectsSessionOverrides(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	createResp := postJSON(t, ts.URL+"/v1/sessions", map[string]any{})
+	defer createResp.Body.Close()
+	var created struct {
+		Session struct {
+			SessionID string `json:"session_id"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create failed: %v", err)
+	}
+
+	cases := []struct {
+		name    string
+		payload map[string]any
+	}{
+		{
+			name: "host root override",
+			payload: map[string]any{
+				"session_id": created.Session.SessionID,
+				"command":    "env PATH",
+				"host_root":  t.TempDir(),
+			},
+		},
+		{
+			name: "root dir override",
+			payload: map[string]any{
+				"session_id": created.Session.SessionID,
+				"command":    "env PATH",
+				"root_dir":   t.TempDir(),
+			},
+		},
+		{
+			name: "profile override",
+			payload: map[string]any{
+				"session_id": created.Session.SessionID,
+				"command":    "env PATH",
+				"profile":    "bash-plus",
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			resp := postJSON(t, ts.URL+"/v1/execute", tc.payload)
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusBadRequest {
+				raw, _ := io.ReadAll(resp.Body)
+				t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+			}
+			raw, _ := io.ReadAll(resp.Body)
+			if !strings.Contains(string(raw), "session-bound execute does not accept host_root/root_dir/profile overrides") {
+				t.Fatalf("unexpected body %q", string(raw))
+			}
+		})
+	}
+}
+
 func TestExecuteHandlerReturnsTracePaths(t *testing.T) {
 	tmp := t.TempDir()
 	hostFile := filepath.Join(tmp, "task_outputs", "trace.txt")
@@ -563,11 +940,24 @@ func postJSON(t *testing.T, url string, payload map[string]any) *http.Response {
 	if err != nil {
 		t.Fatalf("marshal payload failed: %v", err)
 	}
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := postRequest(url, bytes.NewReader(body))
 	if err != nil {
 		t.Fatalf("post failed: %v", err)
 	}
 	return resp
+}
+
+func postBody(t *testing.T, url string, body io.Reader) *http.Response {
+	t.Helper()
+	resp, err := postRequest(url, body)
+	if err != nil {
+		t.Fatalf("post failed: %v", err)
+	}
+	return resp
+}
+
+func postRequest(url string, body io.Reader) (*http.Response, error) {
+	return http.Post(url, "application/json", body)
 }
 
 func containsString(values []string, target string) bool {
