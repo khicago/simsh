@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-03T18:20:00Z
+- Updated At (UTC): 2026-04-03T19:10:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,7 +14,7 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. `K-020: adapter projection metrics and denial surfaces` has now been completed through the feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. `K-021: second adapter seam validation` has now been completed through the feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
 
 ## Acceptance Criteria
 
@@ -47,8 +47,8 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: The long-run queue is currently idle. `K-020: adapter projection metrics and denial surfaces` has landed through the feat harness, and there is still no new actionable row.
-- Tests: `go test ./...`, `make lint`, and `make check` are green after the `K-020` implementation wave.
+- Summary: The long-run queue is currently idle. `K-020` is complete, and `K-021: second adapter seam validation` is now the next planned feat-harness slice.
+- Tests: Repository baseline is green before the `K-021` implementation wave starts.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, which now matches this handoff.
 
 ## Response Driver Snapshot
@@ -56,7 +56,7 @@ bash .bagakit/long-run/check_and_resume.sh
 ```text
 [[BAGAKIT]]
 - LivingDoc: long-run handoff refreshed so it no longer points at a completed row while the next adapter-side slice is executed through the feat-task harness.
-- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-020 closed | repository gates green; Next=bash .bagakit/long-run/check_and_resume.sh
+- LongRun: Item=none; Status=blocked; Confidence=0.95; Evidence=next_row null | K-020 closed | K-021 queued in backlog; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

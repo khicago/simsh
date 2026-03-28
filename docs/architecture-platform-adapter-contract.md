@@ -124,6 +124,12 @@ At least one adapter-backed workload SHOULD implement:
 
 The purpose is validation of the seam, not canonization of one business domain.
 
+Current seam evidence intentionally spans more than one adapter shape:
+- the richer `reference` adapter exercises `/knowledge_base`, `/resources`, `/skills`, managed `/memory`, control-plane hooks, audit, and metrics;
+- the smaller `resourceset` adapter exercises the same lifecycle/projection seam with only `/resources` plus a minimal managed `/memory` view.
+
+This is deliberate. A second adapter should be materially smaller, so seam validation does not silently overfit to the richest implementation.
+
 ## Contract Tests
 Minimum adapter contract tests SHOULD cover:
 - stable path projection for the same logical source object;

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	referenceadapter "github.com/khicago/simsh/pkg/adapter/reference"
+	resourcesetadapter "github.com/khicago/simsh/pkg/adapter/resourceset"
 	"github.com/khicago/simsh/pkg/contract"
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
 	"github.com/khicago/simsh/pkg/fs"
@@ -189,6 +190,7 @@ func runSuite() (SuiteReport, error) {
 		runCommandNamespaceScenario,
 		runTracePlanningScenario,
 		runAdapterProjectionScenario,
+		runResourceSetAdapterScenario,
 		runCancelTimeoutScenario,
 	}
 
@@ -1183,6 +1185,210 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:                 notes,
 	}, nil
+}
+
+type resourceSetEntry struct {
+	Path      string `json:"path"`
+	Source    string `json:"source,omitempty"`
+	Freshness string `json:"freshness,omitempty"`
+}
+
+func runResourceSetAdapterScenario() (ScenarioReport, error) {
+	root := mustTempHostRoot()
+	defer os.RemoveAll(root)
+
+	adapter := resourcesetadapter.New(resourcesetadapter.Options{
+		Resources: map[string]string{
+			"plan.json": "{\"steps\":[\"start\"]}\n",
+		},
+		ResourceMetadata: map[string]resourcesetadapter.ResourceMetadata{
+			"plan.json": {
+				Source:    "validation",
+				Freshness: "snapshot",
+			},
+		},
+	})
+	manager := newFullSessionManager()
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: root,
+		Profile:  contract.ProfileBashPlus,
+		Policy:   fullPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	start := time.Now()
+	resourcePath := "/resources/plan.json"
+
+	readResult, err := manager.Execute(context.Background(), session.SessionID, "cat "+resourcePath, contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	readTracePassed, readTraceTotal := evaluateTrace(readResult.Result.Trace, traceExpectation{
+		requested: []string{"/resources/plan.json"},
+		read:      []string{"/resources/plan.json"},
+	})
+	tracePassed := readTracePassed
+	traceTotal := readTraceTotal
+
+	deniedResult, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > "+resourcePath, contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	denyTracePassed, denyTraceTotal := evaluateTrace(deniedResult.Result.Trace, traceExpectation{
+		requested: []string{"/resources/plan.json"},
+		denied:    []string{"/resources/plan.json"},
+	})
+	tracePassed += denyTracePassed
+	traceTotal += denyTraceTotal
+
+	resourcesResult, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/resources.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	var resourceEntries []resourceSetEntry
+	if err := json.Unmarshal([]byte(resourcesResult.Result.Stdout), &resourceEntries); err != nil {
+		return ScenarioReport{}, err
+	}
+	resourceJSONOK := false
+	for _, entry := range resourceEntries {
+		if entry.Path == resourcePath && entry.Source == "validation" && entry.Freshness == "snapshot" {
+			resourceJSONOK = true
+			break
+		}
+	}
+
+	observationsResult, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/observations.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	observationLines := parseObservationLines(observationsResult.Result.Stdout)
+	observationsRecorded := observationContains(observationLines, "read:"+resourcePath) &&
+		observationContains(observationLines, "denied:"+resourcePath)
+
+	summaryResult, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	summaryText := summaryResult.Result.Stdout
+	resourceCount, resourceCountOK := summaryCount(summaryText, "resource_count")
+	observations, observationsOK := summaryCount(summaryText, "observations")
+	phaseValue, phaseOK := summaryLineValue(summaryText, "phase")
+
+	checkpointSession, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+
+	resumedSession, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if len(resumedSession.State.Opaque[adapter.AdapterID()]) == 0 {
+		return ScenarioReport{}, fmt.Errorf("missing %q adapter state after resume", adapter.AdapterID())
+	}
+
+	resumedSummaryResult, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	resumedSummaryText := resumedSummaryResult.Result.Stdout
+	resumedPhaseValue, resumedPhaseOK := summaryLineValue(resumedSummaryText, "phase")
+	resumedObservations, resumedObservationsOK := summaryCount(resumedSummaryText, "observations")
+	resumedResourceCount, resumedResourceOK := summaryCount(resumedSummaryText, "resource_count")
+
+	resumeRead, err := manager.Execute(context.Background(), session.SessionID, "cat "+resourcePath, contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	resumeTracePassed, resumeTraceTotal := evaluateTrace(resumeRead.Result.Trace, traceExpectation{
+		requested: []string{resourcePath},
+		read:      []string{resourcePath},
+	})
+	tracePassed += resumeTracePassed
+	traceTotal += resumeTraceTotal
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+
+	assertionPassed, assertionTotal, failedChecks := countNamedChecks(
+		namedCheck{name: "initial_read_exit_code", ok: readResult.Result.ExitCode == 0},
+		namedCheck{name: "initial_read_content", ok: strings.TrimSpace(readResult.Result.Stdout) == `{"steps":["start"]}`},
+		namedCheck{name: "resources_json_metadata", ok: resourceJSONOK},
+		namedCheck{name: "resource_write_denied", ok: deniedResult.Result.ExitCode != 0},
+		namedCheck{name: "observations_capture", ok: observationsRecorded},
+		namedCheck{name: "summary_resource_count", ok: resourceCountOK && resourceCount == 1},
+		namedCheck{name: "summary_observations_count", ok: observationsOK && observations >= 2},
+		namedCheck{name: "summary_phase_observed", ok: phaseOK && phaseValue == "observed"},
+		namedCheck{name: "checkpoint_state_saved", ok: len(checkpointSession.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "resumed_session_state", ok: len(resumedSession.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "resumed_phase", ok: resumedPhaseOK && resumedPhaseValue == "resumed"},
+		namedCheck{name: "resumed_observations_count", ok: resumedObservationsOK && resumedObservations >= observations},
+		namedCheck{name: "resumed_resource_count", ok: resumedResourceOK && resumedResourceCount == resourceCount},
+		namedCheck{name: "resume_read_exit_code", ok: resumeRead.Result.ExitCode == 0},
+		namedCheck{name: "resume_read_content", ok: strings.TrimSpace(resumeRead.Result.Stdout) == `{"steps":["start"]}`},
+	)
+
+	notes := []string{}
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
+	if !success {
+		notes = append(notes, "resource-set adapter seam validation failed")
+		if len(failedChecks) > 0 {
+			notes = append(notes, "failed_checks: "+strings.Join(failedChecks, ", "))
+		}
+	}
+
+	return ScenarioReport{
+		Name:                  "resource_set_adapter_seam",
+		Category:              "adapter_second_seam_validation",
+		Success:               success,
+		SessionScoped:         true,
+		AsyncCandidate:        false,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
+		Notes:                 notes,
+	}, nil
+}
+
+func parseObservationLines(raw string) []string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return nil
+	}
+	parts := strings.Split(trimmed, "\n")
+	lines := make([]string, 0, len(parts))
+	for _, line := range parts {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.HasPrefix(line, "-") {
+			line = strings.TrimSpace(strings.TrimPrefix(line, "-"))
+		}
+		lines = append(lines, line)
+	}
+	return lines
+}
+
+func observationContains(lines []string, target string) bool {
+	for _, line := range lines {
+		if line == target {
+			return true
+		}
+	}
+	return false
 }
 
 func runCancelTimeoutScenario() (ScenarioReport, error) {

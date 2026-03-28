@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "feat_id": "f-20260403-second-adapter-seam-validation",
+  "updated_at": "2026-04-03T07:26:07Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add a second adapter shape and validate the seam",
+      "status": "done",
+      "summary": "Implement a smaller resource-first adapter, prove it through focused tests and the native reference benchmark, then refine docs and archive the feat cleanly.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-03T07:26:07Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./pkg/adapter/resourceset ./benchmarks/simsh_native_reference -count=1",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "make lint",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "make check",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "cb6501a",
+      "started_at": "2026-04-03T06:48:20Z",
+      "finished_at": "2026-04-03T07:19:20Z",
+      "updated_at": "2026-04-03T07:26:07Z",
+      "notes": [
+        "Post-archive evidence refreshed after commit cb6501a aligned the resource-set benchmark scenario with the actual adapter surfaces."
+      ]
+    }
+  ]
+}

@@ -590,6 +590,38 @@ Optional but recommended:
 - Rollback note:
   - If the metrics surface starts widening into speculative telemetry, keep the truthful counts and generation fields and drop the speculative fields.
 
+### K-021: Validate the seam with a second adapter shape
+- Feat: `f-20260403-second-adapter-seam-validation`
+- Status: done
+- Why now: The current seam is strong, but most of its evidence still flows through one rich reference adapter. The next meaningful validation step is a second, smaller adapter shape that proves the seam does not implicitly require `/skills`, workflow control planes, or richer `/memory` features.
+- Kernel invariant: adapter seam contracts must remain generic enough that a smaller adapter can participate in the same lifecycle/projection model without forcing reference-specific semantics into core or into every adapter.
+- Files to touch:
+  - `pkg/adapter/<new-adapter>/`
+  - `pkg/adapter/<new-adapter>/*_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `benchmarks/simsh_native_reference/README.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/... ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - A second adapter package exists and implements the same adapter seam with a materially smaller feature shape.
+  - The second adapter participates in session lifecycle and projection without inheriting unnecessary `reference`-specific semantics.
+  - The native reference benchmark (or a companion workload inside it) proves the second adapter-backed flow structurally.
+  - The second adapter improves confidence that current seam contracts are generic rather than overfit to `reference`.
+- Notes:
+  - Favor a resource-first or document-first adapter with a simpler `/memory` view.
+  - The goal is seam generality, not feature parity with `reference`.
+  - Keep the adapter small enough that any extra required abstraction pressure becomes obvious.
+  - The new `resourceset` adapter now validates the seam with a materially smaller shape: `/resources` plus minimal managed `/memory`, no skills, no workflows, no curation, and no control-plane semantics.
+  - The native reference benchmark now includes a separate companion scenario for the smaller adapter instead of overloading the rich reference scenario with capability branches.
+  - Validated with `go test ./pkg/adapter/resourceset ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Rollback note:
+  - If the second adapter starts turning into a second rich product model, shrink it back to the smallest seam-proving workload instead of deleting the effort.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.
