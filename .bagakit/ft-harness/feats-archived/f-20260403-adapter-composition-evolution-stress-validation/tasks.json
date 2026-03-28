@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260403-adapter-composition-evolution-stress-validation",
+  "updated_at": "2026-04-03T15:52:26Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add adapter composition and evolution stress validation",
+      "status": "done",
+      "summary": "Build a multi-step reference-adapter stress workload that proves projection, control-plane mutation, freshness/materialization, audit, metrics, denials, and checkpoint/resume remain coherent together.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-03T15:51:33Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-04-03T15:28:54Z",
+      "finished_at": "2026-04-03T15:52:16Z",
+      "updated_at": "2026-04-03T15:52:16Z",
+      "notes": []
+    }
+  ]
+}

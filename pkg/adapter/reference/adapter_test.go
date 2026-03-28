@@ -440,6 +440,269 @@ func TestReferenceAdapterProjectionMetricsAndDenials(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterCompositionEvolutionStressAlignment(t *testing.T) {
+	const (
+		docPath               = "/knowledge_base/reference/guide.md"
+		resourcePath          = "/resources/checklists/plan.json"
+		draftSkillPath        = "/skills/planning/draft-plan/SKILL.md"
+		prioritySkillPath     = "/skills/planning/priority/SKILL.md"
+		selectionScope        = "planning/default"
+		documentFailureReason = "sync_failed"
+	)
+
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nstress\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: projectionFreshnessSnapshot},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: projectionFreshnessLive},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      projectionFreshnessLive,
+				SelectionScope: selectionScope,
+				Eligibility: SkillEligibility{
+					State: skillEligibilityEligible,
+				},
+				Precedence: SkillPrecedence{
+					Tier: skillPrecedenceTierWorkspace,
+					Rank: 5,
+				},
+				Selected: true,
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_composition_stress" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	for _, cmd := range []string{
+		"cat " + docPath,
+		"cat " + resourcePath,
+		"cat " + draftSkillPath,
+	} {
+		result, execErr := manager.Execute(context.Background(), session.SessionID, cmd, contract.ExecutionPolicy{})
+		if execErr != nil {
+			t.Fatalf("execute %q failed: %v", cmd, execErr)
+		}
+		if result.Result.ExitCode != 0 {
+			t.Fatalf("execute %q exit code = %d, want 0", cmd, result.Result.ExitCode)
+		}
+	}
+	for _, cmd := range []string{
+		"echo blocked > " + docPath,
+		"echo blocked > " + draftSkillPath,
+	} {
+		result, execErr := manager.Execute(context.Background(), session.SessionID, cmd, contract.ExecutionPolicy{})
+		if execErr != nil {
+			t.Fatalf("execute denied command %q failed unexpectedly: %v", cmd, execErr)
+		}
+		if result.Result.ExitCode == 0 {
+			t.Fatalf("execute denied command %q exit code = 0, want non-zero", cmd)
+		}
+	}
+
+	adapter.UpsertSkill("planning/priority", "# Priority Planner\n", SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      projectionFreshnessLive,
+		SelectionScope: selectionScope,
+		Eligibility: SkillEligibility{
+			State: skillEligibilityEligible,
+		},
+		Precedence: SkillPrecedence{
+			Tier: skillPrecedenceTierWorkspace,
+			Rank: 0,
+		},
+	})
+	adapter.UpdateSkill("planning/priority", "# Priority Planner\nv2\n")
+	adapter.InvalidateDocument("guide.md")
+	adapter.SetDocumentMaterialization("guide.md", projectionMaterializationFailed, documentFailureReason)
+	adapter.UpsertResource("catalog/live.json", "{\"live\":true}\n", ProjectionMetadata{
+		Source:    "control_plane",
+		Freshness: projectionFreshnessUpdated,
+	})
+	adapter.SetResourceMaterialization("catalog/live.json", projectionMaterializationPartial, "refresh_pending")
+
+	beforeCheckpoint := readCompositionStressSnapshot(t, manager, session.SessionID)
+	assertCompositionStressAligned(t, beforeCheckpoint)
+
+	guideProjection := requireProjectionRecord(t, beforeCheckpoint.Projections.Documents, docPath)
+	if guideProjection.Freshness != projectionFreshnessStale {
+		t.Fatalf("guide freshness = %q, want %q", guideProjection.Freshness, projectionFreshnessStale)
+	}
+	if guideProjection.Materialization.State != projectionMaterializationFailed || guideProjection.Materialization.Reason != documentFailureReason {
+		t.Fatalf("guide materialization = %+v, want failed/%q", guideProjection.Materialization, documentFailureReason)
+	}
+	priorityProjection := requireProjectionRecord(t, beforeCheckpoint.Projections.Skills, prioritySkillPath)
+	if !priorityProjection.Selected || priorityProjection.Source != "control_plane" || priorityProjection.Freshness != projectionFreshnessUpdated {
+		t.Fatalf("priority projection = %+v, want selected control-plane updated skill", priorityProjection)
+	}
+	if priorityProjection.Selection == nil || priorityProjection.Selection.Scope != selectionScope || strings.TrimSpace(priorityProjection.Selection.Reason) == "" {
+		t.Fatalf("priority selection = %+v, want scope=%q with non-empty reason", priorityProjection.Selection, selectionScope)
+	}
+	draftProjection := requireProjectionRecord(t, beforeCheckpoint.Projections.Skills, draftSkillPath)
+	if draftProjection.Selected {
+		t.Fatalf("draft skill should lose selection after priority upsert: %+v", draftProjection)
+	}
+	if draftProjection.Selection == nil || draftProjection.Selection.WinnerPath != prioritySkillPath {
+		t.Fatalf("draft selection = %+v, want winner_path=%q", draftProjection.Selection, prioritySkillPath)
+	}
+
+	if len(beforeCheckpoint.Events) != 2 {
+		t.Fatalf("control-plane events = %d, want 2", len(beforeCheckpoint.Events))
+	}
+	added := beforeCheckpoint.Events[0]
+	if added.Op != controlPlaneEventKindSkillAdded || added.Path != prioritySkillPath || added.SelectionScope != selectionScope {
+		t.Fatalf("added event = %+v, want skill_added on %q", added, prioritySkillPath)
+	}
+	if added.Result != "applied" || added.VisibleAfter != controlPlaneVisibilityNextProjection || added.Visibility != "visible" {
+		t.Fatalf("added event visibility/result mismatch: %+v", added)
+	}
+	if added.SelectedBefore || !added.SelectedAfter || added.WinnerAfter != prioritySkillPath {
+		t.Fatalf("added event selection transition mismatch: %+v", added)
+	}
+	updated := beforeCheckpoint.Events[1]
+	if updated.Op != controlPlaneEventKindSkillUpdated || updated.Path != prioritySkillPath {
+		t.Fatalf("updated event = %+v, want skill_updated on %q", updated, prioritySkillPath)
+	}
+	if updated.Result != "applied" || updated.VisibleAfter != controlPlaneVisibilityNextProjection || updated.Visibility != "visible" {
+		t.Fatalf("updated event visibility/result mismatch: %+v", updated)
+	}
+	if !updated.SelectedBefore || !updated.SelectedAfter || updated.WinnerBefore != prioritySkillPath || updated.WinnerAfter != prioritySkillPath {
+		t.Fatalf("updated event selection transition mismatch: %+v", updated)
+	}
+	if updated.VisibleFromGeneration < added.VisibleFromGeneration {
+		t.Fatalf("event visibility generation regressed: added=%d updated=%d", added.VisibleFromGeneration, updated.VisibleFromGeneration)
+	}
+
+	for _, deniedPath := range []string{docPath, draftSkillPath} {
+		if !containsLine(beforeCheckpoint.State.DeniedPaths, deniedPath) {
+			t.Fatalf("state denied paths missing %q: %v", deniedPath, beforeCheckpoint.State.DeniedPaths)
+		}
+		if !containsLine(beforeCheckpoint.Denials.SamplePaths, deniedPath) {
+			t.Fatalf("denial sample paths missing %q: %v", deniedPath, beforeCheckpoint.Denials.SamplePaths)
+		}
+	}
+
+	guideRead, err := manager.Execute(context.Background(), session.SessionID, "cat "+docPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read failed-materialized guide failed unexpectedly: %v", err)
+	}
+	if guideRead.Result.ExitCode == 0 {
+		t.Fatalf("expected failed-materialized guide read to fail, got %+v", guideRead.Result)
+	}
+
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("checkpoint failed: %v", err)
+	}
+	checkpointState := decodeReferenceState(t, checkpoint.State.Opaque[adapter.AdapterID()])
+	if checkpointState.Freshness != "checkpointed" {
+		t.Fatalf("checkpoint freshness = %q, want checkpointed", checkpointState.Freshness)
+	}
+	if checkpointState.ControlPlaneEvents != len(beforeCheckpoint.Events) {
+		t.Fatalf("checkpoint control-plane events = %d, want %d", checkpointState.ControlPlaneEvents, len(beforeCheckpoint.Events))
+	}
+	if checkpointState.LastControlPlaneKind != beforeCheckpoint.State.LastControlPlaneKind {
+		t.Fatalf("checkpoint last control-plane kind = %q, want %q", checkpointState.LastControlPlaneKind, beforeCheckpoint.State.LastControlPlaneKind)
+	}
+	if !reflect.DeepEqual(dedupeLines(checkpointState.DeniedPaths), dedupeLines(beforeCheckpoint.State.DeniedPaths)) {
+		t.Fatalf("checkpoint denied paths drifted: before=%v checkpoint=%v", beforeCheckpoint.State.DeniedPaths, checkpointState.DeniedPaths)
+	}
+
+	closed, err := manager.Close(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	closedState := decodeReferenceState(t, closed.State.Opaque[adapter.AdapterID()])
+	if closedState.Freshness != "closed" {
+		t.Fatalf("closed freshness = %q, want closed", closedState.Freshness)
+	}
+
+	resumed, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+	resumedState := decodeReferenceState(t, resumed.State.Opaque[adapter.AdapterID()])
+	if resumedState.Freshness != "resumed" {
+		t.Fatalf("resumed freshness = %q, want resumed", resumedState.Freshness)
+	}
+	if resumedState.ControlPlaneEvents != len(beforeCheckpoint.Events) {
+		t.Fatalf("resumed control-plane events = %d, want %d", resumedState.ControlPlaneEvents, len(beforeCheckpoint.Events))
+	}
+	if resumedState.LastControlPlaneKind != beforeCheckpoint.State.LastControlPlaneKind {
+		t.Fatalf("resumed last control-plane kind = %q, want %q", resumedState.LastControlPlaneKind, beforeCheckpoint.State.LastControlPlaneKind)
+	}
+	if resumedState.ProjectionGeneration < beforeCheckpoint.State.ProjectionGeneration {
+		t.Fatalf("resumed projection generation = %d, want >= %d", resumedState.ProjectionGeneration, beforeCheckpoint.State.ProjectionGeneration)
+	}
+	for _, deniedPath := range []string{docPath, draftSkillPath} {
+		if !containsLine(resumedState.DeniedPaths, deniedPath) {
+			t.Fatalf("resumed denied paths missing %q: %v", deniedPath, resumedState.DeniedPaths)
+		}
+	}
+
+	afterResume := readCompositionStressSnapshot(t, manager, session.SessionID)
+	assertCompositionStressAligned(t, afterResume)
+
+	if afterResume.Metrics.ProjectionGeneration < beforeCheckpoint.Metrics.ProjectionGeneration {
+		t.Fatalf("metrics projection generation regressed across resume: before=%d after=%d", beforeCheckpoint.Metrics.ProjectionGeneration, afterResume.Metrics.ProjectionGeneration)
+	}
+	if len(afterResume.Events) != len(beforeCheckpoint.Events) {
+		t.Fatalf("event count drift across resume: before=%d after=%d", len(beforeCheckpoint.Events), len(afterResume.Events))
+	}
+	for idx := range beforeCheckpoint.Events {
+		beforeEvent := beforeCheckpoint.Events[idx]
+		afterEvent := afterResume.Events[idx]
+		if beforeEvent.Seq != afterEvent.Seq || beforeEvent.Op != afterEvent.Op || beforeEvent.Path != afterEvent.Path {
+			t.Fatalf("event identity drift at index %d: before=%+v after=%+v", idx, beforeEvent, afterEvent)
+		}
+		if beforeEvent.VisibleFromGeneration != afterEvent.VisibleFromGeneration {
+			t.Fatalf("event visible_from_generation drift at index %d: before=%+v after=%+v", idx, beforeEvent, afterEvent)
+		}
+	}
+	if !reflect.DeepEqual(afterResume.Denials.SamplePaths, beforeCheckpoint.Denials.SamplePaths) {
+		t.Fatalf("denial sample paths drifted across resume: before=%v after=%v", beforeCheckpoint.Denials.SamplePaths, afterResume.Denials.SamplePaths)
+	}
+
+	guideAfterResume := requireProjectionRecord(t, afterResume.Projections.Documents, docPath)
+	if guideAfterResume.Freshness != guideProjection.Freshness ||
+		guideAfterResume.Materialization.State != guideProjection.Materialization.State ||
+		guideAfterResume.Materialization.Reason != guideProjection.Materialization.Reason {
+		t.Fatalf("guide projection drifted across resume: before=%+v after=%+v", guideProjection, guideAfterResume)
+	}
+	priorityAfterResume := requireProjectionRecord(t, afterResume.Projections.Skills, prioritySkillPath)
+	if !priorityAfterResume.Selected || priorityAfterResume.Selection == nil || priorityAfterResume.Selection.Scope != selectionScope {
+		t.Fatalf("priority projection drifted across resume: %+v", priorityAfterResume)
+	}
+	draftAfterResume := requireProjectionRecord(t, afterResume.Projections.Skills, draftSkillPath)
+	if draftAfterResume.Selected || draftAfterResume.Selection == nil || draftAfterResume.Selection.WinnerPath != prioritySkillPath {
+		t.Fatalf("draft projection drifted across resume: %+v", draftAfterResume)
+	}
+}
+
 func TestReferenceAdapterProjectionError(t *testing.T) {
 	adapter := New(Options{})
 	adapter.SetProjectionError(errors.New("projection unavailable"))
@@ -1437,6 +1700,262 @@ func TestReferenceAdapterSkillControlPlaneAuditEvents(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterWorkflowOverrideCompositionRoundTrip(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft-plan skill\n",
+			"planning/alternate":  "# Alternate planning skill\n",
+			"planning/fallback":   "# Fallback planning skill\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: "eligible"},
+				Precedence:     SkillPrecedence{Tier: "workspace", Rank: 1},
+			},
+			"planning/alternate": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: "eligible"},
+				Precedence:     SkillPrecedence{Tier: "workspace", Rank: 5},
+				Selected:       true,
+			},
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: "planning/default",
+				Eligibility:    SkillEligibility{State: "ineligible", Reason: "missing_env:PLAN_FALLBACK_TOKEN"},
+				Precedence:     SkillPrecedence{Tier: "bundled", Rank: 90},
+			},
+		},
+		Workflows: []WorkflowSpec{
+			{
+				ID:              "draft-plan",
+				Title:           "Draft plan",
+				Summary:         "Read the planning checklist and write the first plan draft.",
+				ResourcePaths:   []string{"/resources/checklists/plan.json"},
+				ExpectedOutputs: []string{"/task_outputs/plan.txt"},
+			},
+		},
+	})
+
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{
+		NewID: func() string { return "sess_reference_composition_stress" },
+	})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	for _, command := range []string{
+		"cat /knowledge_base/reference/guide.md",
+		"cat /resources/checklists/plan.json",
+		"cat /skills/planning/draft-plan/SKILL.md",
+		"echo plan > /task_outputs/plan.txt",
+		"echo blocked > /knowledge_base/reference/guide.md",
+		"echo blocked > /skills/planning/draft-plan/SKILL.md",
+	} {
+		if _, err := manager.Execute(context.Background(), session.SessionID, command, contract.ExecutionPolicy{}); err != nil {
+			t.Fatalf("execute %q failed: %v", command, err)
+		}
+	}
+
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("checkpoint failed: %v", err)
+	}
+	if len(checkpoint.State.Opaque[adapter.AdapterID()]) == 0 {
+		t.Fatalf("checkpoint opaque state missing for %q", adapter.AdapterID())
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before mutation failed: %v", err)
+	}
+
+	adapter.InvalidateDocument("guide.md")
+	adapter.InvalidateResource("checklists/plan.json")
+	adapter.UpsertSkill("planning/live-hotfix", "# Live hotfix skill\n", SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      "updated",
+		SelectionScope: "planning/default",
+		Eligibility:    SkillEligibility{State: "eligible"},
+		Precedence:     SkillPrecedence{Tier: "workspace", Rank: 0},
+	})
+	adapter.SetWorkflowStatus("draft-plan", "blocked", "awaiting review")
+
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after mutation failed: %v", err)
+	}
+
+	statusResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/status.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read status view failed: %v", err)
+	}
+	status := decodeReferenceState(t, []byte(statusResp.Result.Stdout))
+
+	projectionsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projections view failed: %v", err)
+	}
+	projections := decodeProjectionView(t, []byte(projectionsResp.Result.Stdout))
+
+	metricsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projection_metrics.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read metrics view failed: %v", err)
+	}
+	metrics := decodeProjectionMetricsView(t, []byte(metricsResp.Result.Stdout))
+
+	auditResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills audit view failed: %v", err)
+	}
+	audit := decodeControlPlaneEventViews(t, []byte(auditResp.Result.Stdout))
+
+	denialsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/denials.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read denials view failed: %v", err)
+	}
+	denials := decodeDenialView(t, []byte(denialsResp.Result.Stdout))
+
+	workflowsResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read workflows view failed: %v", err)
+	}
+	workflows := decodeWorkflowViews(t, []byte(workflowsResp.Result.Stdout))
+
+	guideProjection := requireProjectionRecord(t, projections.Documents, "/knowledge_base/reference/guide.md")
+	if guideProjection.Freshness != "stale" {
+		t.Fatalf("guide projection freshness = %q, want stale", guideProjection.Freshness)
+	}
+	if state := strings.TrimSpace(guideProjection.Materialization.State); state != "partial" && state != "error" {
+		t.Fatalf("guide materialization state = %q, want partial or error", state)
+	}
+	if strings.TrimSpace(guideProjection.Materialization.Reason) == "" {
+		t.Fatalf("guide materialization lacks machine-readable detail: %+v", guideProjection.Materialization)
+	}
+
+	resourceProjection := requireProjectionRecord(t, projections.Resources, "/resources/checklists/plan.json")
+	if resourceProjection.Freshness != "stale" {
+		t.Fatalf("resource projection freshness = %q, want stale", resourceProjection.Freshness)
+	}
+	if state := strings.TrimSpace(resourceProjection.Materialization.State); state != "partial" && state != "error" {
+		t.Fatalf("resource materialization state = %q, want partial or error", state)
+	}
+	if strings.TrimSpace(resourceProjection.Materialization.Reason) == "" {
+		t.Fatalf("resource materialization lacks machine-readable detail: %+v", resourceProjection.Materialization)
+	}
+
+	hotfixProjection := requireProjectionRecord(t, projections.Skills, "/skills/planning/live-hotfix/SKILL.md")
+	if hotfixProjection.Source != "control_plane" || hotfixProjection.Freshness != "updated" || !hotfixProjection.Selected {
+		t.Fatalf("hotfix projection = %+v, want control_plane/updated selected", hotfixProjection)
+	}
+	if hotfixProjection.Selection == nil || hotfixProjection.Selection.Scope != "planning/default" || hotfixProjection.Selection.WinnerPath != "" {
+		t.Fatalf("hotfix selection = %+v, want selected planning/default winner without winner_path", hotfixProjection.Selection)
+	}
+
+	draftProjection := requireProjectionRecord(t, projections.Skills, "/skills/planning/draft-plan/SKILL.md")
+	if draftProjection.Selected {
+		t.Fatalf("draft projection should lose selection after hotfix: %+v", draftProjection)
+	}
+	if draftProjection.Selection == nil || draftProjection.Selection.Scope != "planning/default" || draftProjection.Selection.WinnerPath != "/skills/planning/live-hotfix/SKILL.md" || strings.TrimSpace(draftProjection.Selection.Reason) == "" {
+		t.Fatalf("draft selection = %+v, want loser state pointing at hotfix", draftProjection.Selection)
+	}
+
+	if status.Freshness != "resumed" {
+		t.Fatalf("status freshness = %q, want resumed", status.Freshness)
+	}
+	if status.ControlPlaneEvents != len(audit) {
+		t.Fatalf("status control_plane_events = %d, want %d", status.ControlPlaneEvents, len(audit))
+	}
+	if !containsLine(status.DeniedPaths, "/knowledge_base/reference/guide.md") || !containsLine(status.DeniedPaths, "/skills/planning/draft-plan/SKILL.md") {
+		t.Fatalf("status denied paths = %v, want reference and skill denied paths", status.DeniedPaths)
+	}
+
+	if len(audit) != 1 {
+		t.Fatalf("skills audit count = %d, want 1", len(audit))
+	}
+	if audit[0].Op != controlPlaneEventKindSkillAdded || audit[0].Path != "/skills/planning/live-hotfix/SKILL.md" {
+		t.Fatalf("skills audit event = %+v, want added hotfix event", audit[0])
+	}
+	if audit[0].VisibleAfter != controlPlaneVisibilityNextProjection || !audit[0].SelectedAfter || audit[0].WinnerAfter != "/skills/planning/live-hotfix/SKILL.md" {
+		t.Fatalf("skills audit event metadata = %+v, want visible selected hotfix winner", audit[0])
+	}
+
+	if metrics.ControlPlaneEvents != len(audit) {
+		t.Fatalf("projection metrics control_plane_events = %d, want %d", metrics.ControlPlaneEvents, len(audit))
+	}
+	if metrics.UniqueDeniedPaths != len(status.DeniedPaths) {
+		t.Fatalf("projection metrics unique_denied_paths = %d, want %d", metrics.UniqueDeniedPaths, len(status.DeniedPaths))
+	}
+	if metrics.ProjectionCounts["documents"] != 1 || metrics.ProjectionCounts["resources"] != 1 || metrics.ProjectionCounts["skills"] != 4 {
+		t.Fatalf("projection counts = %+v, want docs=1 resources=1 skills=4", metrics.ProjectionCounts)
+	}
+	expectedMaterialization := countProjectionMaterialization(projections.Documents, projections.Resources, projections.Skills)
+	if !reflect.DeepEqual(metrics.MaterializationCounts, expectedMaterialization) {
+		t.Fatalf("materialization counts = %+v, want %+v", metrics.MaterializationCounts, expectedMaterialization)
+	}
+	if metrics.CacheHitMetricsAvailable {
+		t.Fatalf("projection metrics cache flag = %+v, want unavailable", metrics)
+	}
+
+	if denials.UniqueDeniedPaths != len(status.DeniedPaths) {
+		t.Fatalf("denials unique paths = %d, want %d", denials.UniqueDeniedPaths, len(status.DeniedPaths))
+	}
+	if denials.ByNamespace["reference"] < 1 || denials.ByNamespace["skills"] < 1 {
+		t.Fatalf("denials namespace buckets = %+v, want reference and skills buckets", denials.ByNamespace)
+	}
+	if !containsLine(denials.SamplePaths, "/knowledge_base/reference/guide.md") || !containsLine(denials.SamplePaths, "/skills/planning/draft-plan/SKILL.md") {
+		t.Fatalf("denials sample paths = %v, want reference and skill denied samples", denials.SamplePaths)
+	}
+
+	overrideWorkflow := requireWorkflowView(t, workflows, "draft-plan")
+	if overrideWorkflow.Status != "blocked" || overrideWorkflow.StatusSource != "control_plane" || overrideWorkflow.StatusReason != "awaiting review" {
+		t.Fatalf("workflow override = %+v, want blocked control_plane awaiting review", overrideWorkflow)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before clearing workflow override failed: %v", err)
+	}
+	adapter.ClearWorkflowStatus("draft-plan")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume after clearing workflow override failed: %v", err)
+	}
+
+	traceWorkflowResp, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read workflows after clear failed: %v", err)
+	}
+	traceWorkflows := decodeWorkflowViews(t, []byte(traceWorkflowResp.Result.Stdout))
+	traceWorkflow := requireWorkflowView(t, traceWorkflows, "draft-plan")
+	if traceWorkflow.Status != "completed" || traceWorkflow.StatusSource != "trace" || traceWorkflow.StatusReason != "" {
+		t.Fatalf("workflow after clear = %+v, want completed trace-derived workflow", traceWorkflow)
+	}
+}
+
 func TestReferenceAdapterSkillSelectionTieBreakDeterministic(t *testing.T) {
 	adapter := New(Options{
 		Skills: map[string]string{
@@ -2267,6 +2786,102 @@ type controlPlaneEventView struct {
 	WinnerBefore          string `json:"winner_before,omitempty"`
 	WinnerAfter           string `json:"winner_after,omitempty"`
 	ReasonAfter           string `json:"reason_after,omitempty"`
+}
+
+type compositionStressSnapshot struct {
+	State       sessionState
+	Projections projectionView
+	Metrics     projectionMetricsView
+	Denials     denialView
+	Events      []controlPlaneEventView
+}
+
+func readCompositionStressSnapshot(t *testing.T, manager *runtimeengine.SessionManager, sessionID string) compositionStressSnapshot {
+	t.Helper()
+	pulse, err := manager.Execute(context.Background(), sessionID, "echo pulse", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("sync pulse failed: %v", err)
+	}
+	if pulse.Result.ExitCode != 0 {
+		t.Fatalf("sync pulse exit code = %d, want 0", pulse.Result.ExitCode)
+	}
+	readJSON := func(pathValue string) []byte {
+		t.Helper()
+		resp, err := manager.Execute(context.Background(), sessionID, "cat "+pathValue, contract.ExecutionPolicy{})
+		if err != nil {
+			t.Fatalf("read %s failed: %v", pathValue, err)
+		}
+		if resp.Result.ExitCode != 0 {
+			t.Fatalf("read %s exit code = %d, want 0", pathValue, resp.Result.ExitCode)
+		}
+		return []byte(resp.Result.Stdout)
+	}
+	return compositionStressSnapshot{
+		State:       decodeReferenceState(t, readJSON("/memory/status.json")),
+		Projections: decodeProjectionView(t, readJSON("/memory/projections.json")),
+		Metrics:     decodeProjectionMetricsView(t, readJSON("/memory/projection_metrics.json")),
+		Denials:     decodeDenialView(t, readJSON("/memory/denials.json")),
+		Events:      decodeControlPlaneEventViews(t, readJSON("/memory/skills_audit.json")),
+	}
+}
+
+func assertCompositionStressAligned(t *testing.T, snapshot compositionStressSnapshot) {
+	t.Helper()
+	if snapshot.State.ProjectionGeneration <= 0 {
+		t.Fatalf("projection generation = %d, want positive generation", snapshot.State.ProjectionGeneration)
+	}
+	if snapshot.Metrics.ProjectionGeneration < snapshot.State.ProjectionGeneration {
+		t.Fatalf("metrics generation = %d, want >= %d", snapshot.Metrics.ProjectionGeneration, snapshot.State.ProjectionGeneration)
+	}
+	if snapshot.Denials.ProjectionGeneration < snapshot.Metrics.ProjectionGeneration {
+		t.Fatalf("denials generation = %d, want >= metrics generation %d", snapshot.Denials.ProjectionGeneration, snapshot.Metrics.ProjectionGeneration)
+	}
+	if snapshot.Denials.ProjectionGeneration < snapshot.State.ProjectionGeneration {
+		t.Fatalf("denials generation = %d, want >= status generation %d", snapshot.Denials.ProjectionGeneration, snapshot.State.ProjectionGeneration)
+	}
+	if snapshot.State.ControlPlaneEvents != len(snapshot.Events) {
+		t.Fatalf("state control-plane events = %d, want %d", snapshot.State.ControlPlaneEvents, len(snapshot.Events))
+	}
+	if snapshot.Metrics.ControlPlaneEvents != len(snapshot.Events) {
+		t.Fatalf("metrics control-plane events = %d, want %d", snapshot.Metrics.ControlPlaneEvents, len(snapshot.Events))
+	}
+	if len(snapshot.Events) > 0 && snapshot.State.LastControlPlaneKind != snapshot.Events[len(snapshot.Events)-1].Op {
+		t.Fatalf("state last control-plane kind = %q, want %q", snapshot.State.LastControlPlaneKind, snapshot.Events[len(snapshot.Events)-1].Op)
+	}
+
+	expectedCounts := countProjectionNamespaces(snapshot.Projections.Documents, snapshot.Projections.Resources, snapshot.Projections.Skills)
+	if !reflect.DeepEqual(snapshot.Metrics.ProjectionCounts, expectedCounts) {
+		t.Fatalf("projection count mismatch: metrics=%v expected=%v", snapshot.Metrics.ProjectionCounts, expectedCounts)
+	}
+	expectedFreshness := countProjectionFreshness(snapshot.Projections.Documents, snapshot.Projections.Resources, snapshot.Projections.Skills)
+	if !reflect.DeepEqual(snapshot.Metrics.FreshnessCounts, expectedFreshness) {
+		t.Fatalf("freshness count mismatch: metrics=%v expected=%v", snapshot.Metrics.FreshnessCounts, expectedFreshness)
+	}
+	expectedMaterialization := countProjectionMaterialization(snapshot.Projections.Documents, snapshot.Projections.Resources, snapshot.Projections.Skills)
+	if !reflect.DeepEqual(snapshot.Metrics.MaterializationCounts, expectedMaterialization) {
+		t.Fatalf("materialization count mismatch: metrics=%v expected=%v", snapshot.Metrics.MaterializationCounts, expectedMaterialization)
+	}
+	if snapshot.Metrics.CacheHitMetricsAvailable {
+		t.Fatalf("cache hit metrics should stay unavailable, got %+v", snapshot.Metrics)
+	}
+
+	uniqueDenied := dedupeLines(snapshot.State.DeniedPaths)
+	if snapshot.Metrics.UniqueDeniedPaths != len(uniqueDenied) {
+		t.Fatalf("metrics unique denied paths = %d, want %d", snapshot.Metrics.UniqueDeniedPaths, len(uniqueDenied))
+	}
+	if snapshot.Denials.UniqueDeniedPaths != len(uniqueDenied) {
+		t.Fatalf("denials unique denied paths = %d, want %d", snapshot.Denials.UniqueDeniedPaths, len(uniqueDenied))
+	}
+	if !reflect.DeepEqual(snapshot.Denials.SamplePaths, uniqueDenied) {
+		t.Fatalf("denial sample paths = %v, want %v", snapshot.Denials.SamplePaths, uniqueDenied)
+	}
+	namespaceTotal := 0
+	for _, count := range snapshot.Denials.ByNamespace {
+		namespaceTotal += count
+	}
+	if namespaceTotal != snapshot.Denials.UniqueDeniedPaths {
+		t.Fatalf("denial namespace totals = %d, want %d", namespaceTotal, snapshot.Denials.UniqueDeniedPaths)
+	}
 }
 
 func decodeControlPlaneEventViews(t *testing.T, raw []byte) []controlPlaneEventView {

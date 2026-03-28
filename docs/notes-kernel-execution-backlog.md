@@ -719,6 +719,37 @@ Optional but recommended:
 - Rollback note:
   - If helper tests start reproducing full adapter behavior, pull them back to targeted helper semantics and keep end-to-end behavior in adapter tests or benchmarks.
 
+### K-025: Validate adapter composition and evolution truth under stress
+- Feat: `f-20260403-adapter-composition-evolution-stress-validation`
+- Status: done
+- Why now: the seam, mount, and helper layers are now individually strong, but the remaining risk is composition drift. Projection, control-plane mutation, freshness/materialization, audit, metrics, denials, and checkpoint/resume must also stay coherent when exercised together in one evolving workload.
+- Kernel invariant: adapter truth surfaces must remain aligned under multi-step evolution; composition validation should prove coherence, not introduce new product semantics.
+- Files to touch:
+  - `pkg/adapter/reference/*_test.go`
+  - `benchmarks/simsh_native_reference/*`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference -count=1`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - At least one multi-step composition/evolution workload proves projection, control-plane, freshness/materialization, audit, metrics, and denials stay structurally aligned.
+  - Checkpoint/resume preserves the relevant truth surfaces across the workload.
+  - The validation lives as proof, not as a new product feature branch.
+  - Docs clearly record composition/evolution stress validation as a proof layer above isolated helper conformance.
+- Notes:
+  - Prefer one hard scenario over many shallow ones.
+  - Do not add new adapter nouns just to make the scenario interesting.
+  - Keep assertions structural and machine-readable; do not fall back to prose-only output matching.
+  - `reference` now has a focused composition/evolution alignment stress test and a separate workflow-override composition roundtrip test so adapter-local proof stays readable.
+  - The native reference benchmark now carries an explicit `adapter_composition_evolution_stress` scenario that validates the same truth surfaces at the benchmark layer.
+  - Validated with `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Rollback note:
+  - If the stress workload starts smuggling in new product semantics, strip it back to composition proof and keep product expansion as a separate feat.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

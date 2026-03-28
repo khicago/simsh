@@ -19,6 +19,7 @@ Current scenario classes:
   plus structured control-plane audit coverage via `/memory/skills_audit.json` and `/memory/skills_audit.md` so every add/update/remove event, visibility timing, and `/memory/summary.md` alignment is machine-checked
   plus a generic curated-memory entry assertion with explicit source-path references
   plus structured projection metrics (`/memory/projection_metrics.json`/`.md`) and denial surfaces (`/memory/denials.json`/`.md`) that prove projection generation, freshness/materialization counts, and denied-path metadata stay aligned with the control-plane audit
+- adapter composition/evolution stress: a harder multi-step workload that proves those same machine-readable truth surfaces remain aligned together across control-plane mutation, invalidation/refresh, denial accumulation, and checkpoint/close/resume, without introducing new adapter nouns
 - resource-set adapter seam: exercises the smaller `resourceset` adapter by reading a resource, forcing a denial, and decoding its minimal `/memory` views before and after the checkpoint/close/resume cycle so this simpler shape proves the same seam without inheriting the full reference model.
 - cancel and timeout interruption
 

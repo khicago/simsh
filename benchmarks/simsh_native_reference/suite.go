@@ -190,6 +190,7 @@ func runSuite() (SuiteReport, error) {
 		runCommandNamespaceScenario,
 		runTracePlanningScenario,
 		runAdapterProjectionScenario,
+		runAdapterCompositionEvolutionStressScenario,
 		runResourceSetAdapterScenario,
 		runCancelTimeoutScenario,
 	}
@@ -1185,6 +1186,432 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
 		Notes:                 notes,
 	}, nil
+}
+
+type adapterTruthSnapshot struct {
+	Projections projectionIndexView
+	Metrics     projectionMetricsView
+	Denials     denialView
+	Audit       []skillAuditRecord
+	State       sessionStateSummary
+}
+
+func runAdapterCompositionEvolutionStressScenario() (ScenarioReport, error) {
+	root := mustTempHostRoot()
+	defer os.RemoveAll(root)
+
+	selectionScope := "planning/default"
+	adapter := referenceadapter.New(referenceadapter.Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]referenceadapter.ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]referenceadapter.ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft-plan skill\n",
+			"planning/alternate":  "# Alternate planning skill\n",
+			"planning/fallback":   "# Fallback planning skill\n",
+		},
+		SkillMetadata: map[string]referenceadapter.SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: selectionScope,
+				Eligibility: referenceadapter.SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: false,
+			},
+			"planning/alternate": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: selectionScope,
+				Eligibility: referenceadapter.SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "workspace",
+					Rank: 5,
+				},
+				Selected: true,
+			},
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: selectionScope,
+				Eligibility: referenceadapter.SkillEligibility{
+					State:  "ineligible",
+					Reason: "missing_env:PLAN_FALLBACK_TOKEN",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "bundled",
+					Rank: 90,
+				},
+			},
+		},
+	})
+
+	manager := newFullSessionManager()
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: root,
+		Profile:  contract.ProfileBashPlus,
+		Policy:   fullPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	start := time.Now()
+	readGuide, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	readResource, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	deniedGuideWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	deniedSkillWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	baseline, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	baselineDraft, baselineDraftOK := findProjectionRecord(baseline.Projections.Skills, "/skills/planning/draft-plan/SKILL.md")
+	baselineAlternate, baselineAlternateOK := findProjectionRecord(baseline.Projections.Skills, "/skills/planning/alternate/SKILL.md")
+	baselineFallback, baselineFallbackOK := findProjectionRecord(baseline.Projections.Skills, "/skills/planning/fallback/SKILL.md")
+
+	checkpointBeforeEvolution, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	resumedBeforeEvolution, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	postCheckpoint, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.UpsertSkill("planning/live-hotfix", "# Live hotfix skill\n", referenceadapter.SkillMetadata{
+		Source:         "control_plane",
+		Freshness:      "updated",
+		SelectionScope: selectionScope,
+		Eligibility: referenceadapter.SkillEligibility{
+			State: "eligible",
+		},
+		Precedence: referenceadapter.SkillPrecedence{
+			Tier: "workspace",
+			Rank: 0,
+		},
+	})
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	afterUpsert, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	upsertHotfix, upsertHotfixOK := findProjectionRecord(afterUpsert.Projections.Skills, "/skills/planning/live-hotfix/SKILL.md")
+	upsertDraft, upsertDraftOK := findProjectionRecord(afterUpsert.Projections.Skills, "/skills/planning/draft-plan/SKILL.md")
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.UpdateSkill("planning/live-hotfix", "# Live hotfix skill\nUpdated guidance.\n")
+	adapter.InvalidateDocument("guide.md")
+	adapter.InvalidateResource("checklists/plan.json")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	afterUpdateAndInvalidate, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	staleGuide, staleGuideOK := findProjectionRecord(afterUpdateAndInvalidate.Projections.Documents, "/knowledge_base/reference/guide.md")
+	staleResource, staleResourceOK := findProjectionRecord(afterUpdateAndInvalidate.Projections.Resources, "/resources/checklists/plan.json")
+	staleHotfix, staleHotfixOK := findProjectionRecord(afterUpdateAndInvalidate.Projections.Skills, "/skills/planning/live-hotfix/SKILL.md")
+	updatedHotfixContent, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/live-hotfix/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	adapter.RefreshDocument("guide.md", "# Guide\nhello refreshed\n", referenceadapter.ProjectionMetadata{})
+	adapter.RefreshResource("checklists/plan.json", "{\"steps\":[\"refresh\"]}\n", referenceadapter.ProjectionMetadata{})
+	adapter.RemoveSkill("planning/live-hotfix")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	afterRefreshAndRemove, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	finalGuide, finalGuideOK := findProjectionRecord(afterRefreshAndRemove.Projections.Documents, "/knowledge_base/reference/guide.md")
+	finalResource, finalResourceOK := findProjectionRecord(afterRefreshAndRemove.Projections.Resources, "/resources/checklists/plan.json")
+	finalDraft, finalDraftOK := findProjectionRecord(afterRefreshAndRemove.Projections.Skills, "/skills/planning/draft-plan/SKILL.md")
+	_, finalHotfixPresent := findProjectionRecord(afterRefreshAndRemove.Projections.Skills, "/skills/planning/live-hotfix/SKILL.md")
+
+	finalCheckpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+	finalResumedSession, err := manager.Resume(context.Background(), session.SessionID)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	afterFinalResume, err := captureAdapterTruthSnapshot(manager, session.SessionID, adapter.AdapterID())
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	resumedDraftRead, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		return ScenarioReport{}, err
+	}
+
+	readGuideTracePassed, readGuideTraceTotal := evaluateTrace(readGuide.Result.Trace, traceExpectation{
+		requested: []string{"/knowledge_base/reference/guide.md"},
+		read:      []string{"/knowledge_base/reference/guide.md"},
+	})
+	readResourceTracePassed, readResourceTraceTotal := evaluateTrace(readResource.Result.Trace, traceExpectation{
+		requested: []string{"/resources/checklists/plan.json"},
+		read:      []string{"/resources/checklists/plan.json"},
+	})
+	denyGuideTracePassed, denyGuideTraceTotal := evaluateTrace(deniedGuideWrite.Result.Trace, traceExpectation{
+		requested: []string{"/knowledge_base/reference/guide.md"},
+		denied:    []string{"/knowledge_base/reference/guide.md"},
+	})
+	denySkillTracePassed, denySkillTraceTotal := evaluateTrace(deniedSkillWrite.Result.Trace, traceExpectation{
+		requested: []string{"/skills/planning/draft-plan/SKILL.md"},
+		denied:    []string{"/skills/planning/draft-plan/SKILL.md"},
+	})
+	resumedDraftTracePassed, resumedDraftTraceTotal := evaluateTrace(resumedDraftRead.Result.Trace, traceExpectation{
+		requested: []string{"/skills/planning/draft-plan/SKILL.md"},
+		read:      []string{"/skills/planning/draft-plan/SKILL.md"},
+	})
+	tracePassed := readGuideTracePassed + readResourceTracePassed + denyGuideTracePassed + denySkillTracePassed + resumedDraftTracePassed
+	traceTotal := readGuideTraceTotal + readResourceTraceTotal + denyGuideTraceTotal + denySkillTraceTotal + resumedDraftTraceTotal
+
+	assertionPassed, assertionTotal, failedChecks := countNamedChecks(
+		namedCheck{name: "baseline_surface_alignment", ok: truthSnapshotAligned(baseline, 1, 1, 3, 0)},
+		namedCheck{name: "baseline_selected_skill_is_draft", ok: baselineDraftOK && skillSelected(baselineDraft) && skillSelectionScope(baselineDraft) == selectionScope},
+		namedCheck{name: "baseline_alternate_is_loser", ok: baselineAlternateOK && !skillSelected(baselineAlternate) && skillSelectionWinnerPath(baselineAlternate) == "/skills/planning/draft-plan/SKILL.md"},
+		namedCheck{name: "baseline_fallback_is_ineligible", ok: baselineFallbackOK && !skillSelected(baselineFallback) && skillEligibilityState(baselineFallback) == "ineligible"},
+		namedCheck{name: "checkpoint_before_evolution_state", ok: len(checkpointBeforeEvolution.State.Opaque[adapter.AdapterID()]) > 0 && len(resumedBeforeEvolution.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "post_checkpoint_surface_alignment", ok: truthSnapshotAligned(postCheckpoint, 1, 1, 3, 0)},
+		namedCheck{name: "post_checkpoint_generation_monotonic", ok: postCheckpoint.State.ProjectionGeneration >= baseline.State.ProjectionGeneration},
+		namedCheck{name: "upsert_surface_alignment", ok: truthSnapshotAligned(afterUpsert, 1, 1, 4, 1)},
+		namedCheck{name: "upsert_event_shape", ok: len(afterUpsert.Audit) == 1 &&
+			afterUpsert.Audit[0].Op == "skill_added" &&
+			afterUpsert.Audit[0].Result == "applied" &&
+			afterUpsert.Audit[0].VisibleAfter == "next_projection_rebuild" &&
+			afterUpsert.Audit[0].SelectionScope == selectionScope},
+		namedCheck{name: "upsert_selection_shift", ok: upsertHotfixOK &&
+			skillSelected(upsertHotfix) &&
+			skillSelectionScope(upsertHotfix) == selectionScope &&
+			upsertDraftOK &&
+			!skillSelected(upsertDraft) &&
+			skillSelectionWinnerPath(upsertDraft) == "/skills/planning/live-hotfix/SKILL.md"},
+		namedCheck{name: "upsert_generation_monotonic", ok: afterUpsert.State.ProjectionGeneration >= postCheckpoint.State.ProjectionGeneration},
+		namedCheck{name: "update_invalidate_surface_alignment", ok: truthSnapshotAligned(afterUpdateAndInvalidate, 1, 1, 4, 2)},
+		namedCheck{name: "update_event_shape", ok: len(afterUpdateAndInvalidate.Audit) == 2 &&
+			afterUpdateAndInvalidate.Audit[1].Op == "skill_updated" &&
+			afterUpdateAndInvalidate.Audit[1].Result == "applied" &&
+			afterUpdateAndInvalidate.Audit[1].SelectedBefore &&
+			afterUpdateAndInvalidate.Audit[1].SelectedAfter},
+		namedCheck{name: "stale_document_materialization_truth", ok: staleGuideOK &&
+			staleGuide.Freshness == "stale" &&
+			projectionMaterializationStateIn(staleGuide, "partial", "error") &&
+			projectionHasMaterializationFailureDetail(staleGuide)},
+		namedCheck{name: "stale_resource_materialization_truth", ok: staleResourceOK &&
+			staleResource.Freshness == "stale" &&
+			projectionMaterializationStateIn(staleResource, "partial", "error") &&
+			projectionHasMaterializationFailureDetail(staleResource)},
+		namedCheck{name: "updated_hotfix_still_selected", ok: staleHotfixOK &&
+			skillSelected(staleHotfix) &&
+			strings.Contains(updatedHotfixContent.Result.Stdout, "Updated guidance")},
+		namedCheck{name: "update_generation_monotonic", ok: afterUpdateAndInvalidate.State.ProjectionGeneration >= afterUpsert.State.ProjectionGeneration},
+		namedCheck{name: "refresh_remove_surface_alignment", ok: truthSnapshotAligned(afterRefreshAndRemove, 1, 1, 3, 3)},
+		namedCheck{name: "remove_event_shape", ok: len(afterRefreshAndRemove.Audit) == 3 &&
+			afterRefreshAndRemove.Audit[2].Op == "skill_removed" &&
+			!afterRefreshAndRemove.Audit[2].SelectedAfter &&
+			afterRefreshAndRemove.Audit[2].VisibleAfter == "next_projection_rebuild"},
+		namedCheck{name: "final_document_resource_back_to_live", ok: finalGuideOK &&
+			finalGuide.Freshness == "live" &&
+			finalResourceOK &&
+			finalResource.Freshness == "live"},
+		namedCheck{name: "final_selection_restored_to_draft", ok: finalDraftOK &&
+			skillSelected(finalDraft) &&
+			skillSelectionScope(finalDraft) == selectionScope &&
+			!finalHotfixPresent},
+		namedCheck{name: "refresh_remove_generation_monotonic", ok: afterRefreshAndRemove.State.ProjectionGeneration >= afterUpdateAndInvalidate.State.ProjectionGeneration},
+		namedCheck{name: "final_checkpoint_resume_state", ok: len(finalCheckpoint.State.Opaque[adapter.AdapterID()]) > 0 && len(finalResumedSession.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "final_resume_surface_alignment", ok: truthSnapshotAligned(afterFinalResume, 1, 1, 3, 3)},
+		namedCheck{name: "final_resume_generation_monotonic", ok: afterFinalResume.State.ProjectionGeneration >= afterRefreshAndRemove.State.ProjectionGeneration},
+		namedCheck{name: "audit_sequence_stable_after_final_resume", ok: len(afterFinalResume.Audit) == 3 &&
+			afterFinalResume.Audit[0].Op == "skill_added" &&
+			afterFinalResume.Audit[1].Op == "skill_updated" &&
+			afterFinalResume.Audit[2].Op == "skill_removed"},
+		namedCheck{name: "final_resume_draft_read", ok: resumedDraftRead.Result.ExitCode == 0 && strings.Contains(resumedDraftRead.Result.Stdout, "Draft-plan skill")},
+	)
+
+	notes := []string{}
+	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
+	if !success {
+		notes = append(notes, "composition/evolution truth surfaces drifted under multi-step stress")
+		if len(failedChecks) > 0 {
+			notes = append(notes, "failed_checks: "+strings.Join(failedChecks, ", "))
+		}
+	}
+
+	return ScenarioReport{
+		Name:                  "adapter_composition_evolution_stress",
+		Category:              "adapter_composition_evolution_truth",
+		Success:               success,
+		SessionScoped:         true,
+		AsyncCandidate:        true,
+		PatchWorkflow:         false,
+		DurationMS:            time.Since(start).Milliseconds(),
+		TraceChecksPassed:     tracePassed,
+		TraceChecksTotal:      traceTotal,
+		TraceCompleteness:     ratioPtr(tracePassed, traceTotal),
+		AssertionChecksPassed: assertionPassed,
+		AssertionChecksTotal:  assertionTotal,
+		AssertionCompleteness: ratioPtr(assertionPassed, assertionTotal),
+		Notes:                 notes,
+	}, nil
+}
+
+func captureAdapterTruthSnapshot(manager *runtimeengine.SessionManager, sessionID string, adapterID string) (adapterTruthSnapshot, error) {
+	projectionsView, err := manager.Execute(context.Background(), sessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+	if projectionsView.Result.ExitCode != 0 {
+		return adapterTruthSnapshot{}, fmt.Errorf("projections command failed: %+v", projectionsView.Result)
+	}
+	projections, err := decodeProjectionIndex(projectionsView.Result.Stdout)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+
+	metricsView, err := manager.Execute(context.Background(), sessionID, "cat /memory/projection_metrics.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+	if metricsView.Result.ExitCode != 0 {
+		return adapterTruthSnapshot{}, fmt.Errorf("projection metrics command failed: %+v", metricsView.Result)
+	}
+	metrics, err := decodeProjectionMetricsView(metricsView.Result.Stdout)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+
+	denialsView, err := manager.Execute(context.Background(), sessionID, "cat /memory/denials.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+	if denialsView.Result.ExitCode != 0 {
+		return adapterTruthSnapshot{}, fmt.Errorf("denials command failed: %+v", denialsView.Result)
+	}
+	denials, err := decodeDenialView(denialsView.Result.Stdout)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+
+	auditView, err := manager.Execute(context.Background(), sessionID, "cat /memory/skills_audit.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+	if auditView.Result.ExitCode != 0 {
+		return adapterTruthSnapshot{}, fmt.Errorf("skills audit command failed: %+v", auditView.Result)
+	}
+	audit, err := decodeSkillAudit(auditView.Result.Stdout)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+
+	statusSnapshot, err := manager.Get(sessionID)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+	rawState, ok := statusSnapshot.State.Opaque[adapterID]
+	if !ok {
+		return adapterTruthSnapshot{}, fmt.Errorf("missing adapter state for %q", adapterID)
+	}
+	state, err := decodeSessionStateSummary(rawState)
+	if err != nil {
+		return adapterTruthSnapshot{}, err
+	}
+
+	return adapterTruthSnapshot{
+		Projections: projections,
+		Metrics:     metrics,
+		Denials:     denials,
+		Audit:       audit,
+		State:       state,
+	}, nil
+}
+
+func truthSnapshotAligned(snapshot adapterTruthSnapshot, wantDocuments int, wantResources int, wantSkills int, wantControlPlaneEvents int) bool {
+	documentCount, resourceCount, skillCount, totalCount := projectionIndexCounts(snapshot.Projections)
+	return documentCount == wantDocuments &&
+		resourceCount == wantResources &&
+		skillCount == wantSkills &&
+		snapshot.Metrics.ProjectionCounts["documents"] == wantDocuments &&
+		snapshot.Metrics.ProjectionCounts["resources"] == wantResources &&
+		snapshot.Metrics.ProjectionCounts["skills"] == wantSkills &&
+		sumCounts(snapshot.Metrics.MaterializationCounts) == totalCount &&
+		len(snapshot.Audit) == wantControlPlaneEvents &&
+		snapshot.State.ControlPlaneEvents == wantControlPlaneEvents &&
+		snapshot.Metrics.ControlPlaneEvents == wantControlPlaneEvents &&
+		snapshot.Metrics.UniqueDeniedPaths == len(snapshot.State.DeniedPaths) &&
+		snapshot.Metrics.UniqueDeniedPaths == snapshot.Denials.UniqueDeniedPaths &&
+		snapshot.Metrics.ProjectionGeneration > 0 &&
+		snapshot.Denials.ProjectionGeneration > 0 &&
+		snapshot.Metrics.ProjectionGeneration <= snapshot.State.ProjectionGeneration &&
+		snapshot.Denials.ProjectionGeneration <= snapshot.State.ProjectionGeneration
+}
+
+func projectionIndexCounts(view projectionIndexView) (documents int, resources int, skills int, total int) {
+	documents = len(view.Documents)
+	resources = len(view.Resources)
+	skills = len(view.Skills)
+	total = documents + resources + skills
+	return documents, resources, skills, total
 }
 
 type resourceSetEntry struct {

@@ -148,6 +148,8 @@ When these helpers become reusable mechanisms rather than one-off test glue, the
 
 Mount conformance is now a sibling proof layer, not an afterthought inside lifecycle tests. A good current shape is a dedicated helper such as `pkg/adapter/internal/contracttest/mount.go` that validates `Exists`, `ListChildren`, `CollectFilesUnder`, `ResolveSearchPaths`, `DescribePath`, and read-only access/capability metadata against projected mount shapes. It should not become a generic filesystem DSL and it should not absorb benchmark or product semantics.
 
+Once seam helpers are strong in isolation, the next proof layer SHOULD be composition/evolution stress validation: one harder workload that proves projection state, control-plane mutation, freshness/materialization, audit, metrics, denials, and checkpoint/resume still agree after multi-step evolution. This layer should reuse existing nouns and machine-readable surfaces rather than inventing new product concepts just to make the scenario broader.
+
 ## Promotion Rule
 Kernel abstractions that only look good in isolated unit tests SHOULD remain provisional.
 

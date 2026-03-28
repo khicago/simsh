@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-03T23:00:00Z
+- Updated At (UTC): 2026-04-03T23:55:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,7 +14,7 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-024: contracttest helper self-coverage and failure semantics` is now complete and archived through feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-025: adapter composition and evolution stress validation` is now complete and archived through feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
 
 ## Acceptance Criteria
 
@@ -47,16 +47,16 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: `K-024: contracttest helper self-coverage and failure semantics` is complete and archived. The repository is back to an explicit idle state until the next manual row is created.
-- Tests: `go test -cover ./pkg/adapter/internal/contracttest ./pkg/adapter/reference ./pkg/adapter/resourceset` now reports `92.1% / 92.9% / 91.9%`, and `go test ./...`, `make lint`, `make check` all passed during the feat wave.
+- Summary: `K-025: adapter composition and evolution stress validation` is complete and archived. The repository is back to an explicit idle state until the next manual row is created.
+- Tests: `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check` all passed during the feat wave.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-024` is closed and long-run is explicitly idle again.
-- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-024 archived | repo gates green; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-025` is closed and long-run is explicitly idle again.
+- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-025 archived | repo gates green; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions
