@@ -11,15 +11,7 @@ import (
 )
 
 func TestResourceSetAdapterConformance(t *testing.T) {
-	adapter := New(Options{
-		Resources: map[string]string{
-			"manuals/guide.md":   "# Guide\nstart here\n",
-			"templates/plan.txt": "plan template\n",
-		},
-		ResourceMetadata: map[string]ResourceMetadata{
-			"manuals/guide.md": {Source: "sync", Freshness: "live"},
-		},
-	})
+	adapter := newResourceSetConformanceAdapter()
 	contracttest.RunLifecycle(t, contracttest.LifecycleSpec{
 		Adapter:            adapter,
 		ObserveResult:      resourceSetObserveResult(),
@@ -86,6 +78,25 @@ func TestResourceSetAdapterConformance(t *testing.T) {
 	})
 }
 
+func TestResourceSetAdapterMountConformance(t *testing.T) {
+	adapter := newResourceSetConformanceAdapter()
+	contracttest.RunLifecycle(t, contracttest.LifecycleSpec{
+		Adapter:            adapter,
+		ObserveResult:      resourceSetObserveResult(),
+		RequireMemoryMount: true,
+		RequireOpaqueState: true,
+		WantMountPoints:    []string{"/resources", "/memory"},
+		CheckCreated: func(t *testing.T, snapshot contracttest.Snapshot) {
+			snapshot.AssertReadOnlyMountConformance(t, resourcesMountConformanceSpec())
+			snapshot.AssertReadOnlyMountConformance(t, memoryMountConformanceSpec())
+		},
+		CheckResumed: func(t *testing.T, snapshot contracttest.Snapshot) {
+			snapshot.AssertReadOnlyMountConformance(t, resourcesMountConformanceSpec())
+			snapshot.AssertReadOnlyMountConformance(t, memoryMountConformanceSpec())
+		},
+	})
+}
+
 func TestResourceSetAdapterObservationDedupe(t *testing.T) {
 	ctx := context.Background()
 	adapter := New(Options{
@@ -133,6 +144,74 @@ func resourceSetObserveResult() contract.ExecutionResult {
 			DeniedPaths:  []string{"/resources/protected.txt"},
 		},
 	}
+}
+
+func resourcesMountConformanceSpec() contracttest.MountConformanceSpec {
+	return contracttest.MountConformanceSpec{
+		MountPoint:        "/resources",
+		DirectoryPath:     "/resources",
+		WantDirectoryKind: "resource_dir",
+		FilePath:          "/resources/manuals/guide.md",
+		WantFileKind:      "resource_file",
+		WantFileLineCount: 2,
+		MissingPath:       "/resources/missing.md",
+		RecursivePath:     "/resources",
+		WantChildren: []string{
+			"/resources/_index.json",
+			"/resources/manuals",
+			"/resources/templates",
+		},
+		WantCollectedFiles: []string{
+			"/resources/_index.json",
+			"/resources/manuals/guide.md",
+			"/resources/templates/plan.txt",
+		},
+		WantRecursiveSearchPaths: []string{
+			"/resources/_index.json",
+			"/resources/manuals/guide.md",
+			"/resources/templates/plan.txt",
+		},
+	}
+}
+
+func memoryMountConformanceSpec() contracttest.MountConformanceSpec {
+	return contracttest.MountConformanceSpec{
+		MountPoint:        "/memory",
+		DirectoryPath:     "/memory",
+		WantDirectoryKind: "memory_dir",
+		FilePath:          "/memory/summary.md",
+		WantFileKind:      "memory_file",
+		WantFileLineCount: -1,
+		MissingPath:       "/memory/missing.md",
+		RecursivePath:     "/memory",
+		WantChildren: []string{
+			"/memory/observations.md",
+			"/memory/resources.json",
+			"/memory/summary.md",
+		},
+		WantCollectedFiles: []string{
+			"/memory/observations.md",
+			"/memory/resources.json",
+			"/memory/summary.md",
+		},
+		WantRecursiveSearchPaths: []string{
+			"/memory/observations.md",
+			"/memory/resources.json",
+			"/memory/summary.md",
+		},
+	}
+}
+
+func newResourceSetConformanceAdapter() *Adapter {
+	return New(Options{
+		Resources: map[string]string{
+			"manuals/guide.md":   "# Guide\nstart here\n",
+			"templates/plan.txt": "plan template\n",
+		},
+		ResourceMetadata: map[string]ResourceMetadata{
+			"manuals/guide.md": {Source: "sync", Freshness: "live"},
+		},
+	})
 }
 
 func decodeResourceRecords(t *testing.T, raw string) []resourceRecord {

@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-03T19:46:00Z
+- Updated At (UTC): 2026-04-03T22:00:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,7 +14,7 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-022: adapter seam conformance harness` is now complete and archived through feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-023: adapter mount conformance harness` is now complete and archived through feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
 
 ## Acceptance Criteria
 
@@ -43,11 +43,11 @@ bash .bagakit/long-run/check_and_resume.sh
 ## Expected Verification
 
 - Gate / verification command: `bash .bagakit/long-run/check_and_resume.sh`
-- Expected result: `next-action.json` and handoff remain aligned; there is no stale active row while the repository is in a clean idle state.
+- Expected result: `next-action.json` and handoff remain aligned; there is no stale active row while the repository is back in a clean idle state.
 
 ## Results
 
-- Summary: `K-022: adapter seam conformance harness` is complete and archived. The repository is back to an explicit idle state until the next manual row is created.
+- Summary: `K-023: adapter mount conformance harness` is complete and archived. The repository is back to an explicit idle state until the next manual row is created.
 - Tests: `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`, `go test ./...`, `make lint`, and `make check` all passed during the feat wave.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
@@ -55,8 +55,8 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-022` is closed and long-run is explicitly idle again.
-- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-022 archived | repo gates green; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-023` is closed and long-run is explicitly idle again.
+- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-023 archived | repo gates green; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

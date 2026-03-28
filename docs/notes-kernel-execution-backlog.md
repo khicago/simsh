@@ -655,6 +655,39 @@ Optional but recommended:
 - Rollback note:
   - If the harness starts widening into a bespoke testing DSL, keep only the reusable lifecycle/projection checks and return richer behavior checks to adapter-local tests.
 
+### K-023: Extract a shared adapter mount conformance harness
+- Feat: `f-20260403-adapter-mount-conformance-harness`
+- Status: done
+- Why now: `K-022` made lifecycle/projection conformance reusable, but mount-level list/search/describe/read-only metadata checks still live in scattered adapter assertions. The next seam-hardening step is a focused reusable proof for `VirtualMount` behavior across adapter shapes.
+- Kernel invariant: mount conformance must stay generic and mount-focused; the shared helper should validate deterministic list/search/describe/read-only metadata semantics without absorbing adapter-specific workflow, skill, audit, or benchmark behavior.
+- Files to touch:
+  - `pkg/adapter/internal/contracttest/`
+  - `pkg/adapter/reference/*_test.go`
+  - `pkg/adapter/resourceset/*_test.go`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - A shared mount conformance helper exists and stays narrow enough to encode `VirtualMount` invariants rather than adapter-specific semantics.
+  - `reference` and `resourceset` both use the helper for deterministic list/search/describe/read-only metadata checks on their projected mounts.
+  - Existing benchmark scenarios and richer adapter tests remain in place; the helper does not replace them.
+  - Docs clearly distinguish lifecycle conformance, mount conformance, and benchmark validation as separate proof layers.
+- Notes:
+  - Favor explicit expectations and callbacks over reflective helper magic.
+  - Reuse `pkg/mount` unit-test knowledge, but do not couple the helper to the concrete static-mount implementation.
+  - The helper should prove read-only metadata and deterministic path surfacing, not runtime write denial flows.
+  - The shared mount helper now lives in `pkg/adapter/internal/contracttest/mount.go` and owns only `VirtualMount` invariants: `Exists`, list/search, `DescribePath`, and read-only capability truth.
+  - `reference` and `resourceset` now each use the helper for focused mount conformance, while lifecycle conformance and benchmark validation remain separate proof layers.
+  - Validated with `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`, `go test ./...`, `make lint`, and `make check`.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260403-adapter-mount-conformance-harness/`.
+- Rollback note:
+  - If the helper starts becoming a generic filesystem test DSL, keep only the reusable `VirtualMount` invariants and move richer assertions back into adapter-local tests.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

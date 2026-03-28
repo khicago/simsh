@@ -133,6 +133,7 @@ This is deliberate. A second adapter should be materially smaller, so seam valid
 ## Contract Tests
 Minimum adapter contract tests SHOULD cover:
 - stable path projection for the same logical source object;
+- deterministic `VirtualMount` list/search/describe behavior for projected paths;
 - explicit freshness/error behavior;
 - refresh or invalidation round-trips that preserve path identity while changing visible freshness state;
 - session checkpoint and resume;
@@ -142,6 +143,8 @@ Minimum adapter contract tests SHOULD cover:
 Once multiple adapter shapes exist, teams SHOULD factor the shared seam checks into a reusable conformance harness rather than copying benchmark-only smoke scenarios into each adapter package. The benchmark remains the end-to-end proof; the conformance harness carries the reusable lifecycle/projection invariants.
 
 A good current shape is a small internal test helper such as `pkg/adapter/internal/contracttest` that sequences `create -> observe -> checkpoint -> resume -> close`, validates shared mount or opaque-state invariants, and leaves domain assertions to adapter-local callbacks. If the helper starts absorbing workflow, audit, selection, or other product-shaped assertions, it has crossed the seam and should be narrowed again.
+
+Mount conformance is now a sibling proof layer, not an afterthought inside lifecycle tests. A good current shape is a dedicated helper such as `pkg/adapter/internal/contracttest/mount.go` that validates `Exists`, `ListChildren`, `CollectFilesUnder`, `ResolveSearchPaths`, `DescribePath`, and read-only access/capability metadata against projected mount shapes. It should not become a generic filesystem DSL and it should not absorb benchmark or product semantics.
 
 ## Promotion Rule
 Kernel abstractions that only look good in isolated unit tests SHOULD remain provisional.

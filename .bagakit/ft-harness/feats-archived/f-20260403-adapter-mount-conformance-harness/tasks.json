@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "feat_id": "f-20260403-adapter-mount-conformance-harness",
+  "updated_at": "2026-04-03T09:56:08Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Build a shared mount conformance harness",
+      "status": "done",
+      "summary": "Define and implement reusable VirtualMount list/search/describe/read-only metadata checks, wire them into `reference` and `resourceset`, and keep benchmark and richer adapter assertions separate.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-03T09:56:08Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "make lint",
+          "exit_code": 0,
+          "status": "pass"
+        },
+        {
+          "command": "make check",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": "46afefd",
+      "started_at": "2026-04-03T09:32:40Z",
+      "finished_at": "2026-04-03T09:52:52Z",
+      "updated_at": "2026-04-03T09:56:08Z",
+      "notes": [
+        "Archive evidence refreshed after the final targeted and repository-wide gate run."
+      ]
+    }
+  ]
+}

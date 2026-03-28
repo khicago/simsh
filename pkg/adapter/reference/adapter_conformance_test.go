@@ -1,6 +1,7 @@
 package reference
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -9,35 +10,7 @@ import (
 )
 
 func TestReferenceAdapterConformance(t *testing.T) {
-	adapter := New(Options{
-		Documents: map[string]string{
-			"guide.md": "# Guide\nhello\n",
-		},
-		DocumentMetadata: map[string]ProjectionMetadata{
-			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
-		},
-		Resources: map[string]string{
-			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
-		},
-		ResourceMetadata: map[string]ProjectionMetadata{
-			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
-		},
-		Skills: map[string]string{
-			"planning/draft-plan": "# Draft plan\nUse the checklist.\n",
-		},
-		SkillMetadata: map[string]SkillMetadata{
-			"planning/draft-plan": {
-				SelectionScope: "planning",
-				Eligibility: SkillEligibility{
-					State: skillEligibilityEligible,
-				},
-				Precedence: SkillPrecedence{
-					Tier: skillPrecedenceTierWorkspace,
-					Rank: 1,
-				},
-			},
-		},
-	})
+	adapter := New(referenceConformanceOptions())
 
 	contracttest.RunLifecycle(t, contracttest.LifecycleSpec{
 		Adapter:            adapter,
@@ -131,6 +104,83 @@ func TestReferenceAdapterConformance(t *testing.T) {
 	})
 }
 
+func TestReferenceAdapterMountConformance(t *testing.T) {
+	adapter := New(referenceConformanceOptions())
+
+	projection, err := adapter.CreateSession(context.Background(), contract.Session{})
+	if err != nil {
+		t.Fatalf("CreateSession(...) error = %v, want nil", err)
+	}
+	if len(projection.OpaqueState) == 0 {
+		t.Fatal("CreateSession(...) OpaqueState = empty, want non-empty")
+	}
+	snapshot := contracttest.Snapshot{
+		Phase:      contracttest.PhaseCreated,
+		AdapterID:  adapter.AdapterID(),
+		Projection: projection,
+	}
+
+	snapshot.AssertReadOnlyMountConformance(t, contracttest.MountConformanceSpec{
+		MountPoint:                  "/knowledge_base/reference",
+		DirectoryPath:               "/knowledge_base/reference",
+		WantDirectoryKind:           "reference_dir",
+		FilePath:                    "/knowledge_base/reference/guide.md",
+		WantFileKind:                "reference_file",
+		MissingPath:                 "/knowledge_base/reference/missing.md",
+		RecursivePath:               "/knowledge_base/reference",
+		WantChildren:                []string{"/knowledge_base/reference/_index.json", "/knowledge_base/reference/guide.md"},
+		WantCollectedFiles:          []string{"/knowledge_base/reference/_index.json", "/knowledge_base/reference/guide.md"},
+		WantRecursiveSearchPaths:    []string{"/knowledge_base/reference/_index.json", "/knowledge_base/reference/guide.md"},
+		WantFileLineCount:           2,
+		RequireNonRecursiveDirError: true,
+	})
+
+	snapshot.AssertReadOnlyMountConformance(t, contracttest.MountConformanceSpec{
+		MountPoint:                  "/resources",
+		DirectoryPath:               "/resources/checklists",
+		WantDirectoryKind:           "resource_dir",
+		FilePath:                    "/resources/checklists/plan.json",
+		WantFileKind:                "resource_file",
+		MissingPath:                 "/resources/checklists/missing.json",
+		RecursivePath:               "/resources",
+		WantChildren:                []string{"/resources/checklists/plan.json"},
+		WantCollectedFiles:          []string{"/resources/_index.json", "/resources/checklists/plan.json"},
+		WantRecursiveSearchPaths:    []string{"/resources/_index.json", "/resources/checklists/plan.json"},
+		WantFileLineCount:           1,
+		RequireNonRecursiveDirError: true,
+	})
+
+	snapshot.AssertReadOnlyMountConformance(t, contracttest.MountConformanceSpec{
+		MountPoint:                  "/skills",
+		DirectoryPath:               "/skills/planning/draft-plan",
+		WantDirectoryKind:           "skill_dir",
+		FilePath:                    "/skills/planning/draft-plan/SKILL.md",
+		WantFileKind:                "skill_file",
+		MissingPath:                 "/skills/planning/missing/SKILL.md",
+		RecursivePath:               "/skills",
+		WantChildren:                []string{"/skills/planning/draft-plan/SKILL.md"},
+		WantCollectedFiles:          []string{"/skills/_index.json", "/skills/planning/draft-plan/SKILL.md"},
+		WantRecursiveSearchPaths:    []string{"/skills/_index.json", "/skills/planning/draft-plan/SKILL.md"},
+		WantFileLineCount:           2,
+		RequireNonRecursiveDirError: true,
+	})
+
+	snapshot.AssertReadOnlyMountConformance(t, contracttest.MountConformanceSpec{
+		MountPoint:                  "/memory",
+		DirectoryPath:               "/memory",
+		WantDirectoryKind:           "memory_dir",
+		FilePath:                    "/memory/status.json",
+		WantFileKind:                "memory_file",
+		MissingPath:                 "/memory/missing.json",
+		RecursivePath:               "/memory",
+		WantChildren:                []string{"/memory/curated.json", "/memory/curated.md", "/memory/denials.json", "/memory/denials.md", "/memory/observations.md", "/memory/projection_metrics.json", "/memory/projection_metrics.md", "/memory/projections.json", "/memory/projections.md", "/memory/skills_audit.json", "/memory/skills_audit.md", "/memory/status.json", "/memory/summary.md", "/memory/workflows.json", "/memory/workflows.md"},
+		WantCollectedFiles:          []string{"/memory/curated.json", "/memory/curated.md", "/memory/denials.json", "/memory/denials.md", "/memory/observations.md", "/memory/projection_metrics.json", "/memory/projection_metrics.md", "/memory/projections.json", "/memory/projections.md", "/memory/skills_audit.json", "/memory/skills_audit.md", "/memory/status.json", "/memory/summary.md", "/memory/workflows.json", "/memory/workflows.md"},
+		WantRecursiveSearchPaths:    []string{"/memory/curated.json", "/memory/curated.md", "/memory/denials.json", "/memory/denials.md", "/memory/observations.md", "/memory/projection_metrics.json", "/memory/projection_metrics.md", "/memory/projections.json", "/memory/projections.md", "/memory/skills_audit.json", "/memory/skills_audit.md", "/memory/status.json", "/memory/summary.md", "/memory/workflows.json", "/memory/workflows.md"},
+		WantFileLineCount:           -1,
+		RequireNonRecursiveDirError: true,
+	})
+}
+
 func referenceConformanceObserveResult() contract.ExecutionResult {
 	return contract.ExecutionResult{
 		ExecutionID: "exec-conformance",
@@ -138,6 +188,38 @@ func referenceConformanceObserveResult() contract.ExecutionResult {
 			ReadPaths:    []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json"},
 			WrittenPaths: []string{"/task_outputs/plan.txt"},
 			DeniedPaths:  []string{"/knowledge_base/reference/guide.md"},
+		},
+	}
+}
+
+func referenceConformanceOptions() Options {
+	return Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft plan\nUse the checklist.\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				SelectionScope: "planning",
+				Eligibility: SkillEligibility{
+					State: skillEligibilityEligible,
+				},
+				Precedence: SkillPrecedence{
+					Tier: skillPrecedenceTierWorkspace,
+					Rank: 1,
+				},
+			},
 		},
 	}
 }
