@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-03T09:53:00Z",
+  "updated_at": "2026-04-03T10:54:32Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -249,6 +249,15 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-04-03T07:44:57Z"
+    },
+    {
+      "feat_id": "f-20260403-contracttest-helper-self-coverage",
+      "title": "Contracttest helper self-coverage and failure semantics",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-04-03T10:54:32Z"
     },
     {
       "feat_id": "f-20260403-second-adapter-seam-validation",

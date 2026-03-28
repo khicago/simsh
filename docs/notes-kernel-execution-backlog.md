@@ -688,6 +688,37 @@ Optional but recommended:
 - Rollback note:
   - If the helper starts becoming a generic filesystem test DSL, keep only the reusable `VirtualMount` invariants and move richer assertions back into adapter-local tests.
 
+### K-024: Add direct tests for shared contracttest helpers
+- Feat: `f-20260403-contracttest-helper-self-coverage`
+- Status: done
+- Why now: `K-022` and `K-023` turned adapter seam proof into reusable helpers, but `pkg/adapter/internal/contracttest` itself still lacks direct package-local tests. The next hardening step is to make that reusable layer self-tested, especially around failure semantics, instead of trusting only indirect adapter coverage.
+- Kernel invariant: reusable proof helpers must stay smaller than the runtime and adapter logic they validate; direct tests should cover helper semantics without recreating a hidden runtime or adapter product layer.
+- Files to touch:
+  - `pkg/adapter/internal/contracttest/*`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `docs/notes-reusable-items-coding.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test -cover ./pkg/adapter/internal/contracttest ./pkg/adapter/reference ./pkg/adapter/resourceset`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - `pkg/adapter/internal/contracttest` has direct tests for lifecycle and mount helpers.
+  - Success paths and key failure semantics are both covered.
+  - The direct tests raise the package coverage materially, targeting full or near-full helper coverage without reward hacking.
+  - Docs clearly record that reusable proof helpers are self-tested assets, not only adapter side effects.
+- Notes:
+  - Prefer small fake adapters and fake mounts over broad test scaffolding.
+  - Do not duplicate benchmark scenarios in package-local helper tests.
+  - Failure cases should be chosen for seam value, not for synthetic branch farming.
+  - `pkg/adapter/internal/contracttest` now has direct package-local tests for both lifecycle and mount helpers.
+  - The helper layer now follows an `error`-returning core plus thin `testing.T` wrappers so failure semantics are directly testable.
+  - `go test -cover ./pkg/adapter/internal/contracttest` now reports `92.1%` coverage, up from `0.0%`, while `reference` and `resourceset` remain above `90%`.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260403-contracttest-helper-self-coverage/`.
+- Rollback note:
+  - If helper tests start reproducing full adapter behavior, pull them back to targeted helper semantics and keep end-to-end behavior in adapter tests or benchmarks.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

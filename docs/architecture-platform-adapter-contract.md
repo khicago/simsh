@@ -144,6 +144,8 @@ Once multiple adapter shapes exist, teams SHOULD factor the shared seam checks i
 
 A good current shape is a small internal test helper such as `pkg/adapter/internal/contracttest` that sequences `create -> observe -> checkpoint -> resume -> close`, validates shared mount or opaque-state invariants, and leaves domain assertions to adapter-local callbacks. If the helper starts absorbing workflow, audit, selection, or other product-shaped assertions, it has crossed the seam and should be narrowed again.
 
+When these helpers become reusable mechanisms rather than one-off test glue, they SHOULD keep an error-returning core and only use thin `testing.T` wrappers at the edge. That keeps failure semantics directly testable without forcing subprocess tricks or adapter-level indirection.
+
 Mount conformance is now a sibling proof layer, not an afterthought inside lifecycle tests. A good current shape is a dedicated helper such as `pkg/adapter/internal/contracttest/mount.go` that validates `Exists`, `ListChildren`, `CollectFilesUnder`, `ResolveSearchPaths`, `DescribePath`, and read-only access/capability metadata against projected mount shapes. It should not become a generic filesystem DSL and it should not absorb benchmark or product semantics.
 
 ## Promotion Rule
