@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-03T19:10:00Z
+- Updated At (UTC): 2026-04-03T19:46:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,18 +14,18 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. `K-021: second adapter seam validation` has now been completed through the feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-022: adapter seam conformance harness` is now complete and archived through feat-task harness, so long-run should remain explicitly idle until the next manual row is defined.
 
 ## Acceptance Criteria
 
 - [ ] Refresh long-run rows before using `ralphloop` again.
-- [ ] Keep handoff aligned with `next-action.json` while the current implementation wave runs through feat-task harness instead.
+- [ ] Keep handoff aligned with `next-action.json` while the current implementation wave is fully closed.
 
 ## Execution Plan
 
 1. Keep long-run explicitly idle until the next row is deliberately created.
-2. When this slice is complete, either reopen long-run with a fresh manual row or keep handoff explicitly idle.
-3. Do not point handoff at stale completed rows.
+2. When the next slice is selected, reopen handoff with that new row instead of pointing at the archived feat.
+3. Do not let handoff drift from `next-action.json` while work proceeds through feat-task harness.
 
 ## Files To Touch
 
@@ -43,27 +43,27 @@ bash .bagakit/long-run/check_and_resume.sh
 ## Expected Verification
 
 - Gate / verification command: `bash .bagakit/long-run/check_and_resume.sh`
-- Expected result: `next-action.json` and handoff remain aligned; there is no stale active row while current implementation work proceeds through feat-task harness.
+- Expected result: `next-action.json` and handoff remain aligned; there is no stale active row while the repository is in a clean idle state.
 
 ## Results
 
-- Summary: The long-run queue is currently idle. `K-020` is complete, and `K-021: second adapter seam validation` is now the next planned feat-harness slice.
-- Tests: Repository baseline is green before the `K-021` implementation wave starts.
-- Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, which now matches this handoff.
+- Summary: `K-022: adapter seam conformance harness` is complete and archived. The repository is back to an explicit idle state until the next manual row is created.
+- Tests: `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`, `go test ./...`, `make lint`, and `make check` all passed during the feat wave.
+- Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: long-run handoff refreshed so it no longer points at a completed row while the next adapter-side slice is executed through the feat-task harness.
-- LongRun: Item=none; Status=blocked; Confidence=0.95; Evidence=next_row null | K-020 closed | K-021 queued in backlog; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-022` is closed and long-run is explicitly idle again.
+- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-022 archived | repo gates green; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions
 
-- Risks: The main process risk is letting handoff drift from `next-action.json` again while work happens outside the long-run loop.
-- Rollback: If a new long-run phase is not ready, keep handoff explicitly idle instead of pointing it at a guessed next row.
-- Unblock Action (if blocked): Re-run `bash .bagakit/long-run/check_and_resume.sh`; if a new row is created later, let the generated files advance together.
+- Risks: The main process risk is letting handoff drift from the now-idle `next-action.json` state again while future work happens outside the long-run loop.
+- Rollback: If the next long-run phase is not ready, keep handoff explicitly idle instead of pointing it at a guessed future slice.
+- Unblock Action (if blocked): Re-run `bash .bagakit/long-run/check_and_resume.sh`; if a future row is created, let the generated files advance together.
 
 ## Next Run
 

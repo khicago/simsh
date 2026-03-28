@@ -34,6 +34,7 @@ Examples: error handling patterns, feature flag patterns, logging/metrics conven
 | RC parser subset (`export` + `alias`) | SHOULD | Need deterministic startup customization from read-only mounted rc files while rejecting ambiguous shell constructs | `pkg/engine/orchestrator.go` |
 | VirtualMount driver + mount-router composition | SHOULD | Need to project business context trees (memory/resources/skills) without coupling core to backend | `pkg/contract/mount_contract.go`, `pkg/engine/virtualfs_bridge.go` |
 | PreparedOps snapshot (`PrepareOps` + `ExecutePrepared`) | SHOULD | Need high-frequency command execution with stable callbacks; avoid repeating per-exec normalize/wrap/bootstrap work | `pkg/engine/orchestrator.go`, `pkg/engine/runtime/runtime_stack.go` |
+| Adapter seam conformance harness | SHOULD | Need reusable lifecycle/projection/managed-memory seam assertions across multiple adapter shapes without copying benchmark smoke logic into each adapter test | `pkg/adapter/internal/contracttest/lifecycle.go`, `pkg/adapter/reference/adapter_conformance_test.go`, `pkg/adapter/resourceset/adapter_test.go` |
 
 ## Deprecations
 - `pkg/builtin/manuals/*.md` -> `pkg/builtin/commands/*/manual.md` (remove duplicated manual sources and drift risk)

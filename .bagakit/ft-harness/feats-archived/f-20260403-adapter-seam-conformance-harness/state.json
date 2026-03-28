@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "feat_id": "f-20260403-adapter-seam-conformance-harness",
+  "title": "Adapter seam conformance harness",
+  "slug": "adapter-seam-conformance-harness",
+  "goal": "Extract reusable adapter conformance checks so richer and smaller adapters validate the same lifecycle, projection, and managed-memory seam without duplicating benchmark-specific logic.",
+  "status": "archived",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-04-03T07:27:55Z",
+  "updated_at": "2026-04-03T07:44:57Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 1
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-04-03T07:42:41Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260403-adapter-seam-conformance-harness/artifacts/gate-20260403T074241Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-04-03T07:27:55Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-04-03T07:28:25Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-04-03T07:42:41Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-04-03T07:44:48Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-04-03T07:44:57Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-04-03T07:44:57Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
+}

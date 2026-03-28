@@ -622,6 +622,39 @@ Optional but recommended:
 - Rollback note:
   - If the second adapter starts turning into a second rich product model, shrink it back to the smallest seam-proving workload instead of deleting the effort.
 
+### K-022: Extract a shared adapter seam conformance harness
+- Feat: `f-20260403-adapter-seam-conformance-harness`
+- Status: done
+- Why now: `reference` and `resourceset` now prove the seam through materially different shapes, but the core lifecycle/projection invariants still live in adapter-specific tests and benchmark code. The next hardening step is to make those shared invariants reusable so future adapters validate the seam without copying benchmark-specific logic.
+- Kernel invariant: seam conformance must stay generic and reusable; the shared harness should validate lifecycle, projection, opaque-state, and managed-memory invariants without pulling richer product semantics into every adapter test.
+- Files to touch:
+  - `pkg/adapter/<shared-test-package>/`
+  - `pkg/adapter/reference/*_test.go`
+  - `pkg/adapter/resourceset/*_test.go`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - A shared adapter conformance harness exists and is small enough to encode seam invariants rather than adapter-specific product logic.
+  - `reference` and `resourceset` both use the harness for the common lifecycle/projection checks.
+  - Existing richer adapter-specific tests remain in place for product-shaped behavior; the harness does not replace them.
+  - Docs clearly distinguish reusable conformance coverage from benchmark-level end-to-end validation.
+- Notes:
+  - Favor explicit callbacks and small expectations over generic reflection-heavy test frameworks.
+  - Do not move benchmark assertions into the conformance harness.
+  - Keep adapter-specific helper logic close to each adapter when it is not truly shared.
+  - The shared conformance helper now lives in `pkg/adapter/internal/contracttest` and owns only the reusable lifecycle sequence, mount-presence checks, opaque-state round-trip, and managed-memory visibility helpers.
+  - `reference` and `resourceset` now each carry one focused conformance test that uses the helper, while the richer reference end-to-end test and the native reference benchmark remain separate proof layers.
+  - Validated with `go test ./pkg/adapter/reference ./pkg/adapter/resourceset -count=1`, `go test ./...`, `make lint`, and `make check`.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260403-adapter-seam-conformance-harness/`.
+- Rollback note:
+  - If the harness starts widening into a bespoke testing DSL, keep only the reusable lifecycle/projection checks and return richer behavior checks to adapter-local tests.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

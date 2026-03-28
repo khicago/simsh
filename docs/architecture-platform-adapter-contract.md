@@ -139,6 +139,10 @@ Minimum adapter contract tests SHOULD cover:
 - trace-driven observation or follow-up behavior;
 - separation of mirrored source data from derived outputs.
 
+Once multiple adapter shapes exist, teams SHOULD factor the shared seam checks into a reusable conformance harness rather than copying benchmark-only smoke scenarios into each adapter package. The benchmark remains the end-to-end proof; the conformance harness carries the reusable lifecycle/projection invariants.
+
+A good current shape is a small internal test helper such as `pkg/adapter/internal/contracttest` that sequences `create -> observe -> checkpoint -> resume -> close`, validates shared mount or opaque-state invariants, and leaves domain assertions to adapter-local callbacks. If the helper starts absorbing workflow, audit, selection, or other product-shaped assertions, it has crossed the seam and should be narrowed again.
+
 ## Promotion Rule
 Kernel abstractions that only look good in isolated unit tests SHOULD remain provisional.
 
