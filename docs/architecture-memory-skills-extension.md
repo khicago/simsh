@@ -75,6 +75,11 @@ Keep write/update flows explicit and auditable via dedicated commands/APIs (not 
 - Keep projection freshness explicit and small-state, not prose-only. Prefer canonical states such as `snapshot`, `live`, `stale`, and `updated`, and surface them in sidecars or managed summary views.
 - Keep refresh ownership in the control plane. If a projection becomes stale, expose that staleness in `/memory` or sidecar metadata, but do not make the projected mount itself the write path for refresh.
 - Treat `/memory` as a managed read-only view over adapter state. Raw observations, projection indexes, curated summaries, and workflow views may share the namespace, but they should remain conceptually distinct and auditable.
+- A minimal current reference shape for curation is: explicit control-plane promotion into `/memory/curated.json`, an optional human-readable mirror at `/memory/curated.md`, and stable source-path provenance on each curated entry.
+- For `/skills`, prefer a stable read-only projection plus explicit metadata over implicit gating. The current reference shape is: projected skill artifacts under `/skills/...`, an index at `/skills/_index.json`, and mirrored metadata in `/memory/projections.json` that surfaces `source`, `freshness`, `eligibility`, `precedence`, and optional selection state.
+- If an adapter exposes skill selection, keep the competition boundary explicit. Selection should be derived inside an adapter-defined scope from eligibility plus precedence, not inferred from mount writability and not guessed from path layout alone.
+- When non-selected skills remain visible, surface why they lost. The current reference shape is a `selection` object with `state`, `mode`, `scope`, `reason`, and optional `winner_path`, alongside a compatibility `selected` bit for quick consumers.
+- Unscoped skills stay in compatibility mode: they may surface explicit selected or not-selected state, but the adapter must not invent competition from path layout alone.
 - Add load-time gating for skills (required bins/env/config/os), but keep fallback predictable.
 - Handle missing memory/resource files gracefully (`not found` should be a normal result path, not a hard failure).
 - Apply limits from day one (scan count, loaded entries, prompt injection size, debounce/watch intervals).

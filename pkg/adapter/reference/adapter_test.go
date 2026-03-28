@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -380,6 +382,107 @@ func TestReferenceAdapterRefreshAndInvalidationAcrossResume(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterProjectionMaterializationStateForStaleSlice(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: true,
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_projection_materialization" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	initialProjections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read initial projections failed: %v", err)
+	}
+	initialView := decodeProjectionMaterializationView(t, []byte(initialProjections.Result.Stdout))
+	assertProjectionMaterializationStatePresent(
+		t,
+		requireProjectionMaterializationRecord(t, initialView.Documents, "/knowledge_base/reference/guide.md"),
+		"initial document projection",
+	)
+	assertProjectionMaterializationStatePresent(
+		t,
+		requireProjectionMaterializationRecord(t, initialView.Resources, "/resources/checklists/plan.json"),
+		"initial resource projection",
+	)
+	assertProjectionMaterializationStatePresent(
+		t,
+		requireProjectionMaterializationRecord(t, initialView.Skills, "/skills/planning/draft-plan/SKILL.md"),
+		"initial skill projection",
+	)
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close before invalidation failed: %v", err)
+	}
+	adapter.InvalidateDocument("guide.md")
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume stale projections failed: %v", err)
+	}
+
+	staleProjections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read stale projections failed: %v", err)
+	}
+	staleView := decodeProjectionMaterializationView(t, []byte(staleProjections.Result.Stdout))
+	assertProjectionMaterializationPartialOrError(
+		t,
+		requireProjectionMaterializationRecord(t, staleView.Documents, "/knowledge_base/reference/guide.md"),
+		"stale document projection",
+	)
+	assertProjectionMaterializationStatePresent(
+		t,
+		requireProjectionMaterializationRecord(t, staleView.Resources, "/resources/checklists/plan.json"),
+		"stale resource projection",
+	)
+	assertProjectionMaterializationStatePresent(
+		t,
+		requireProjectionMaterializationRecord(t, staleView.Skills, "/skills/planning/draft-plan/SKILL.md"),
+		"stale skill projection",
+	)
+}
+
 func TestReferenceAdapterWorkflowStatusOverrideAcrossResume(t *testing.T) {
 	adapter := New(Options{
 		Resources: map[string]string{
@@ -471,6 +574,734 @@ func TestReferenceAdapterWorkflowStatusOverrideAcrossResume(t *testing.T) {
 	}
 }
 
+func TestReferenceAdapterSkillMetadataNormalization(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			" planner/draft ":  "# Draft skill\n",
+			"planner/fallback": "# Fallback skill\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planner/draft/SKILL.md": {
+				Source:    "workspace_catalog",
+				Freshness: "live",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: true,
+			},
+			"planner/fallback/SKILL.md": {
+				Source:    "user_catalog",
+				Freshness: "snapshot",
+				Eligibility: SkillEligibility{
+					State: "blocked",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "invalid",
+					Rank: -2,
+				},
+			},
+		},
+	})
+
+	records := adapter.skillRecords()
+	primary := requireProjectionRecord(t, records, "/skills/planner/draft/SKILL.md")
+	assertSkillProjectionMetadata(t, primary, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+
+	fallback := requireProjectionRecord(t, records, "/skills/planner/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, fallback, "user_catalog", "snapshot", "unknown", "", "bundled", 0, false)
+}
+
+func TestReferenceAdapterSkillsProjectionReadOnlyAcrossResume(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\nUse deterministic plan steps.\n",
+			"planning/fallback":   "# Fallback Planner\nUse manual checklist fallback.\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: true,
+			},
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State:  "ineligible",
+					Reason: "missing_env:PLAN_FALLBACK_TOKEN",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "bundled",
+					Rank: 90,
+				},
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_skills" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	readSkill, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skill projection failed: %v", err)
+	}
+	if !strings.Contains(readSkill.Result.Stdout, "Draft Planner") {
+		t.Fatalf("unexpected skill output: %+v", readSkill.Result)
+	}
+	skillIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index failed: %v", err)
+	}
+	indexSkills := decodeProjectionRecords(t, []byte(skillIndex.Result.Stdout))
+	draftSkill := requireProjectionRecord(t, indexSkills, "/skills/planning/draft-plan/SKILL.md")
+	assertSkillProjectionMetadata(t, draftSkill, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+	fallbackSkill := requireProjectionRecord(t, indexSkills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, fallbackSkill, "bundled_catalog", "snapshot", "ineligible", "missing_env:PLAN_FALLBACK_TOKEN", "bundled", 90, false)
+
+	projections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projection view failed: %v", err)
+	}
+	projectionView := decodeProjectionView(t, []byte(projections.Result.Stdout))
+	projectedDraft := requireProjectionRecord(t, projectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	assertSkillProjectionMetadata(t, projectedDraft, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+	projectedFallback := requireProjectionRecord(t, projectionView.Skills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, projectedFallback, "bundled_catalog", "snapshot", "ineligible", "missing_env:PLAN_FALLBACK_TOKEN", "bundled", 90, false)
+
+	summary, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/summary.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read memory summary failed: %v", err)
+	}
+	if !strings.Contains(summary.Result.Stdout, "projections.skills: 2") || !strings.Contains(summary.Result.Stdout, "skill_reads: 2") {
+		t.Fatalf("expected skill projection count in memory summary, got %+v", summary.Result)
+	}
+	skillsEvidence, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/skills.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills evidence failed: %v", err)
+	}
+	if !strings.Contains(skillsEvidence.Result.Stdout, "/skills/planning/draft-plan/SKILL.md") {
+		t.Fatalf("expected skill read evidence, got %+v", skillsEvidence.Result)
+	}
+
+	deniedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("write to /skills failed unexpectedly: %v", err)
+	}
+	if deniedWrite.Result.ExitCode == 0 {
+		t.Fatalf("expected write to /skills to be denied, got %+v", deniedWrite.Result)
+	}
+	observations, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/observations.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read observations failed: %v", err)
+	}
+	if !strings.Contains(observations.Result.Stdout, "denied:/skills/planning/draft-plan/SKILL.md") {
+		t.Fatalf("expected denied /skills observation, got %+v", observations.Result)
+	}
+	if !strings.Contains(observations.Result.Stdout, "read-skill:/skills/planning/draft-plan/SKILL.md") {
+		t.Fatalf("expected read /skills observation, got %+v", observations.Result)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close session failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume session failed: %v", err)
+	}
+	resumedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read resumed skills index failed: %v", err)
+	}
+	resumedSkills := decodeProjectionRecords(t, []byte(resumedIndex.Result.Stdout))
+	resumedDraft := requireProjectionRecord(t, resumedSkills, "/skills/planning/draft-plan/SKILL.md")
+	assertSkillProjectionMetadata(t, resumedDraft, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+}
+
+func TestReferenceAdapterSkillsSelectionTruthAcrossResume(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft Planner\n",
+			"planning/alternate":  "# Alternate Planner\n",
+			"planning/fallback":   "# Fallback Planner\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: false,
+			},
+			"planning/alternate": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 5,
+				},
+				Selected: true,
+			},
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: "planning/default",
+				Eligibility: SkillEligibility{
+					State:  "ineligible",
+					Reason: "missing_env:PLAN_FALLBACK_TOKEN",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "bundled",
+					Rank: 90,
+				},
+				Selected: true,
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_skills_selection_truth" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	skillIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index failed: %v", err)
+	}
+	indexSkills := decodeProjectionRecords(t, []byte(skillIndex.Result.Stdout))
+	draftSkill := requireProjectionRecord(t, indexSkills, "/skills/planning/draft-plan/SKILL.md")
+	alternateSkill := requireProjectionRecord(t, indexSkills, "/skills/planning/alternate/SKILL.md")
+	fallbackSkill := requireProjectionRecord(t, indexSkills, "/skills/planning/fallback/SKILL.md")
+	assertSkillProjectionMetadata(t, draftSkill, "workspace_catalog", "live", "eligible", "", "workspace", 1, true)
+	assertSkillProjectionMetadata(t, alternateSkill, "workspace_catalog", "live", "eligible", "", "workspace", 5, false)
+	assertSkillProjectionMetadata(t, fallbackSkill, "bundled_catalog", "snapshot", "ineligible", "missing_env:PLAN_FALLBACK_TOKEN", "bundled", 90, false)
+
+	indexSkillMaps := decodeProjectionRecordMaps(t, []byte(skillIndex.Result.Stdout))
+	draftMap := requireProjectionRecordMap(t, indexSkillMaps, "/skills/planning/draft-plan/SKILL.md")
+	alternateMap := requireProjectionRecordMap(t, indexSkillMaps, "/skills/planning/alternate/SKILL.md")
+	fallbackMap := requireProjectionRecordMap(t, indexSkillMaps, "/skills/planning/fallback/SKILL.md")
+
+	draftSelection := requireSelectionMap(t, draftMap)
+	alternateSelection := requireSelectionMap(t, alternateMap)
+	fallbackSelection := requireSelectionMap(t, fallbackMap)
+
+	draftScope := mapStringField(t, draftSelection, "scope")
+	alternateScope := mapStringField(t, alternateSelection, "scope")
+	fallbackScope := mapStringField(t, fallbackSelection, "scope")
+	if draftScope == "" || alternateScope == "" || fallbackScope == "" {
+		t.Fatalf("selection scope must be explicit for all skills, got draft=%q alternate=%q fallback=%q", draftScope, alternateScope, fallbackScope)
+	}
+	if draftScope != alternateScope || draftScope != fallbackScope {
+		t.Fatalf("expected same explicit selection scope across planning skills, got draft=%q alternate=%q fallback=%q", draftScope, alternateScope, fallbackScope)
+	}
+	if mapStringField(t, draftSelection, "mode") == "" || mapStringField(t, alternateSelection, "mode") == "" || mapStringField(t, fallbackSelection, "mode") == "" {
+		t.Fatalf("selection mode must be machine-readable for winner/loser/ineligible skills")
+	}
+	if mapStringField(t, alternateSelection, "reason") == "" {
+		t.Fatalf("loser skill must expose machine-readable selection reason: %+v", alternateSelection)
+	}
+	if mapStringField(t, fallbackSelection, "reason") == "" {
+		t.Fatalf("ineligible skill must expose machine-readable selection reason: %+v", fallbackSelection)
+	}
+
+	projections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read /memory/projections.json failed: %v", err)
+	}
+	projectionView := decodeProjectionView(t, []byte(projections.Result.Stdout))
+	projectedDraft := requireProjectionRecord(t, projectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	projectedAlternate := requireProjectionRecord(t, projectionView.Skills, "/skills/planning/alternate/SKILL.md")
+	projectedFallback := requireProjectionRecord(t, projectionView.Skills, "/skills/planning/fallback/SKILL.md")
+	if !projectedDraft.Selected || projectedAlternate.Selected || projectedFallback.Selected {
+		t.Fatalf("projection view selected states mismatch: draft=%v alternate=%v fallback=%v", projectedDraft.Selected, projectedAlternate.Selected, projectedFallback.Selected)
+	}
+
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close session failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume session failed: %v", err)
+	}
+	resumedIndex, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read resumed skills index failed: %v", err)
+	}
+	resumedSkillMaps := decodeProjectionRecordMaps(t, []byte(resumedIndex.Result.Stdout))
+	resumedDraft := requireProjectionRecordMap(t, resumedSkillMaps, "/skills/planning/draft-plan/SKILL.md")
+	resumedAlternate := requireProjectionRecordMap(t, resumedSkillMaps, "/skills/planning/alternate/SKILL.md")
+	resumedFallback := requireProjectionRecordMap(t, resumedSkillMaps, "/skills/planning/fallback/SKILL.md")
+	if !mapBoolField(resumedDraft, "selected") || mapBoolField(resumedAlternate, "selected") || mapBoolField(resumedFallback, "selected") {
+		t.Fatalf("selection state should remain stable across resume: draft=%v alternate=%v fallback=%v", mapBoolField(resumedDraft, "selected"), mapBoolField(resumedAlternate, "selected"), mapBoolField(resumedFallback, "selected"))
+	}
+
+	if mapStringField(t, requireSelectionMap(t, resumedDraft), "scope") != draftScope {
+		t.Fatalf("winner scope drift across resume: before=%q after=%q", draftScope, mapStringField(t, requireSelectionMap(t, resumedDraft), "scope"))
+	}
+	if mapStringField(t, requireSelectionMap(t, resumedAlternate), "scope") != alternateScope {
+		t.Fatalf("loser scope drift across resume: before=%q after=%q", alternateScope, mapStringField(t, requireSelectionMap(t, resumedAlternate), "scope"))
+	}
+	if mapStringField(t, requireSelectionMap(t, resumedFallback), "scope") != fallbackScope {
+		t.Fatalf("ineligible scope drift across resume: before=%q after=%q", fallbackScope, mapStringField(t, requireSelectionMap(t, resumedFallback), "scope"))
+	}
+}
+
+func TestReferenceAdapterSkillSelectionTieBreakDeterministic(t *testing.T) {
+	adapter := New(Options{
+		Skills: map[string]string{
+			"triage/alpha": "# Triage Alpha\n",
+			"triage/beta":  "# Triage Beta\n",
+		},
+		SkillMetadata: map[string]SkillMetadata{
+			"triage/alpha": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "triage/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: false,
+			},
+			"triage/beta": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "triage/default",
+				Eligibility: SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: false,
+			},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_skills_tie_break" }})
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	firstWinner, firstLoser, firstScope := readTieBreakSnapshot(t, manager, session.SessionID)
+	if firstWinner == "" || firstLoser == "" {
+		t.Fatalf("expected exactly one winner and one loser, got winner=%q loser=%q", firstWinner, firstLoser)
+	}
+	if firstScope == "" {
+		t.Fatalf("expected explicit competition scope for tie-break selection")
+	}
+
+	for idx := 0; idx < 2; idx++ {
+		if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+			t.Fatalf("close #%d failed: %v", idx+1, err)
+		}
+		if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+			t.Fatalf("resume #%d failed: %v", idx+1, err)
+		}
+		winner, loser, scope := readTieBreakSnapshot(t, manager, session.SessionID)
+		if winner != firstWinner || loser != firstLoser {
+			t.Fatalf("tie-break selection drifted across resume #%d: first=(%q,%q) now=(%q,%q)", idx+1, firstWinner, firstLoser, winner, loser)
+		}
+		if scope != firstScope {
+			t.Fatalf("tie-break selection scope drifted across resume #%d: first=%q now=%q", idx+1, firstScope, scope)
+		}
+	}
+}
+
+func TestReferenceAdapterCuratedMemoryViewDistinctFromRawSignals(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_curated_distinct" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read reference projection failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read resource projection failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "echo plan > /task_outputs/plan.txt", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("write task output failed: %v", err)
+	}
+	deniedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("write to read-only projection failed unexpectedly: %v", err)
+	}
+	if deniedWrite.Result.ExitCode == 0 {
+		t.Fatalf("expected denied projection write to fail, got %+v", deniedWrite.Result)
+	}
+	adapter.UpsertCuratedEntry(CuratedEntry{
+		ID:          "plan-context",
+		Title:       "Plan Context",
+		Summary:     "Curated entry for the current plan workflow.",
+		SourcePaths: []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json", "/task_outputs/plan.txt"},
+	})
+
+	curatedPath := requireCuratedMemoryJSONPath(t, manager, session.SessionID)
+	curatedView, err := manager.Execute(context.Background(), session.SessionID, "cat "+curatedPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read curated memory view %q failed: %v", curatedPath, err)
+	}
+	curatedSnapshot := decodeCuratedMemorySnapshot(t, []byte(curatedView.Result.Stdout))
+
+	observations, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/observations.md", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read observations failed: %v", err)
+	}
+	projections, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read projections failed: %v", err)
+	}
+
+	observationPaths := extractObservationPaths(observations.Result.Stdout)
+	if !hasPathIntersection(curatedSnapshot.SourcePaths, observationPaths) {
+		t.Fatalf("expected curated source paths to reference observed paths, curated=%v observed=%v", curatedSnapshot.SourcePaths, observationPaths)
+	}
+	if strings.Contains(curatedView.Result.Stdout, "read-ref:") || strings.Contains(curatedView.Result.Stdout, "read-resource:") || strings.Contains(curatedView.Result.Stdout, "read-skill:") {
+		t.Fatalf("expected curated view to stay distinct from raw observations, got %q", curatedView.Result.Stdout)
+	}
+
+	var projectionLike projectionView
+	if err := json.Unmarshal([]byte(curatedView.Result.Stdout), &projectionLike); err == nil && (len(projectionLike.Documents) > 0 || len(projectionLike.Resources) > 0 || len(projectionLike.Skills) > 0) {
+		t.Fatalf("expected curated view to stay distinct from projection index shape, got %+v", projectionLike)
+	}
+	if strings.TrimSpace(curatedView.Result.Stdout) == strings.TrimSpace(observations.Result.Stdout) {
+		t.Fatalf("expected curated view content to differ from raw observations")
+	}
+	if strings.TrimSpace(curatedView.Result.Stdout) == strings.TrimSpace(projections.Result.Stdout) {
+		t.Fatalf("expected curated view content to differ from projection index")
+	}
+
+	deniedCuratedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > "+curatedPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("write to curated memory view failed unexpectedly: %v", err)
+	}
+	if deniedCuratedWrite.Result.ExitCode == 0 {
+		t.Fatalf("expected write to curated memory view to be denied, got %+v", deniedCuratedWrite.Result)
+	}
+}
+
+func TestReferenceAdapterCuratedMemoryViewSurvivesCheckpointResume(t *testing.T) {
+	adapter := New(Options{
+		Documents: map[string]string{
+			"guide.md": "# Guide\nhello\n",
+		},
+		DocumentMetadata: map[string]ProjectionMetadata{
+			"guide.md": {Source: "knowledge_sync", Freshness: "snapshot"},
+		},
+		Resources: map[string]string{
+			"checklists/plan.json": "{\"steps\":[\"read\",\"write\"]}\n",
+		},
+		ResourceMetadata: map[string]ProjectionMetadata{
+			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
+		},
+	})
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{NewID: func() string { return "sess_curated_resume" }})
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileBashPlus,
+		Policy: contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		},
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /knowledge_base/reference/guide.md", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read reference projection failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "cat /resources/checklists/plan.json", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("read resource projection failed: %v", err)
+	}
+	if _, err := manager.Execute(context.Background(), session.SessionID, "echo plan > /task_outputs/plan.txt", contract.ExecutionPolicy{}); err != nil {
+		t.Fatalf("write task output failed: %v", err)
+	}
+	adapter.UpsertCuratedEntry(CuratedEntry{
+		ID:          "plan-context",
+		Title:       "Plan Context",
+		Summary:     "Curated entry for the current plan workflow.",
+		SourcePaths: []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json", "/task_outputs/plan.txt"},
+	})
+
+	curatedPath := requireCuratedMemoryJSONPath(t, manager, session.SessionID)
+	beforeCurated, err := manager.Execute(context.Background(), session.SessionID, "cat "+curatedPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read curated view before checkpoint failed: %v", err)
+	}
+	beforeSnapshot := decodeCuratedMemorySnapshot(t, []byte(beforeCurated.Result.Stdout))
+
+	checkpoint, err := manager.Checkpoint(context.Background(), session.SessionID)
+	if err != nil {
+		t.Fatalf("checkpoint failed: %v", err)
+	}
+	if len(checkpoint.State.Opaque[adapter.AdapterID()]) == 0 {
+		t.Fatalf("checkpoint missing adapter opaque state")
+	}
+	if _, err := manager.Close(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("close failed: %v", err)
+	}
+	if _, err := manager.Resume(context.Background(), session.SessionID); err != nil {
+		t.Fatalf("resume failed: %v", err)
+	}
+
+	resumedCuratedPath := requireCuratedMemoryJSONPath(t, manager, session.SessionID)
+	if resumedCuratedPath != curatedPath {
+		t.Fatalf("curated view path drifted across resume: before=%q after=%q", curatedPath, resumedCuratedPath)
+	}
+	afterCurated, err := manager.Execute(context.Background(), session.SessionID, "cat "+resumedCuratedPath, contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read curated view after resume failed: %v", err)
+	}
+	afterSnapshot := decodeCuratedMemorySnapshot(t, []byte(afterCurated.Result.Stdout))
+	if beforeSnapshot.EntryCount != afterSnapshot.EntryCount {
+		t.Fatalf("curated entry count changed across resume: before=%d after=%d", beforeSnapshot.EntryCount, afterSnapshot.EntryCount)
+	}
+	if !reflect.DeepEqual(beforeSnapshot.SourcePaths, afterSnapshot.SourcePaths) {
+		t.Fatalf("curated source paths changed across resume: before=%v after=%v", beforeSnapshot.SourcePaths, afterSnapshot.SourcePaths)
+	}
+}
+
+type curatedMemorySnapshot struct {
+	EntryCount  int
+	SourcePaths []string
+}
+
+type projectionMaterializationFailure struct {
+	Code string `json:"code,omitempty"`
+}
+
+type projectionMaterialization struct {
+	State   string                            `json:"state"`
+	Reason  string                            `json:"reason,omitempty"`
+	Failure *projectionMaterializationFailure `json:"failure,omitempty"`
+}
+
+type projectionMaterializationRecord struct {
+	Path            string                     `json:"path"`
+	Materialization *projectionMaterialization `json:"materialization,omitempty"`
+}
+
+type projectionMaterializationView struct {
+	Documents []projectionMaterializationRecord `json:"documents,omitempty"`
+	Resources []projectionMaterializationRecord `json:"resources,omitempty"`
+	Skills    []projectionMaterializationRecord `json:"skills,omitempty"`
+}
+
+func requireCuratedMemoryJSONPath(t *testing.T, manager *runtimeengine.SessionManager, sessionID string) string {
+	t.Helper()
+	probe, err := manager.Execute(context.Background(), sessionID, "cat /memory/curated.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read /memory/curated.json failed: %v", err)
+	}
+	if probe.Result.ExitCode != 0 {
+		t.Fatalf("expected /memory/curated.json to exist, got %+v", probe.Result)
+	}
+	return "/memory/curated.json"
+}
+
+func decodeCuratedMemorySnapshot(t *testing.T, raw []byte) curatedMemorySnapshot {
+	t.Helper()
+	var payload any
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("decode curated memory view failed: %v", err)
+	}
+	entryCount, sourcePaths := collectCuratedEntrySources(payload)
+	if entryCount == 0 {
+		t.Fatalf("expected at least one curated entry, got payload=%s", strings.TrimSpace(string(raw)))
+	}
+	if len(sourcePaths) == 0 {
+		t.Fatalf("expected curated entries to contain source-path references, got payload=%s", strings.TrimSpace(string(raw)))
+	}
+	return curatedMemorySnapshot{
+		EntryCount:  entryCount,
+		SourcePaths: sourcePaths,
+	}
+}
+
+func collectCuratedEntrySources(payload any) (int, []string) {
+	unique := map[string]struct{}{}
+	entryCount := 0
+	var walk func(any)
+	walk = func(node any) {
+		switch typed := node.(type) {
+		case map[string]any:
+			paths := sourcePathsFromCuratedRecord(typed)
+			if len(paths) > 0 {
+				entryCount++
+				for _, pathValue := range paths {
+					unique[pathValue] = struct{}{}
+				}
+			}
+			for _, child := range typed {
+				walk(child)
+			}
+		case []any:
+			for _, child := range typed {
+				walk(child)
+			}
+		}
+	}
+	walk(payload)
+	paths := make([]string, 0, len(unique))
+	for pathValue := range unique {
+		paths = append(paths, pathValue)
+	}
+	sort.Strings(paths)
+	return entryCount, paths
+}
+
+func sourcePathsFromCuratedRecord(record map[string]any) []string {
+	keys := []string{"source_path", "source_paths", "sourcePath", "sourcePaths"}
+	paths := make([]string, 0)
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok {
+			continue
+		}
+		paths = append(paths, extractCuratedPaths(value)...)
+	}
+	return dedupeLines(paths)
+}
+
+func extractCuratedPaths(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		pathValue := strings.TrimSpace(typed)
+		if strings.HasPrefix(pathValue, "/") {
+			return []string{pathValue}
+		}
+	case []any:
+		paths := make([]string, 0, len(typed))
+		for _, item := range typed {
+			if text, ok := item.(string); ok {
+				pathValue := strings.TrimSpace(text)
+				if strings.HasPrefix(pathValue, "/") {
+					paths = append(paths, pathValue)
+				}
+			}
+		}
+		return dedupeLines(paths)
+	}
+	return nil
+}
+
+func extractObservationPaths(raw string) []string {
+	paths := make([]string, 0)
+	for _, line := range strings.Split(raw, "\n") {
+		value := strings.TrimSpace(line)
+		if value == "" {
+			continue
+		}
+		sep := strings.Index(value, ":")
+		if sep <= 0 || sep >= len(value)-1 {
+			continue
+		}
+		pathValue := strings.TrimSpace(value[sep+1:])
+		if strings.HasPrefix(pathValue, "/") {
+			paths = append(paths, pathValue)
+		}
+	}
+	return dedupeLines(paths)
+}
+
+func hasPathIntersection(left []string, right []string) bool {
+	for _, value := range left {
+		if containsLine(right, value) {
+			return true
+		}
+	}
+	return false
+}
+
 func decodeReferenceState(t *testing.T, raw []byte) sessionState {
 	t.Helper()
 	var state sessionState
@@ -527,6 +1358,15 @@ func decodeProjectionView(t *testing.T, raw []byte) projectionView {
 	return view
 }
 
+func decodeProjectionMaterializationView(t *testing.T, raw []byte) projectionMaterializationView {
+	t.Helper()
+	var view projectionMaterializationView
+	if err := json.Unmarshal(raw, &view); err != nil {
+		t.Fatalf("decode projection materialization view failed: %v", err)
+	}
+	return view
+}
+
 func decodeProjectionRecords(t *testing.T, raw []byte) []projectionRecord {
 	t.Helper()
 	var records []projectionRecord
@@ -545,4 +1385,164 @@ func requireProjectionRecord(t *testing.T, records []projectionRecord, target st
 	}
 	t.Fatalf("projection record %q not found in %+v", target, records)
 	return projectionRecord{}
+}
+
+func requireProjectionMaterializationRecord(t *testing.T, records []projectionMaterializationRecord, target string) projectionMaterializationRecord {
+	t.Helper()
+	for _, record := range records {
+		if record.Path == target {
+			return record
+		}
+	}
+	t.Fatalf("projection materialization record %q not found in %+v", target, records)
+	return projectionMaterializationRecord{}
+}
+
+func assertProjectionMaterializationStatePresent(t *testing.T, record projectionMaterializationRecord, label string) {
+	t.Helper()
+	if record.Materialization == nil {
+		t.Fatalf("%s materialization is missing for %+v", label, record)
+	}
+	if strings.TrimSpace(record.Materialization.State) == "" {
+		t.Fatalf("%s materialization state is empty for %+v", label, record.Materialization)
+	}
+}
+
+func assertProjectionMaterializationPartialOrError(t *testing.T, record projectionMaterializationRecord, label string) {
+	t.Helper()
+	assertProjectionMaterializationStatePresent(t, record, label)
+	state := strings.TrimSpace(record.Materialization.State)
+	if state != "partial" && state != "error" {
+		t.Fatalf("%s materialization state = %q, want partial or error", label, state)
+	}
+	if strings.TrimSpace(record.Materialization.Reason) == "" &&
+		(record.Materialization.Failure == nil || strings.TrimSpace(record.Materialization.Failure.Code) == "") {
+		t.Fatalf("%s partial/error materialization lacks machine-readable detail: %+v", label, record.Materialization)
+	}
+}
+
+func assertSkillProjectionMetadata(t *testing.T, record projectionRecord, source string, freshness string, eligibilityState string, eligibilityReason string, precedenceTier string, precedenceRank int, selected bool) {
+	t.Helper()
+	if record.Source != source || record.Freshness != freshness {
+		t.Fatalf("projection record metadata = %+v, want source=%q freshness=%q", record, source, freshness)
+	}
+	if record.Eligibility == nil {
+		t.Fatalf("projection record eligibility missing: %+v", record)
+	}
+	if record.Eligibility.State != eligibilityState || record.Eligibility.Reason != eligibilityReason {
+		t.Fatalf("projection record eligibility = %+v, want state=%q reason=%q", record.Eligibility, eligibilityState, eligibilityReason)
+	}
+	if record.Precedence == nil {
+		t.Fatalf("projection record precedence missing: %+v", record)
+	}
+	if record.Precedence.Tier != precedenceTier || record.Precedence.Rank != precedenceRank {
+		t.Fatalf("projection record precedence = %+v, want tier=%q rank=%d", record.Precedence, precedenceTier, precedenceRank)
+	}
+	if record.Selected != selected {
+		t.Fatalf("projection record selected = %v, want %v", record.Selected, selected)
+	}
+}
+
+func decodeProjectionRecordMaps(t *testing.T, raw []byte) []map[string]any {
+	t.Helper()
+	var records []map[string]any
+	if err := json.Unmarshal(raw, &records); err != nil {
+		t.Fatalf("decode projection record maps failed: %v", err)
+	}
+	return records
+}
+
+func requireProjectionRecordMap(t *testing.T, records []map[string]any, target string) map[string]any {
+	t.Helper()
+	for _, record := range records {
+		if strings.TrimSpace(mapStringField(t, record, "path")) == target {
+			return record
+		}
+	}
+	t.Fatalf("projection record map %q not found in %+v", target, records)
+	return nil
+}
+
+func requireSelectionMap(t *testing.T, record map[string]any) map[string]any {
+	t.Helper()
+	selectionValue, ok := record["selection"]
+	if !ok {
+		t.Fatalf("selection field missing in projection record: %+v", record)
+	}
+	selection, ok := selectionValue.(map[string]any)
+	if !ok {
+		t.Fatalf("selection field has unexpected type %T in projection record: %+v", selectionValue, record)
+	}
+	return selection
+}
+
+func mapStringField(t *testing.T, record map[string]any, key string) string {
+	t.Helper()
+	value, ok := record[key]
+	if !ok {
+		return ""
+	}
+	text, ok := value.(string)
+	if !ok {
+		t.Fatalf("field %q has unexpected type %T in record %+v", key, value, record)
+	}
+	return strings.TrimSpace(text)
+}
+
+func mapBoolField(record map[string]any, key string) bool {
+	value, ok := record[key]
+	if !ok {
+		return false
+	}
+	flag, ok := value.(bool)
+	if !ok {
+		return false
+	}
+	return flag
+}
+
+func readTieBreakSnapshot(t *testing.T, manager *runtimeengine.SessionManager, sessionID string) (winner string, loser string, scope string) {
+	t.Helper()
+	skillIndex, err := manager.Execute(context.Background(), sessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("read skills index failed: %v", err)
+	}
+	records := decodeProjectionRecordMaps(t, []byte(skillIndex.Result.Stdout))
+	alpha := requireProjectionRecordMap(t, records, "/skills/triage/alpha/SKILL.md")
+	beta := requireProjectionRecordMap(t, records, "/skills/triage/beta/SKILL.md")
+
+	alphaSelected := mapBoolField(alpha, "selected")
+	betaSelected := mapBoolField(beta, "selected")
+	if alphaSelected == betaSelected {
+		t.Fatalf("tie-break must choose exactly one winner: alpha_selected=%v beta_selected=%v", alphaSelected, betaSelected)
+	}
+
+	alphaSelection := requireSelectionMap(t, alpha)
+	betaSelection := requireSelectionMap(t, beta)
+	alphaScope := mapStringField(t, alphaSelection, "scope")
+	betaScope := mapStringField(t, betaSelection, "scope")
+	if alphaScope == "" || betaScope == "" {
+		t.Fatalf("tie-break selection scope must be explicit: alpha=%q beta=%q", alphaScope, betaScope)
+	}
+	if alphaScope != betaScope {
+		t.Fatalf("tie-break skills must share explicit scope: alpha=%q beta=%q", alphaScope, betaScope)
+	}
+	if mapStringField(t, alphaSelection, "mode") == "" || mapStringField(t, betaSelection, "mode") == "" {
+		t.Fatalf("tie-break selection mode must be explicit: alpha=%+v beta=%+v", alphaSelection, betaSelection)
+	}
+
+	if alphaSelected {
+		winner = "/skills/triage/alpha/SKILL.md"
+		loser = "/skills/triage/beta/SKILL.md"
+		if mapStringField(t, betaSelection, "reason") == "" {
+			t.Fatalf("tie-break loser must carry machine-readable reason: %+v", betaSelection)
+		}
+	} else {
+		winner = "/skills/triage/beta/SKILL.md"
+		loser = "/skills/triage/alpha/SKILL.md"
+		if mapStringField(t, alphaSelection, "reason") == "" {
+			t.Fatalf("tie-break loser must carry machine-readable reason: %+v", alphaSelection)
+		}
+	}
+	return winner, loser, alphaScope
 }

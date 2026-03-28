@@ -38,7 +38,7 @@
       ],
       "why_now": "The current long-run loop can misclassify actionable work as blocked when temporary-file creation fails transiently, and this repo is currently operating with less than 200 MiB free on `/System/Volumes/Data`, which makes that noise recurring rather than hypothetical.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -82,7 +82,7 @@
       ],
       "why_now": "The reference adapter now exposes source and freshness metadata, but freshness is still mostly a static label rather than a real lifecycle. Without explicit stale/live/snapshot transitions and refresh or invalidation seams, adapter-side realism stalls at the presentation layer and later benchmark review cannot distinguish fresh projections from merely renamed metadata.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -124,7 +124,7 @@
       ],
       "why_now": "Once freshness and refresh semantics exist, the next risk is false confidence: the benchmark and adapter tests can still pass while only string-matching a few happy-path fragments. This review slice makes evidence completeness part of the seam, not an afterthought.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -167,7 +167,7 @@
       ],
       "why_now": "Current workflow state is derived only from trace evidence. That is useful, but still too weak for a realistic non-core harness layer: adapters need a minimal explicit way to pin, override, or annotate workflow transitions without turning `/memory` into a writable scratch mount or leaking product workflow logic into core.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -210,7 +210,7 @@
       ],
       "why_now": "Explicit workflow transitions will only be valuable if the reference workload and gate logic actually depend on them. This closing review slice checks that the new control plane remains truthful, benchmark-visible, and still downstream from kernel contracts.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -253,7 +253,7 @@
       ],
       "why_now": "Session lifecycle is a core kernel contract, and `pkg/engine/runtime` still leaves the lowest coverage in `Execute` and `Resume` precisely where policy narrowing, adapter phases, and closed-session recovery interact.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -295,7 +295,7 @@
       ],
       "why_now": "The HTTP integration surface still sits at 71.1% coverage, and code inspection shows `decodeOptionalJSON`, `describePathMeta`, and path extraction around `include_meta` are only partially exercised even though higher-level harnesses depend on them.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -337,7 +337,7 @@
       ],
       "why_now": "`make check` is currently red on staticcheck findings, so the project's default evidence gate is already broken before any new kernel work begins.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -377,7 +377,7 @@
       ],
       "why_now": "The default workspace trust story depends on `agentfs` and `pathguard`, but those packages still have zero direct package coverage even though they own zone resolution and path-escape prevention.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -418,7 +418,7 @@
       ],
       "why_now": "The parser and script runner are core kernel surfaces, but heredoc branches and several parser failure paths remain effectively unexercised, which makes shell-level regressions easy to miss.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -460,7 +460,7 @@
       ],
       "why_now": "After one implementation slice and one review slice, the durable rules should be written down before the control plane grows further. Freshness states, refresh triggers, and managed `/memory` boundaries are adapter-facing contracts, and leaving them implicit invites drift across future adapters and benchmarks.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -501,7 +501,7 @@
       ],
       "why_now": "Entry adapters are not the architecture center, but they are still public integration surfaces; current coverage misses serve-mode branches, service wrappers, and include-meta fallback edges.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -541,7 +541,7 @@
       ],
       "why_now": "The default workspace still depends on `agentfs` for trusted writes, but direct package coverage remains only 41.5% and every mutator path (`WriteFile`, `AppendFile`, `EditFile`, `MakeDir`, `RemoveFile`) is still uncovered.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -581,7 +581,7 @@
       ],
       "why_now": "Agent inspect/search loops rely on `agentfs` path normalization and search expansion, but `RequireAbsolutePath`, `ResolveSearchPaths`, `CollectFilesUnder`, `toVirtualPath`, and `NewDefaultFilesystem` are still uncovered direct behavior.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -623,7 +623,7 @@
       ],
       "why_now": "Entry surfaces are downstream from the kernel, but they are still public operator paths; `pkg/cmd` and `cmd/simshd` both remain at 0.0% package coverage, so launcher drift can go unnoticed until manual use.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -667,7 +667,7 @@
       ],
       "why_now": "The default workspace is the agent's main surface, yet `pkg/builtin` still sits at 66.8% coverage and the least-covered logic is concentrated in `ls`, `man`, and `json`, which drive directory inspection, command discovery, and structured querying.",
       "updates": [
-        "2026-03-31T16:13:51Z synced from bk-execution-table"
+        "2026-04-01T18:52:29Z synced from bk-execution-table"
       ],
       "managed_by": "execution-table",
       "confidence": 0.99,
@@ -682,5 +682,5 @@
       "source_ref": "pkg/builtin/op_listing.go"
     }
   ],
-  "updated_at": "2026-03-31T16:13:51Z"
+  "updated_at": "2026-04-01T18:52:29Z"
 }

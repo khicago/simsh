@@ -74,15 +74,20 @@ Ship contract tests and at least one end-to-end adapter-backed workload that pro
   - `updated`: control-plane-authored projection that diverged from its prior snapshot
 - Refresh or invalidation SHOULD happen through explicit adapter control-plane or lifecycle hooks, not through implicit writes to read-only projected mounts.
 - If a refresh does not complete, callers should still be able to tell whether the last visible state is `stale`, `snapshot`, or a failed/absent projection.
+- Freshness and materialization SHOULD stay separate. Freshness answers “how up to date is this projection?” while materialization answers “is this projection fully present, partial, or failed right now?”.
 
 ### Error Handling
 - Projection failures SHOULD surface as explicit errors or absent paths, not silent partial files.
 - If partial materialization is unavoidable, the partial state MUST be detectable by the caller.
+- A minimal current reference shape is per-record machine-readable materialization metadata in namespace indexes and `/memory/projections.json`, with `failed` records remaining visible in metadata even if their file bodies are absent from the mounted tree.
 
 ### Source vs Derived Data
 - Mirrored source artifacts belong in source-oriented namespaces such as `/knowledge_base`.
 - Agent-authored or transformed artifacts belong in `/task_outputs`.
 - Adapters SHOULD NOT blur those categories to save plumbing work.
+- Skill projections under `/skills` SHOULD stay read-only and expose eligibility or precedence as metadata, not as implicit side effects on mount writability.
+- If adapters expose skill selection, they SHOULD make the competition boundary and loser or winner reason explicit. A bare `selected` bit is acceptable only as a compatibility surface, not as the whole truth contract.
+- A minimal current reference shape is: explicit adapter-defined selection scope on competing skills, derived `selection` provenance in namespace indexes and `/memory/projections.json`, and no path-derived fallback competition semantics.
 
 ## Memory Lifecycle Protocol
 Adapters that expose session memory SHOULD implement a standard lifecycle even if the internal storage differs.
@@ -100,6 +105,7 @@ Adapters that expose session memory SHOULD implement a standard lifecycle even i
 - Adapters SHOULD treat any `/memory` projection as a view over managed state, not as an ungoverned writable scratch mount.
 - When `/memory` mirrors projection metadata, keep raw observations, projected indexes, curated summaries, and workflow views conceptually separate even if they share one mount namespace.
 - `/memory` MAY expose freshness summaries and workflow status, but those views are evidence surfaces, not the source of truth for control-plane mutation.
+- A minimal current reference shape for explicit curation is a structured read-only view such as `/memory/curated.json`, paired with an optional human-readable mirror such as `/memory/curated.md`, where each curated entry retains stable ids and source-path provenance.
 
 ## Trace Consumption Contract
 - Adapters MUST document which trace fields they consume and why.

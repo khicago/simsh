@@ -14,7 +14,9 @@ Current scenario classes:
 - mount and synthetic capability boundaries
 - command namespace consistency
 - trace-consumable planning
-- adapter-backed projection and managed-memory lifecycle, including projection invalidation, refresh, and workflow-transition provenance
+- adapter-backed projection and managed-memory lifecycle, including projection invalidation, refresh, workflow-transition provenance, and structural per-item projection materialization/failure-state assertions for docs/resources/skills (not message-only checks)
+  plus explicit `/skills` selection-provenance assertions (scope, mode, and loser/ineligible reason) and deterministic precedence outcomes
+  plus a generic curated-memory entry assertion with explicit source-path references
 - cancel and timeout interruption
 
 Current metric gates:

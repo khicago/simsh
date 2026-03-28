@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "feat_id": "f-20260401-skills-selection-precedence-truth",
+  "updated_at": "2026-04-01T18:50:25Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Make /skills selection and precedence truth explicit and benchmarked",
+      "status": "done",
+      "summary": "Update adapter/docs SSOT, derive /skills selection from explicit eligibility and precedence inputs, then benchmark and review the contract until no material findings remain.",
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-01T18:48:44Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
+      "last_commit_hash": null,
+      "started_at": "2026-04-01T18:19:16Z",
+      "finished_at": "2026-04-01T18:49:54Z",
+      "updated_at": "2026-04-01T18:49:54Z",
+      "notes": []
+    }
+  ]
+}

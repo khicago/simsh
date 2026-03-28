@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-03-23T17:55:42Z",
+  "updated_at": "2026-04-01T18:50:25Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -195,6 +195,15 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-03-23T17:55:42Z"
+    },
+    {
+      "feat_id": "f-20260401-skills-selection-precedence-truth",
+      "title": "Skills selection and precedence truth",
+      "status": "archived",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-04-01T18:50:25Z"
     }
   ]
 }

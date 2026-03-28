@@ -18,12 +18,48 @@ type Options struct {
 	DocumentMetadata map[string]ProjectionMetadata
 	Resources        map[string]string
 	ResourceMetadata map[string]ProjectionMetadata
+	Skills           map[string]string
+	SkillMetadata    map[string]SkillMetadata
+	Curated          []CuratedEntry
 	Workflows        []WorkflowSpec
 }
 
 type ProjectionMetadata struct {
-	Source    string `json:"source,omitempty"`
-	Freshness string `json:"freshness,omitempty"`
+	Source          string                    `json:"source,omitempty"`
+	Freshness       string                    `json:"freshness,omitempty"`
+	Materialization ProjectionMaterialization `json:"materialization"`
+}
+
+type ProjectionMaterialization struct {
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type SkillMetadata struct {
+	Source         string           `json:"source,omitempty"`
+	Freshness      string           `json:"freshness,omitempty"`
+	Eligibility    SkillEligibility `json:"eligibility"`
+	Precedence     SkillPrecedence  `json:"precedence"`
+	SelectionScope string           `json:"selection_scope,omitempty"`
+	Selected       bool             `json:"selected,omitempty"`
+}
+
+type SkillEligibility struct {
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type SkillPrecedence struct {
+	Tier string `json:"tier"`
+	Rank int    `json:"rank"`
+}
+
+type SkillSelection struct {
+	State      string `json:"state"`
+	Mode       string `json:"mode,omitempty"`
+	Scope      string `json:"scope,omitempty"`
+	Reason     string `json:"reason,omitempty"`
+	WinnerPath string `json:"winner_path,omitempty"`
 }
 
 const (
@@ -32,6 +68,33 @@ const (
 	projectionFreshnessStale     = "stale"
 	projectionFreshnessUpdated   = "updated"
 	projectionFreshnessGenerated = "generated"
+
+	projectionMaterializationMaterialized = "materialized"
+	projectionMaterializationPartial      = "partial"
+	projectionMaterializationFailed       = "failed"
+
+	skillEligibilityEligible   = "eligible"
+	skillEligibilityIneligible = "ineligible"
+	skillEligibilityUnknown    = "unknown"
+
+	skillPrecedenceTierWorkspace = "workspace"
+	skillPrecedenceTierUser      = "user"
+	skillPrecedenceTierBundled   = "bundled"
+
+	skillSelectionStateSelected    = "selected"
+	skillSelectionStateNotSelected = "not_selected"
+
+	skillSelectionModeDerived  = "derived"
+	skillSelectionModeExplicit = "explicit"
+
+	skillSelectionReasonExplicitSelected    = "explicit_selected"
+	skillSelectionReasonExplicitNotSelected = "explicit_not_selected"
+	skillSelectionReasonUnknownEligibility  = "unknown_eligibility"
+	skillSelectionReasonIneligible          = "ineligible"
+	skillSelectionReasonHighestPrecedence   = "highest_precedence"
+	skillSelectionReasonHigherPrecedence    = "higher_precedence_selected"
+	skillSelectionReasonTieBreakPathOrder   = "tie_breaker_path_order"
+	skillSelectionReasonNoEligibleWinner    = "no_eligible_winner"
 )
 
 type WorkflowSpec struct {
@@ -42,10 +105,21 @@ type WorkflowSpec struct {
 	ExpectedOutputs []string `json:"expected_outputs,omitempty"`
 }
 
+type CuratedEntry struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title,omitempty"`
+	Summary     string   `json:"summary,omitempty"`
+	Content     string   `json:"content,omitempty"`
+	Source      string   `json:"source,omitempty"`
+	SourcePaths []string `json:"source_paths,omitempty"`
+}
+
 type Adapter struct {
 	mu              sync.RWMutex
 	documents       map[string]projectionEntry
 	resources       map[string]projectionEntry
+	skills          map[string]skillEntry
+	curated         map[string]curatedEntry
 	workflows       []WorkflowSpec
 	workflowStatus  map[string]workflowStatusOverride
 	projectionError error
@@ -57,27 +131,35 @@ type projectionEntry struct {
 }
 
 type projectionRecord struct {
-	Path      string `json:"path"`
-	Name      string `json:"name"`
-	Namespace string `json:"namespace"`
-	Kind      string `json:"kind"`
-	Source    string `json:"source"`
-	Freshness string `json:"freshness"`
+	Path            string                    `json:"path"`
+	Name            string                    `json:"name"`
+	Namespace       string                    `json:"namespace"`
+	Kind            string                    `json:"kind"`
+	Source          string                    `json:"source"`
+	Freshness       string                    `json:"freshness"`
+	Materialization ProjectionMaterialization `json:"materialization"`
+	Eligibility     *SkillEligibility         `json:"eligibility,omitempty"`
+	Precedence      *SkillPrecedence          `json:"precedence,omitempty"`
+	Selection       *SkillSelection           `json:"selection,omitempty"`
+	Selected        bool                      `json:"selected,omitempty"`
 }
 
 type projectionView struct {
 	Documents []projectionRecord `json:"documents,omitempty"`
 	Resources []projectionRecord `json:"resources,omitempty"`
+	Skills    []projectionRecord `json:"skills,omitempty"`
 }
 
 type sessionState struct {
-	Observations   []string       `json:"observations"`
-	Freshness      string         `json:"freshness"`
-	ReadRefs       []string       `json:"read_refs,omitempty"`
-	ReadResources  []string       `json:"read_resources,omitempty"`
-	WrittenOutputs []string       `json:"written_outputs,omitempty"`
-	DeniedPaths    []string       `json:"denied_paths,omitempty"`
-	Workflows      []workflowView `json:"workflows,omitempty"`
+	Observations   []string        `json:"observations"`
+	Freshness      string          `json:"freshness"`
+	ReadRefs       []string        `json:"read_refs,omitempty"`
+	ReadResources  []string        `json:"read_resources,omitempty"`
+	ReadSkills     []string        `json:"read_skills,omitempty"`
+	WrittenOutputs []string        `json:"written_outputs,omitempty"`
+	DeniedPaths    []string        `json:"denied_paths,omitempty"`
+	Curated        []curatedRecord `json:"curated,omitempty"`
+	Workflows      []workflowView  `json:"workflows,omitempty"`
 }
 
 type workflowView struct {
@@ -95,6 +177,36 @@ type workflowView struct {
 type workflowStatusOverride struct {
 	Status string `json:"status"`
 	Reason string `json:"reason,omitempty"`
+}
+
+type skillEntry struct {
+	Content  string        `json:"content"`
+	Metadata SkillMetadata `json:"metadata"`
+}
+
+type skillSelectionOutcome struct {
+	Selected  bool
+	Selection *SkillSelection
+}
+
+type curatedEntry struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary,omitempty"`
+	Content     string   `json:"content,omitempty"`
+	Source      string   `json:"source"`
+	SourcePaths []string `json:"source_paths"`
+	Revision    int      `json:"revision"`
+}
+
+type curatedRecord struct {
+	ID          string   `json:"id"`
+	Title       string   `json:"title"`
+	Summary     string   `json:"summary,omitempty"`
+	Content     string   `json:"content,omitempty"`
+	Source      string   `json:"source"`
+	SourcePaths []string `json:"source_paths"`
+	Revision    int      `json:"revision"`
 }
 
 func New(opts Options) *Adapter {
@@ -116,6 +228,23 @@ func New(opts Options) *Adapter {
 			Metadata: normalizeProjectionMetadata(resourceMetadata[name], "resource_bundle", "snapshot"),
 		}
 	}
+	skillMetadata := normalizeSkillMetadataMap(opts.SkillMetadata, normalizeSkillName)
+	skills := map[string]skillEntry{}
+	for key, value := range opts.Skills {
+		name := normalizeSkillName(key)
+		skills[name] = skillEntry{
+			Content:  value,
+			Metadata: normalizeSkillMetadata(skillMetadata[name], "skill_bundle", projectionFreshnessSnapshot),
+		}
+	}
+	curated := map[string]curatedEntry{}
+	for _, value := range opts.Curated {
+		entry, ok := normalizeCuratedEntry(value, "curation_seed")
+		if !ok {
+			continue
+		}
+		upsertCuratedEntry(curated, entry)
+	}
 	workflows := make([]WorkflowSpec, 0, len(opts.Workflows))
 	for _, workflow := range opts.Workflows {
 		if normalized, ok := normalizeWorkflowSpec(workflow); ok {
@@ -125,6 +254,8 @@ func New(opts Options) *Adapter {
 	return &Adapter{
 		documents:      documents,
 		resources:      resources,
+		skills:         skills,
+		curated:        curated,
 		workflows:      workflows,
 		workflowStatus: map[string]workflowStatusOverride{},
 	}
@@ -148,6 +279,7 @@ func (a *Adapter) ObserveExecution(ctx context.Context, session contract.Session
 	state.Observations = dedupeLines(append(state.Observations, summarizeTrace(result.Trace)...))
 	state.ReadRefs = mergePaths(state.ReadRefs, collectPrefixedPaths(result.Trace.ReadPaths, "/knowledge_base/reference/"))
 	state.ReadResources = mergePaths(state.ReadResources, collectPrefixedPaths(result.Trace.ReadPaths, "/resources/"))
+	state.ReadSkills = mergePaths(state.ReadSkills, collectPrefixedPaths(result.Trace.ReadPaths, "/skills/"))
 	state.WrittenOutputs = mergePaths(state.WrittenOutputs, collectOutputPaths(result.Trace))
 	state.DeniedPaths = mergePaths(state.DeniedPaths, result.Trace.DeniedPaths)
 	state.Workflows = a.workflowViews(state)
@@ -208,6 +340,18 @@ func (a *Adapter) InvalidateResource(name string) {
 	invalidateProjectionEntry(a.resources, normalizeResourceName(name))
 }
 
+func (a *Adapter) SetDocumentMaterialization(name string, state string, reason string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	setProjectionMaterializationInMap(a.documents, normalizeDocumentName(name), state, reason)
+}
+
+func (a *Adapter) SetResourceMaterialization(name string, state string, reason string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	setProjectionMaterializationInMap(a.resources, normalizeResourceName(name), state, reason)
+}
+
 func (a *Adapter) UpsertWorkflow(spec WorkflowSpec) {
 	normalized, ok := normalizeWorkflowSpec(spec)
 	if !ok {
@@ -257,7 +401,31 @@ func (a *Adapter) SetProjectionError(err error) {
 	a.projectionError = err
 }
 
+func (a *Adapter) UpsertCuratedEntry(entry CuratedEntry) {
+	normalized, ok := normalizeCuratedEntry(entry, "control_plane")
+	if !ok {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.curated == nil {
+		a.curated = map[string]curatedEntry{}
+	}
+	upsertCuratedEntry(a.curated, normalized)
+}
+
+func (a *Adapter) RemoveCuratedEntry(id string) {
+	id = normalizeCuratedID(id)
+	if id == "" {
+		return
+	}
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	delete(a.curated, id)
+}
+
 func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjection, error) {
+	state.Curated = mergeCuratedRecords(state.Curated, a.curatedRecords())
 	if state.Workflows == nil {
 		state.Workflows = a.workflowViews(state)
 	}
@@ -267,6 +435,8 @@ func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjectio
 	}
 	docs := a.documentRecords()
 	resources := a.resourceRecords()
+	skills := a.skillRecords()
+	curated := a.curatedRecords()
 	knowledgeMount, err := a.knowledgeMount(docs)
 	if err != nil {
 		return contract.AdapterProjection{}, err
@@ -279,7 +449,14 @@ func (a *Adapter) buildProjection(state sessionState) (contract.AdapterProjectio
 	if resourceMount != nil {
 		mounts = append(mounts, resourceMount)
 	}
-	memoryMount, err := mount.NewStaticMount("/memory", "memory", memoryViewFiles(state, raw, docs, resources))
+	skillMount, err := a.skillMount(skills)
+	if err != nil {
+		return contract.AdapterProjection{}, err
+	}
+	if skillMount != nil {
+		mounts = append(mounts, skillMount)
+	}
+	memoryMount, err := mount.NewStaticMount("/memory", "memory", memoryViewFiles(state, raw, docs, resources, skills, curated))
 	if err != nil {
 		return contract.AdapterProjection{}, err
 	}
@@ -309,9 +486,15 @@ func (a *Adapter) knowledgeMount(records []projectionRecord) (contract.VirtualMo
 			Kind:      "document",
 			Source:    "adapter_default",
 			Freshness: "generated",
+			Materialization: ProjectionMaterialization{
+				State: projectionMaterializationMaterialized,
+			},
 		}}
 	}
 	for name, entry := range a.documents {
+		if !shouldMaterializeProjection(entry.Metadata.Materialization) {
+			continue
+		}
 		files["/knowledge_base/reference/"+name] = entry.Content
 	}
 	if raw, err := json.MarshalIndent(records, "", "  "); err == nil {
@@ -331,12 +514,34 @@ func (a *Adapter) resourceMount(records []projectionRecord) (contract.VirtualMou
 	}
 	files := make(map[string]string, len(a.resources)+1)
 	for name, entry := range a.resources {
+		if !shouldMaterializeProjection(entry.Metadata.Materialization) {
+			continue
+		}
 		files["/resources/"+name] = entry.Content
 	}
 	if raw, err := json.MarshalIndent(records, "", "  "); err == nil {
 		files["/resources/_index.json"] = string(raw)
 	}
 	return mount.NewStaticMount("/resources", "resource", files)
+}
+
+func (a *Adapter) skillMount(records []projectionRecord) (contract.VirtualMount, error) {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if a.projectionError != nil {
+		return nil, a.projectionError
+	}
+	if len(a.skills) == 0 {
+		return nil, nil
+	}
+	files := make(map[string]string, len(a.skills)+1)
+	for name, entry := range a.skills {
+		files["/skills/"+name] = entry.Content
+	}
+	if raw, err := json.MarshalIndent(records, "", "  "); err == nil {
+		files["/skills/_index.json"] = string(raw)
+	}
+	return mount.NewStaticMount("/skills", "skill", files)
 }
 
 func (a *Adapter) documentRecords() []projectionRecord {
@@ -351,14 +556,70 @@ func (a *Adapter) resourceRecords() []projectionRecord {
 	return projectionRecordsFromMap(a.resources, "/resources", "resources", "resource")
 }
 
+func (a *Adapter) skillRecords() []projectionRecord {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.skills) == 0 {
+		return nil
+	}
+	outcomes := deriveSkillSelectionOutcomes(a.skills)
+	out := make([]projectionRecord, 0, len(a.skills))
+	for name, entry := range a.skills {
+		eligibility := entry.Metadata.Eligibility
+		precedence := entry.Metadata.Precedence
+		outcome := outcomes[name]
+		out = append(out, projectionRecord{
+			Path:      path.Join("/skills", name),
+			Name:      name,
+			Namespace: "skills",
+			Kind:      "skill",
+			Source:    entry.Metadata.Source,
+			Freshness: entry.Metadata.Freshness,
+			Materialization: ProjectionMaterialization{
+				State: projectionMaterializationMaterialized,
+			},
+			Eligibility: &eligibility,
+			Precedence:  &precedence,
+			Selection:   outcome.Selection,
+			Selected:    outcome.Selected,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
+func (a *Adapter) curatedRecords() []curatedRecord {
+	a.mu.RLock()
+	defer a.mu.RUnlock()
+	if len(a.curated) == 0 {
+		return nil
+	}
+	out := make([]curatedRecord, 0, len(a.curated))
+	for _, entry := range a.curated {
+		out = append(out, curatedRecord{
+			ID:          entry.ID,
+			Title:       entry.Title,
+			Summary:     entry.Summary,
+			Content:     entry.Content,
+			Source:      entry.Source,
+			SourcePaths: append([]string(nil), entry.SourcePaths...),
+			Revision:    entry.Revision,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
 func (a *Adapter) stateFromSession(session contract.Session, freshness string) sessionState {
 	state := sessionState{
 		Freshness: freshness,
+		Curated:   a.curatedRecords(),
 		Workflows: a.workflowViews(sessionState{}),
 	}
 	if raw := session.State.Opaque[a.AdapterID()]; len(raw) > 0 {
 		_ = json.Unmarshal(raw, &state)
 		state.Freshness = freshness
+		state.Curated = mergeCuratedRecords(state.Curated, a.curatedRecords())
 		state.Workflows = a.workflowViews(state)
 	}
 	return state
@@ -372,6 +633,8 @@ func summarizeTrace(trace contract.ExecutionTrace) []string {
 			lines = append(lines, fmt.Sprintf("read-ref:%s", pathValue))
 		case strings.HasPrefix(pathValue, "/resources/"):
 			lines = append(lines, fmt.Sprintf("read-resource:%s", pathValue))
+		case strings.HasPrefix(pathValue, "/skills/"):
+			lines = append(lines, fmt.Sprintf("read-skill:%s", pathValue))
 		}
 	}
 	for _, group := range [][]string{trace.WrittenPaths, trace.EditedPaths, trace.AppendedPaths} {
@@ -421,6 +684,17 @@ func normalizeResourceName(name string) string {
 	return normalizeProjectionName(name, "resource.txt")
 }
 
+func normalizeSkillName(name string) string {
+	value := normalizeProjectionName(name, "default/SKILL.md")
+	if value == "default/SKILL.md" {
+		return value
+	}
+	if path.Ext(value) == "" {
+		value = path.Join(value, "SKILL.md")
+	}
+	return value
+}
+
 func normalizeProjectionName(name string, fallback string) string {
 	value := strings.TrimSpace(name)
 	if value == "" {
@@ -433,6 +707,60 @@ func normalizeProjectionName(name string, fallback string) string {
 	return cleaned
 }
 
+func normalizeCuratedID(raw string) string {
+	return normalizeProjectionName(raw, "")
+}
+
+func normalizeCuratedSourcePaths(paths []string) []string {
+	out := make([]string, 0, len(paths))
+	for _, raw := range paths {
+		value := strings.TrimSpace(raw)
+		if value == "" {
+			continue
+		}
+		if !strings.HasPrefix(value, "/") {
+			value = "/" + value
+		}
+		value = path.Clean(value)
+		if value == "/" {
+			continue
+		}
+		out = append(out, value)
+	}
+	return dedupeLines(out)
+}
+
+func normalizeCuratedEntry(entry CuratedEntry, defaultSource string) (curatedEntry, bool) {
+	id := normalizeCuratedID(entry.ID)
+	if id == "" {
+		return curatedEntry{}, false
+	}
+	sourcePaths := normalizeCuratedSourcePaths(entry.SourcePaths)
+	if len(sourcePaths) == 0 {
+		return curatedEntry{}, false
+	}
+	title := strings.TrimSpace(entry.Title)
+	if title == "" {
+		title = id
+	}
+	source := strings.TrimSpace(entry.Source)
+	if source == "" {
+		source = defaultSource
+	}
+	if source == "" {
+		source = "control_plane"
+	}
+	return curatedEntry{
+		ID:          id,
+		Title:       title,
+		Summary:     strings.TrimSpace(entry.Summary),
+		Content:     strings.TrimSpace(entry.Content),
+		Source:      source,
+		SourcePaths: sourcePaths,
+		Revision:    1,
+	}, true
+}
+
 func normalizeProjectionMetadata(meta ProjectionMetadata, defaultSource string, defaultFreshness string) ProjectionMetadata {
 	source := strings.TrimSpace(meta.Source)
 	if source == "" {
@@ -443,9 +771,276 @@ func normalizeProjectionMetadata(meta ProjectionMetadata, defaultSource string, 
 		freshness = normalizeProjectionFreshness(defaultFreshness)
 	}
 	return ProjectionMetadata{
-		Source:    source,
-		Freshness: freshness,
+		Source:          source,
+		Freshness:       freshness,
+		Materialization: normalizeProjectionMaterialization(meta.Materialization, projectionMaterializationMaterialized),
 	}
+}
+
+func normalizeProjectionMaterialization(raw ProjectionMaterialization, defaultState string) ProjectionMaterialization {
+	state := normalizeProjectionMaterializationState(raw.State)
+	if state == "" {
+		state = normalizeProjectionMaterializationState(defaultState)
+	}
+	reason := strings.TrimSpace(raw.Reason)
+	if state == projectionMaterializationMaterialized {
+		reason = ""
+	}
+	return ProjectionMaterialization{
+		State:  state,
+		Reason: reason,
+	}
+}
+
+func normalizeProjectionMaterializationState(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case projectionMaterializationMaterialized,
+		projectionMaterializationPartial,
+		projectionMaterializationFailed:
+		return strings.TrimSpace(raw)
+	default:
+		return ""
+	}
+}
+
+func normalizeSkillMetadata(meta SkillMetadata, defaultSource string, defaultFreshness string) SkillMetadata {
+	source := strings.TrimSpace(meta.Source)
+	if source == "" {
+		source = defaultSource
+	}
+	freshness := normalizeProjectionFreshness(meta.Freshness)
+	if freshness == "" {
+		freshness = normalizeProjectionFreshness(defaultFreshness)
+	}
+	eligibility := normalizeSkillEligibility(meta.Eligibility)
+	if eligibility.State == "" {
+		eligibility.State = skillEligibilityUnknown
+	}
+	precedence := normalizeSkillPrecedence(meta.Precedence)
+	if precedence.Tier == "" {
+		precedence.Tier = skillPrecedenceTierBundled
+	}
+	if precedence.Rank == 0 && strings.TrimSpace(meta.Precedence.Tier) == "" {
+		precedence.Rank = 100
+	}
+	selectionScope := normalizeSelectionScope(meta.SelectionScope)
+	selected := meta.Selected
+	if eligibility.State != skillEligibilityEligible {
+		selected = false
+	}
+	return SkillMetadata{
+		Source:         source,
+		Freshness:      freshness,
+		Eligibility:    eligibility,
+		Precedence:     precedence,
+		SelectionScope: selectionScope,
+		Selected:       selected,
+	}
+}
+
+func normalizeSelectionScope(raw string) string {
+	return normalizeProjectionName(raw, "")
+}
+
+func normalizeSkillEligibility(raw SkillEligibility) SkillEligibility {
+	return SkillEligibility{
+		State:  normalizeSkillEligibilityState(raw.State),
+		Reason: strings.TrimSpace(raw.Reason),
+	}
+}
+
+func normalizeSkillEligibilityState(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case skillEligibilityEligible,
+		skillEligibilityIneligible,
+		skillEligibilityUnknown:
+		return strings.TrimSpace(raw)
+	default:
+		return ""
+	}
+}
+
+func normalizeSkillPrecedence(raw SkillPrecedence) SkillPrecedence {
+	rank := raw.Rank
+	if rank < 0 {
+		rank = 0
+	}
+	return SkillPrecedence{
+		Tier: normalizeSkillPrecedenceTier(raw.Tier),
+		Rank: rank,
+	}
+}
+
+func normalizeSkillPrecedenceTier(raw string) string {
+	switch strings.TrimSpace(raw) {
+	case skillPrecedenceTierWorkspace,
+		skillPrecedenceTierUser,
+		skillPrecedenceTierBundled:
+		return strings.TrimSpace(raw)
+	default:
+		return ""
+	}
+}
+
+func deriveSkillSelectionOutcomes(entries map[string]skillEntry) map[string]skillSelectionOutcome {
+	outcomes := make(map[string]skillSelectionOutcome, len(entries))
+	scopes := make(map[string][]string)
+	for name, entry := range entries {
+		meta := entry.Metadata
+		if meta.SelectionScope == "" {
+			selected := meta.Selected && meta.Eligibility.State == skillEligibilityEligible
+			state := skillSelectionStateNotSelected
+			reason := skillSelectionReasonExplicitNotSelected
+			if selected {
+				state = skillSelectionStateSelected
+				reason = skillSelectionReasonExplicitSelected
+			} else if meta.Eligibility.State == skillEligibilityIneligible {
+				reason = skillSelectionReasonIneligible
+			} else if meta.Eligibility.State == skillEligibilityUnknown {
+				reason = skillSelectionReasonUnknownEligibility
+			}
+			outcomes[name] = skillSelectionOutcome{
+				Selected: selected,
+				Selection: &SkillSelection{
+					State:  state,
+					Mode:   skillSelectionModeExplicit,
+					Reason: reason,
+				},
+			}
+			continue
+		}
+		scopes[meta.SelectionScope] = append(scopes[meta.SelectionScope], name)
+	}
+	for scope, names := range scopes {
+		sort.Slice(names, func(i, j int) bool {
+			return compareSkillSelectionCandidate(names[i], entries[names[i]].Metadata, names[j], entries[names[j]].Metadata) < 0
+		})
+		winnerName, hasWinner := selectSkillWinner(names, entries)
+		for _, name := range names {
+			meta := entries[name].Metadata
+			if meta.Eligibility.State != skillEligibilityEligible {
+				outcomes[name] = skillSelectionOutcome{
+					Selected: false,
+					Selection: &SkillSelection{
+						State:  skillSelectionStateNotSelected,
+						Mode:   skillSelectionModeDerived,
+						Scope:  scope,
+						Reason: skillSelectionReasonIneligible,
+					},
+				}
+				continue
+			}
+			if hasWinner && name == winnerName {
+				outcomes[name] = skillSelectionOutcome{
+					Selected: true,
+					Selection: &SkillSelection{
+						State:  skillSelectionStateSelected,
+						Mode:   skillSelectionModeDerived,
+						Scope:  scope,
+						Reason: winnerSelectionReason(name, names, entries),
+					},
+				}
+				continue
+			}
+			outcomes[name] = skillSelectionOutcome{
+				Selected: false,
+				Selection: &SkillSelection{
+					State:      skillSelectionStateNotSelected,
+					Mode:       skillSelectionModeDerived,
+					Scope:      scope,
+					Reason:     loserSelectionReason(name, winnerName, entries),
+					WinnerPath: skillSelectionWinnerPath(winnerName),
+				},
+			}
+		}
+	}
+	return outcomes
+}
+
+func selectSkillWinner(names []string, entries map[string]skillEntry) (string, bool) {
+	for _, name := range names {
+		if entries[name].Metadata.Eligibility.State == skillEligibilityEligible {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+func compareSkillSelectionCandidate(leftName string, left SkillMetadata, rightName string, right SkillMetadata) int {
+	leftEligible := left.Eligibility.State == skillEligibilityEligible
+	rightEligible := right.Eligibility.State == skillEligibilityEligible
+	switch {
+	case leftEligible && !rightEligible:
+		return -1
+	case !leftEligible && rightEligible:
+		return 1
+	}
+	leftTier := skillPrecedenceTierWeight(left.Precedence.Tier)
+	rightTier := skillPrecedenceTierWeight(right.Precedence.Tier)
+	switch {
+	case leftTier < rightTier:
+		return -1
+	case leftTier > rightTier:
+		return 1
+	}
+	switch {
+	case left.Precedence.Rank < right.Precedence.Rank:
+		return -1
+	case left.Precedence.Rank > right.Precedence.Rank:
+		return 1
+	}
+	return strings.Compare(leftName, rightName)
+}
+
+func skillPrecedenceTierWeight(tier string) int {
+	switch tier {
+	case skillPrecedenceTierWorkspace:
+		return 0
+	case skillPrecedenceTierUser:
+		return 1
+	case skillPrecedenceTierBundled:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func winnerSelectionReason(winnerName string, orderedNames []string, entries map[string]skillEntry) string {
+	for _, name := range orderedNames {
+		if name == winnerName {
+			continue
+		}
+		meta := entries[name].Metadata
+		if meta.Eligibility.State != skillEligibilityEligible {
+			continue
+		}
+		if sameSkillPrecedence(entries[winnerName].Metadata.Precedence, meta.Precedence) {
+			return skillSelectionReasonTieBreakPathOrder
+		}
+		break
+	}
+	return skillSelectionReasonHighestPrecedence
+}
+
+func loserSelectionReason(name string, winnerName string, entries map[string]skillEntry) string {
+	if winnerName == "" {
+		return skillSelectionReasonNoEligibleWinner
+	}
+	if sameSkillPrecedence(entries[name].Metadata.Precedence, entries[winnerName].Metadata.Precedence) {
+		return skillSelectionReasonTieBreakPathOrder
+	}
+	return skillSelectionReasonHigherPrecedence
+}
+
+func sameSkillPrecedence(left SkillPrecedence, right SkillPrecedence) bool {
+	return left.Tier == right.Tier && left.Rank == right.Rank
+}
+
+func skillSelectionWinnerPath(name string) string {
+	if strings.TrimSpace(name) == "" {
+		return ""
+	}
+	return path.Join("/skills", name)
 }
 
 func normalizeProjectionFreshness(raw string) string {
@@ -480,11 +1075,13 @@ func refreshProjectionEntry(existing projectionEntry, content string, meta Proje
 	if freshness == "" {
 		freshness = projectionFreshnessLive
 	}
+	materialization := normalizeProjectionMaterialization(meta.Materialization, projectionMaterializationMaterialized)
 	return projectionEntry{
 		Content: content,
 		Metadata: ProjectionMetadata{
-			Source:    source,
-			Freshness: freshness,
+			Source:          source,
+			Freshness:       freshness,
+			Materialization: materialization,
 		},
 	}
 }
@@ -502,15 +1099,96 @@ func invalidateProjectionEntry(entries map[string]projectionEntry, name string) 
 	if !ok {
 		return
 	}
+	materialization := normalizeProjectionMaterialization(entry.Metadata.Materialization, projectionMaterializationMaterialized)
+	if materialization.State == projectionMaterializationMaterialized {
+		materialization = ProjectionMaterialization{
+			State:  projectionMaterializationPartial,
+			Reason: "refresh_required",
+		}
+	}
 	entry.Metadata = normalizeProjectionMetadata(
 		ProjectionMetadata{
-			Source:    entry.Metadata.Source,
-			Freshness: projectionFreshnessStale,
+			Source:          entry.Metadata.Source,
+			Freshness:       projectionFreshnessStale,
+			Materialization: materialization,
 		},
 		entry.Metadata.Source,
 		projectionFreshnessStale,
 	)
 	entries[name] = entry
+}
+
+func setProjectionMaterializationInMap(entries map[string]projectionEntry, name string, state string, reason string) {
+	entry, ok := entries[name]
+	if !ok {
+		return
+	}
+	entry.Metadata.Materialization = normalizeProjectionMaterialization(
+		ProjectionMaterialization{State: state, Reason: reason},
+		projectionMaterializationMaterialized,
+	)
+	entries[name] = entry
+}
+
+func shouldMaterializeProjection(materialization ProjectionMaterialization) bool {
+	return normalizeProjectionMaterialization(materialization, projectionMaterializationMaterialized).State != projectionMaterializationFailed
+}
+
+func upsertCuratedEntry(entries map[string]curatedEntry, entry curatedEntry) {
+	if entry.ID == "" {
+		return
+	}
+	existing, ok := entries[entry.ID]
+	if ok {
+		entry.Revision = existing.Revision + 1
+	}
+	if entry.Revision < 1 {
+		entry.Revision = 1
+	}
+	entries[entry.ID] = entry
+}
+
+func mergeCuratedRecords(existing []curatedRecord, current []curatedRecord) []curatedRecord {
+	if len(existing) == 0 && len(current) == 0 {
+		return nil
+	}
+	merged := make(map[string]curatedRecord, len(existing)+len(current))
+	for _, entry := range existing {
+		if strings.TrimSpace(entry.ID) == "" {
+			continue
+		}
+		merged[entry.ID] = entry
+	}
+	for _, entry := range current {
+		if strings.TrimSpace(entry.ID) == "" {
+			continue
+		}
+		merged[entry.ID] = entry
+	}
+	out := make([]curatedRecord, 0, len(merged))
+	for _, entry := range merged {
+		out = append(out, entry)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+func normalizeSkillMetadataMap(raw map[string]SkillMetadata, normalizeName func(string) string) map[string]SkillMetadata {
+	if len(raw) == 0 {
+		return nil
+	}
+	out := make(map[string]SkillMetadata, len(raw))
+	for key, meta := range raw {
+		if normalizeName == nil {
+			continue
+		}
+		name := normalizeName(key)
+		if strings.TrimSpace(name) == "" {
+			continue
+		}
+		out[name] = meta
+	}
+	return out
 }
 
 func normalizeProjectionMetadataMap(raw map[string]ProjectionMetadata, normalizeName func(string) string) map[string]ProjectionMetadata {
@@ -698,51 +1376,64 @@ func projectionRecordsFromMap(entries map[string]projectionEntry, root string, n
 	out := make([]projectionRecord, 0, len(entries))
 	for name, entry := range entries {
 		out = append(out, projectionRecord{
-			Path:      path.Join(root, name),
-			Name:      name,
-			Namespace: namespace,
-			Kind:      kind,
-			Source:    entry.Metadata.Source,
-			Freshness: entry.Metadata.Freshness,
+			Path:            path.Join(root, name),
+			Name:            name,
+			Namespace:       namespace,
+			Kind:            kind,
+			Source:          entry.Metadata.Source,
+			Freshness:       entry.Metadata.Freshness,
+			Materialization: normalizeProjectionMaterialization(entry.Metadata.Materialization, projectionMaterializationMaterialized),
 		})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out
 }
 
-func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, resources []projectionRecord) map[string]string {
+func memoryViewFiles(state sessionState, raw []byte, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curated []curatedRecord) map[string]string {
 	files := map[string]string{
 		"/memory/observations.md": strings.Join(state.Observations, "\n"),
 		"/memory/status.json":     string(raw),
-		"/memory/summary.md":      renderMemorySummary(state, docs, resources),
+		"/memory/summary.md":      renderMemorySummary(state, docs, resources, skills, len(curated)),
 		"/memory/workflows.md":    renderWorkflowSummary(state.Workflows),
-		"/memory/projections.md":  renderProjectionSummary(docs, resources),
+		"/memory/projections.md":  renderProjectionSummary(docs, resources, skills),
+		"/memory/curated.md":      renderCuratedSummary(curated),
 	}
 	workflowRaw, err := json.MarshalIndent(state.Workflows, "", "  ")
 	if err == nil {
 		files["/memory/workflows.json"] = string(workflowRaw)
 	}
-	projectionRaw, err := json.MarshalIndent(projectionView{Documents: docs, Resources: resources}, "", "  ")
+	projectionRaw, err := json.MarshalIndent(projectionView{Documents: docs, Resources: resources, Skills: skills}, "", "  ")
 	if err == nil {
 		files["/memory/projections.json"] = string(projectionRaw)
+	}
+	curatedRaw, err := json.MarshalIndent(curated, "", "  ")
+	if err == nil {
+		files["/memory/curated.json"] = string(curatedRaw)
 	}
 	if len(state.ReadResources) > 0 {
 		files["/memory/resources.md"] = strings.Join(state.ReadResources, "\n")
 	}
+	if len(state.ReadSkills) > 0 {
+		files["/memory/skills.md"] = strings.Join(state.ReadSkills, "\n")
+	}
 	return files
 }
 
-func renderMemorySummary(state sessionState, docs []projectionRecord, resources []projectionRecord) string {
-	freshnessCounts := countProjectionFreshness(docs, resources)
+func renderMemorySummary(state sessionState, docs []projectionRecord, resources []projectionRecord, skills []projectionRecord, curatedCount int) string {
+	freshnessCounts := countProjectionFreshness(docs, resources, skills)
+	materializationCounts := countProjectionMaterialization(docs, resources, skills)
 	lines := []string{
 		"# Managed Memory",
 		"",
 		fmt.Sprintf("- freshness: %s", state.Freshness),
 		fmt.Sprintf("- projections.documents: %d", len(docs)),
 		fmt.Sprintf("- projections.resources: %d", len(resources)),
+		fmt.Sprintf("- projections.skills: %d", len(skills)),
+		fmt.Sprintf("- curated_entries: %d", curatedCount),
 		fmt.Sprintf("- observations: %d", len(state.Observations)),
 		fmt.Sprintf("- reference_reads: %d", len(state.ReadRefs)),
 		fmt.Sprintf("- resource_reads: %d", len(state.ReadResources)),
+		fmt.Sprintf("- skill_reads: %d", len(state.ReadSkills)),
 		fmt.Sprintf("- written_outputs: %d", len(state.WrittenOutputs)),
 		fmt.Sprintf("- denied_paths: %d", len(state.DeniedPaths)),
 	}
@@ -760,10 +1451,40 @@ func renderMemorySummary(state sessionState, docs []projectionRecord, resources 
 			}
 		}
 	}
+	if len(materializationCounts) > 0 {
+		lines = append(lines, "", "## Projection Materialization")
+		for _, stateValue := range []string{
+			projectionMaterializationMaterialized,
+			projectionMaterializationPartial,
+			projectionMaterializationFailed,
+		} {
+			if count := materializationCounts[stateValue]; count > 0 {
+				lines = append(lines, fmt.Sprintf("- %s: %d", stateValue, count))
+			}
+		}
+	}
 	if len(state.Workflows) > 0 {
 		lines = append(lines, "", "## Workflows")
 		for _, workflow := range state.Workflows {
 			lines = append(lines, fmt.Sprintf("- [%s] %s (%s)", workflow.Status, workflow.Title, workflow.ID))
+		}
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func renderCuratedSummary(curated []curatedRecord) string {
+	lines := []string{"# Curated Memory", ""}
+	if len(curated) == 0 {
+		lines = append(lines, "- no curated entries")
+		return strings.Join(lines, "\n") + "\n"
+	}
+	for _, entry := range curated {
+		lines = append(lines, fmt.Sprintf("- [%s] %s (rev=%d source=%s)", entry.ID, entry.Title, entry.Revision, entry.Source))
+		if entry.Summary != "" {
+			lines = append(lines, fmt.Sprintf("  summary: %s", entry.Summary))
+		}
+		if len(entry.SourcePaths) > 0 {
+			lines = append(lines, fmt.Sprintf("  source_paths: %s", strings.Join(entry.SourcePaths, ", ")))
 		}
 	}
 	return strings.Join(lines, "\n") + "\n"
@@ -777,6 +1498,23 @@ func countProjectionFreshness(groups ...[]projectionRecord) map[string]int {
 				continue
 			}
 			counts[record.Freshness]++
+		}
+	}
+	if len(counts) == 0 {
+		return nil
+	}
+	return counts
+}
+
+func countProjectionMaterialization(groups ...[]projectionRecord) map[string]int {
+	counts := map[string]int{}
+	for _, records := range groups {
+		for _, record := range records {
+			state := normalizeProjectionMaterialization(record.Materialization, projectionMaterializationMaterialized).State
+			if state == "" {
+				continue
+			}
+			counts[state]++
 		}
 	}
 	if len(counts) == 0 {
@@ -815,23 +1553,72 @@ func renderWorkflowSummary(workflows []workflowView) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-func renderProjectionSummary(docs []projectionRecord, resources []projectionRecord) string {
+func renderProjectionSummary(docs []projectionRecord, resources []projectionRecord, skills []projectionRecord) string {
 	lines := []string{"# Projection Index", ""}
-	if len(docs) == 0 && len(resources) == 0 {
+	if len(docs) == 0 && len(resources) == 0 && len(skills) == 0 {
 		lines = append(lines, "- no projected items")
 		return strings.Join(lines, "\n") + "\n"
 	}
 	if len(docs) > 0 {
 		lines = append(lines, "## Documents")
 		for _, record := range docs {
-			lines = append(lines, fmt.Sprintf("- %s [%s/%s]", record.Path, record.Source, record.Freshness))
+			line := fmt.Sprintf("- %s [%s/%s]", record.Path, record.Source, record.Freshness)
+			if record.Materialization.State != "" && record.Materialization.State != projectionMaterializationMaterialized {
+				line += fmt.Sprintf(" materialization=%s", record.Materialization.State)
+				if record.Materialization.Reason != "" {
+					line += fmt.Sprintf(" reason=%s", record.Materialization.Reason)
+				}
+			}
+			lines = append(lines, line)
 		}
 		lines = append(lines, "")
 	}
 	if len(resources) > 0 {
 		lines = append(lines, "## Resources")
 		for _, record := range resources {
-			lines = append(lines, fmt.Sprintf("- %s [%s/%s]", record.Path, record.Source, record.Freshness))
+			line := fmt.Sprintf("- %s [%s/%s]", record.Path, record.Source, record.Freshness)
+			if record.Materialization.State != "" && record.Materialization.State != projectionMaterializationMaterialized {
+				line += fmt.Sprintf(" materialization=%s", record.Materialization.State)
+				if record.Materialization.Reason != "" {
+					line += fmt.Sprintf(" reason=%s", record.Materialization.Reason)
+				}
+			}
+			lines = append(lines, line)
+		}
+		lines = append(lines, "")
+	}
+	if len(skills) > 0 {
+		lines = append(lines, "## Skills")
+		for _, record := range skills {
+			line := fmt.Sprintf("- %s [%s/%s]", record.Path, record.Source, record.Freshness)
+			if record.Materialization.State != "" && record.Materialization.State != projectionMaterializationMaterialized {
+				line += fmt.Sprintf(" materialization=%s", record.Materialization.State)
+				if record.Materialization.Reason != "" {
+					line += fmt.Sprintf(" reason=%s", record.Materialization.Reason)
+				}
+			}
+			if record.Eligibility != nil {
+				line += fmt.Sprintf(" eligibility=%s", record.Eligibility.State)
+			}
+			if record.Precedence != nil {
+				line += fmt.Sprintf(" precedence=%s:%d", record.Precedence.Tier, record.Precedence.Rank)
+			}
+			if record.Selection != nil {
+				line += fmt.Sprintf(" selection=%s:%s", record.Selection.Mode, record.Selection.State)
+				if record.Selection.Scope != "" {
+					line += fmt.Sprintf(" scope=%s", record.Selection.Scope)
+				}
+				if record.Selection.Reason != "" {
+					line += fmt.Sprintf(" reason=%s", record.Selection.Reason)
+				}
+				if record.Selection.WinnerPath != "" {
+					line += fmt.Sprintf(" winner=%s", record.Selection.WinnerPath)
+				}
+			}
+			if record.Selected {
+				line += " selected=true"
+			}
+			lines = append(lines, line)
 		}
 	}
 	return strings.Join(lines, "\n") + "\n"

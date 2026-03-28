@@ -2,74 +2,71 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-03-31T16:28:00Z
+- Updated At (UTC): 2026-04-02T00:55:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
 
 ## Current Execution Item
 
-- Execution Item ID: EXEC::manual-20260331-reference-workflow-transition-control-plane
+- Execution Item ID: none
 - Source System: manual-default
-- Source Ref: pkg/adapter/reference/adapter.go
-- Title: Implement an explicit workflow-transition control plane over managed `/memory` views
-- Status: todo
-- Why This Item Now: The freshness lifecycle, evidence review, and contract-refine slices are complete. The next current-phase gap is no longer freshness truth; it is workflow-transition truth. The reference adapter still derives workflow state mostly from trace heuristics, so the next implementation slice is to add an explicit adapter-local transition seam without turning `/memory` into a writable backdoor.
+- Source Ref: docs/notes-kernel-execution-backlog.md
+- Title: No active long-run row
+- Status: blocked
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable item. The `K-017` implementation wave was completed through the feat-task harness, so long-run should remain explicitly idle until a new manual row is created.
 
 ## Acceptance Criteria
 
-- [ ] The reference adapter exposes a minimal workflow-transition control plane that can record explicit status or reason updates while preserving the existing trace-derived defaults.
-- [ ] `/memory/workflows.json`, `/memory/workflows.md`, and `/memory/status.json` surface both the current workflow status and whether it came from trace evidence or explicit adapter control-plane action.
-- [ ] Adapter tests cover checkpoint and resume with both trace-driven and control-plane-driven workflow transitions.
-- [ ] `go test ./pkg/adapter/reference ./pkg/engine/runtime` exits 0.
+- [ ] Refresh long-run rows before using `ralphloop` again.
+- [ ] Keep handoff aligned with `next-action.json` while the current implementation wave runs through feat-task harness instead.
 
 ## Execution Plan
 
-1. Add the smallest explicit workflow-transition control-plane seam that stays adapter-local and auditable.
-2. Preserve trace-derived defaults, but let explicit control-plane transitions annotate or override them when the adapter owns that policy.
-3. Surface transition provenance in managed `/memory` views so a harness can tell whether state came from trace evidence or explicit control-plane action.
-4. Add direct adapter tests before widening the benchmark again.
+1. Use the feat-task harness for the current `K-017` implementation wave.
+2. When this slice is complete, either reopen long-run with a fresh manual row or keep handoff explicitly idle.
+3. Do not point handoff at stale completed rows.
 
 ## Files To Touch
 
-- `pkg/adapter/reference/adapter.go`
-- `pkg/adapter/reference/adapter_test.go`
-- `pkg/adapter/reference/adapter_helpers_test.go`
+- `.bagakit/long-run/bk-execution-table.json`
+- `.bagakit/long-run/next-action.json`
+- `.bagakit/long-run/bk-execution-handoff.md`
+- `docs/notes-kernel-execution-backlog.md`
 
 ## Commands To Run
 
 ```bash
-go test ./pkg/adapter/reference ./pkg/engine/runtime
-go test ./pkg/adapter/reference -run 'TestReferenceAdapter'
+bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Expected Verification
 
-- Gate / verification command: `go test ./pkg/adapter/reference ./pkg/engine/runtime`
-- Expected result: workflow transition control-plane behavior is covered directly, persists across checkpoint/resume, and does not regress adapter/runtime tests.
+- Gate / verification command: `bash .bagakit/long-run/check_and_resume.sh`
+- Expected result: `next-action.json` and handoff remain aligned; there is no stale active row while current implementation work proceeds through feat-task harness.
 
 ## Results
 
-- Summary: The freshness lifecycle, evidence review, and contract refinement slices are complete. The next actionable row is now workflow-transition control-plane implementation.
-- Tests: `go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference` and `go test ./...` are green after the prior slices.
-- Gate / Verification: `.bagakit/long-run/next-action.json` now points to `manual-20260331-reference-workflow-transition-control-plane`.
+- Summary: The long-run queue is currently idle. `K-017: /skills selection and precedence truth` has landed through `f-20260401-skills-selection-precedence-truth`, and there is still no new actionable row.
+- Tests: `go test ./...`, `make lint`, and `make check` are green after the `K-017` implementation wave.
+- Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, which now matches this handoff.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: current-phase handoff advanced to the workflow-transition implementation row after freshness implementation, review, and contract refinement all closed.
-- LongRun: Item=manual-20260331-reference-workflow-transition-control-plane; Status=todo; Confidence=0.89; Evidence=K-012/K-013 closed | next-action advanced | tests green; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: long-run handoff refreshed so it no longer points at a completed row while the next adapter-side slice is executed through the feat-task harness.
+- LongRun: Item=none; Status=blocked; Confidence=0.93; Evidence=next_row null | stale workflow row cleared | K-017 queued in backlog; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions
 
-- Risks: The main risk is overfitting the reference adapter to one product workflow model. The transition seam should stay minimal, explicit, and clearly downstream from kernel contracts.
-- Rollback: If explicit transitions become too opinionated, keep the provenance fields and narrow the control plane to the smallest generic transition hook that still matches tests.
-- Unblock Action (if blocked): Re-run `bash .bagakit/long-run/check_and_resume.sh`; if the row still does not select cleanly, resync generated long-run state before touching code.
+- Risks: The main process risk is letting handoff drift from `next-action.json` again while work happens outside the long-run loop.
+- Rollback: If a new long-run phase is not ready, keep handoff explicitly idle instead of pointing it at a guessed next row.
+- Unblock Action (if blocked): Re-run `bash .bagakit/long-run/check_and_resume.sh`; if a new row is created later, let the generated files advance together.
 
 ## Next Run
 
-- Primary: `bash .bagakit/long-run/ralphloop-runner.sh`
+- Primary: `bash .bagakit/long-run/check_and_resume.sh`
 - Fallback: `bash .bagakit/long-run/ralphloop.sh pulse --endless`
 - Resume command: `bash .bagakit/long-run/check_and_resume.sh`

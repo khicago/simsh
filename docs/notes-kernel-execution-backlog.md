@@ -374,7 +374,7 @@ Optional but recommended:
   - If the review suggests the current slice is too broad, keep the finished freshness lifecycle and reduce the next implementation scope rather than weakening evidence requirements.
 
 ### K-014: Implement explicit managed-memory curation and workflow transitions
-- Status: todo
+- Status: done
 - Why now: The reference adapter already proves projection and trace consumption, but managed `/memory` still behaves mainly like a derived report over trace sets. The next realism step is one explicit curation layer plus workflow transitions that are adapter-owned rather than purely heuristic.
 - Kernel invariant: `/memory` remains a managed read-only view over adapter-owned state; raw observations, curated summaries, and workflow transitions must stay explicit and auditable.
 - Files to touch:
@@ -394,11 +394,14 @@ Optional but recommended:
 - Notes:
   - Keep curation and transition semantics adapter-local and deterministic.
   - Prefer one small realistic managed-memory layer over a large pseudo-product framework.
+  - The reference adapter now exposes explicit curated `/memory` views (`/memory/curated.json` and `/memory/curated.md`) driven by an adapter-local control-plane rather than trace-derived implicit summaries.
+  - Curated entries persist through adapter opaque state and remain distinct from raw observations, projection indexes, and workflow views.
+  - The reference benchmark now proves that curated entries are structurally readable, provenance-bearing, and survive checkpoint/resume without widening `/memory` into a writable backdoor.
 - Rollback note:
   - If explicit workflow transitions prove too product-specific, keep the curated memory views and narrow transitions to the smallest generic state machine that still matches tests and docs.
 
 ### K-015: Add a `/skills` projection driver with explicit eligibility metadata
-- Status: todo
+- Status: done
 - Why now: After freshness and managed-memory semantics become trustworthy, the biggest remaining adapter-side namespace gap is `/skills`. The architecture already expects a skill projection seam, but the reference adapter does not yet exercise it.
 - Kernel invariant: skill projection remains a read-only adapter concern; eligibility, precedence, and source metadata must be surfaced explicitly rather than by silent omission.
 - Files to touch:
@@ -416,8 +419,70 @@ Optional but recommended:
 - Notes:
   - This is a next-phase candidate after the current freshness and managed-memory loop closes cleanly.
   - Do not let `/skills` widen into a product-specific registry before freshness and workflow evidence are already solid.
+  - The reference adapter now projects a read-only `/skills` namespace with canonical paths, `_index.json`, and `/memory/projections.json` visibility.
+  - Skill entries now surface `source`, canonical `freshness`, explicit eligibility state/reason, comparable precedence metadata, and a simple `selected` bit without introducing a mutable skill registry.
+  - The reference benchmark now proves one selected eligible skill and one visible-but-ineligible fallback skill, and keeps `/skills` read-only under session lifecycle flows.
 - Rollback note:
   - If `/skills` is still too early, preserve the contract wording and move the item to the next phase rather than smuggling skill semantics into unrelated adapter work.
+
+### K-016: Make per-item projection materialization and failure state visible
+- Status: done
+- Why now: The reference adapter already exposes freshness, workflow provenance, curated views, and `/skills`, but it still needed one more truth surface: a caller should be able to tell whether a specific projection is fully materialized, partial, or failed without confusing that state with freshness.
+- Kernel invariant: freshness and materialization remain separate truths at the adapter boundary; item-level projection failure must be machine-visible without forcing a new core-runtime contract.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `benchmarks/simsh_native_reference/README.md`
+  - `docs/architecture-platform-adapter-contract.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./pkg/engine/runtime ./benchmarks/simsh_native_reference`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - Per-item projection records expose machine-readable materialization state such as `materialized`, `partial`, or `failed`, plus detail.
+  - Failed projections remain visible in metadata/index surfaces even when their mounted file bodies are absent.
+  - Benchmark and adapter tests structurally assert partial/error truth instead of relying on message-only checks.
+- Notes:
+  - The reference adapter now keeps global `SetProjectionError(...)` for whole-projection failure, but also exposes item-level materialization truth for documents and resources.
+  - `invalidate` now degrades fully materialized documents/resources into explicit partial state with reason rather than silently implying incompleteness through freshness alone.
+  - The reference benchmark now decodes `materialization` from `/memory/projections.json` and requires partial/error state to carry machine-readable detail.
+- Rollback note:
+  - If item-level materialization semantics prove too broad, keep the metadata surface and reduce the number of states rather than falling back to freshness-only ambiguity.
+
+### K-017: Make `/skills` selection and precedence truth explicit
+- Feat: `f-20260401-skills-selection-precedence-truth`
+- Status: done
+- Why now: The reference adapter already projects `/skills` with explicit freshness, eligibility, and precedence metadata, but `selected` is still too close to adapter input. The next adapter-side gap is to make skill selection a derived, explainable truth surface rather than a hand-authored bit.
+- Kernel invariant: skill selection stays adapter-local and read-only; competition boundaries must be explicit; winner or loser state must be derived from documented inputs rather than path heuristics or mutable mount behavior.
+- Files to touch:
+  - `pkg/adapter/reference/adapter.go`
+  - `pkg/adapter/reference/adapter_test.go`
+  - `pkg/adapter/reference/adapter_helpers_test.go`
+  - `benchmarks/simsh_native_reference/suite.go`
+  - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-platform-adapter-contract.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/adapter/reference ./benchmarks/simsh_native_reference ./pkg/engine/runtime`
+  - `go test ./...`
+- Done gate:
+  - `/skills` records expose machine-readable selection provenance in addition to a compatibility `selected` bit.
+  - Selection is derived from explicit eligibility and precedence inputs within an explicit adapter-defined scope.
+  - Non-selected skills remain visible and carry a machine-readable explanation for why they were not selected.
+  - Benchmark and adapter tests prove winner, loser, and ineligible cases structurally rather than by prose-only assertions.
+- Notes:
+  - Keep the scope narrow: do not introduce a mutable skill registry, remote sync, or product-specific orchestration.
+  - Reject path-derived implicit competition groups; if skills compete, the adapter should declare that scope explicitly.
+  - Preserve the current read-only `/skills` namespace and keep selection semantics downstream from core contracts.
+  - The reference adapter now derives selection in one SSOT path from explicit `SelectionScope + Eligibility + Precedence`, surfaces compatibility `selected` plus machine-readable `selection` provenance (`state/mode/scope/reason/winner_path`), and keeps unscoped skills out of implicit path-based competition.
+  - Adapter tests now cover winner, loser, ineligible, unscoped, and deterministic tie-break cases; the reference benchmark structurally asserts selection provenance instead of relying on prose-only output.
+  - Validated with `go test ./pkg/adapter/reference -count=1`, `go test ./benchmarks/simsh_native_reference -count=1`, `go test ./...`, `make lint`, and `make check`.
+  - The feat is archived under `.bagakit/ft-harness/feats-archived/f-20260401-skills-selection-precedence-truth/`.
+- Rollback note:
+  - If the selection truth surface grows too opinionated, keep explicit scope and reason metadata while narrowing the number of derived states rather than falling back to a naked `selected` flag.
 
 ## Backlog Rules
 

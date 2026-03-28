@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -53,15 +54,47 @@ type ScenarioReport struct {
 	Notes                 []string `json:"notes,omitempty"`
 }
 
+type projectionFailureView struct {
+	Code string `json:"code,omitempty"`
+}
+
+type projectionMaterializationView struct {
+	State   string                 `json:"state"`
+	Reason  string                 `json:"reason,omitempty"`
+	Failure *projectionFailureView `json:"failure,omitempty"`
+}
+
 type projectionRecordView struct {
-	Path      string `json:"path"`
-	Source    string `json:"source"`
-	Freshness string `json:"freshness"`
+	Path            string                         `json:"path"`
+	Source          string                         `json:"source"`
+	Freshness       string                         `json:"freshness"`
+	Materialization *projectionMaterializationView `json:"materialization,omitempty"`
+	Eligibility     *skillEligibilityRecord        `json:"eligibility,omitempty"`
+	Precedence      *skillPrecedenceRecord         `json:"precedence,omitempty"`
+	Selection       *skillSelectionRecord          `json:"selection,omitempty"`
+	Selected        bool                           `json:"selected,omitempty"`
+}
+
+type skillEligibilityRecord struct {
+	State  string `json:"state"`
+	Reason string `json:"reason,omitempty"`
+}
+
+type skillPrecedenceRecord struct {
+	Tier string `json:"tier"`
+	Rank int    `json:"rank"`
+}
+
+type skillSelectionRecord struct {
+	Scope  string `json:"scope,omitempty"`
+	Mode   string `json:"mode,omitempty"`
+	Reason string `json:"reason,omitempty"`
 }
 
 type projectionIndexView struct {
 	Documents []projectionRecordView `json:"documents,omitempty"`
 	Resources []projectionRecordView `json:"resources,omitempty"`
+	Skills    []projectionRecordView `json:"skills,omitempty"`
 }
 
 type workflowViewRecord struct {
@@ -70,6 +103,11 @@ type workflowViewRecord struct {
 	StatusSource string   `json:"status_source,omitempty"`
 	StatusReason string   `json:"status_reason,omitempty"`
 	Evidence     []string `json:"evidence,omitempty"`
+}
+
+type curatedMemorySnapshot struct {
+	EntryCount  int
+	SourcePaths []string
 }
 
 type SuiteReport struct {
@@ -90,6 +128,11 @@ type traceExpectation struct {
 	bytesWritten func(int) bool
 	canceled     *bool
 	timedOut     *bool
+}
+
+type namedCheck struct {
+	name string
+	ok   bool
 }
 
 func defaultThresholds() GateThresholds {
@@ -500,6 +543,52 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		ResourceMetadata: map[string]referenceadapter.ProjectionMetadata{
 			"checklists/plan.json": {Source: "workflow_catalog", Freshness: "live"},
 		},
+		Skills: map[string]string{
+			"planning/draft-plan": "# Draft-plan skill\n",
+			"planning/alternate":  "# Alternate planning skill\n",
+			"planning/fallback":   "# Fallback planning skill\n",
+		},
+		SkillMetadata: map[string]referenceadapter.SkillMetadata{
+			"planning/draft-plan": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: referenceadapter.SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "workspace",
+					Rank: 1,
+				},
+				Selected: false,
+			},
+			"planning/alternate": {
+				Source:         "workspace_catalog",
+				Freshness:      "live",
+				SelectionScope: "planning/default",
+				Eligibility: referenceadapter.SkillEligibility{
+					State: "eligible",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "workspace",
+					Rank: 5,
+				},
+				Selected: true,
+			},
+			"planning/fallback": {
+				Source:         "bundled_catalog",
+				Freshness:      "snapshot",
+				SelectionScope: "planning/default",
+				Eligibility: referenceadapter.SkillEligibility{
+					State:  "ineligible",
+					Reason: "missing_env:PLAN_FALLBACK_TOKEN",
+				},
+				Precedence: referenceadapter.SkillPrecedence{
+					Tier: "bundled",
+					Rank: 90,
+				},
+			},
+		},
 		Workflows: []referenceadapter.WorkflowSpec{
 			{
 				ID:              "draft-plan",
@@ -530,6 +619,10 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	readSkill, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
 	projectionsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/projections.json", contract.ExecutionPolicy{})
 	if err != nil {
 		return ScenarioReport{}, err
@@ -538,7 +631,23 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	skillsIndexView, err := manager.Execute(context.Background(), session.SessionID, "cat /skills/_index.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	initialSkillIndex, err := decodeProjectionRecordsView(skillsIndexView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
 	workflowsView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	workflowStateView, err := manager.Execute(context.Background(), session.SessionID, "cat /memory/workflows.json", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	workflowState, err := decodeWorkflowViews(workflowStateView.Result.Stdout)
 	if err != nil {
 		return ScenarioReport{}, err
 	}
@@ -546,7 +655,17 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	adapter.UpsertCuratedEntry(referenceadapter.CuratedEntry{
+		ID:          "plan-context",
+		Title:       "Plan Context",
+		Summary:     "Curated evidence for the current planning workflow.",
+		SourcePaths: []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json", "/task_outputs/plan.txt", "/skills/planning/draft-plan/SKILL.md"},
+	})
 	deniedWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /knowledge_base/reference/guide.md", contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	deniedSkillWrite, err := manager.Execute(context.Background(), session.SessionID, "echo blocked > /skills/planning/draft-plan/SKILL.md", contract.ExecutionPolicy{})
 	if err != nil {
 		return ScenarioReport{}, err
 	}
@@ -637,6 +756,15 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 	if err != nil {
 		return ScenarioReport{}, err
 	}
+	curatedViewPath := "/memory/curated.json"
+	curatedView, err := manager.Execute(context.Background(), session.SessionID, "cat "+curatedViewPath, contract.ExecutionPolicy{})
+	if err != nil {
+		return ScenarioReport{}, err
+	}
+	curatedSnapshot, err := decodeCuratedMemorySnapshot(curatedView.Result.Stdout)
+	if err != nil {
+		return ScenarioReport{}, err
+	}
 
 	readTracePassed, readTraceTotal := evaluateTrace(readGuide.Result.Trace, traceExpectation{
 		requested: []string{"/knowledge_base/reference/guide.md"},
@@ -654,54 +782,141 @@ func runAdapterProjectionScenario() (ScenarioReport, error) {
 		requested: []string{"/knowledge_base/reference/guide.md"},
 		denied:    []string{"/knowledge_base/reference/guide.md"},
 	})
-	tracePassed := readTracePassed + resourceTracePassed + writeTracePassed + denyTracePassed
-	traceTotal := readTraceTotal + resourceTraceTotal + writeTraceTotal + denyTraceTotal
+	denySkillTracePassed, denySkillTraceTotal := evaluateTrace(deniedSkillWrite.Result.Trace, traceExpectation{
+		requested: []string{"/skills/planning/draft-plan/SKILL.md"},
+		denied:    []string{"/skills/planning/draft-plan/SKILL.md"},
+	})
+	tracePassed := readTracePassed + resourceTracePassed + writeTracePassed + denyTracePassed + denySkillTracePassed
+	traceTotal := readTraceTotal + resourceTraceTotal + writeTraceTotal + denyTraceTotal + denySkillTraceTotal
 	initialGuideProjection, initialGuideOK := findProjectionRecord(initialProjectionView.Documents, "/knowledge_base/reference/guide.md")
 	initialResourceProjection, initialResourceOK := findProjectionRecord(initialProjectionView.Resources, "/resources/checklists/plan.json")
+	initialSkillProjection, initialSkillOK := findProjectionRecord(initialProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
+	initialSkillAlternate, initialSkillAlternateOK := findProjectionRecord(initialProjectionView.Skills, "/skills/planning/alternate/SKILL.md")
+	initialSkillFallback, initialSkillFallbackOK := findProjectionRecord(initialProjectionView.Skills, "/skills/planning/fallback/SKILL.md")
+	skillIndexDraft, skillIndexDraftOK := findProjectionRecord(initialSkillIndex, "/skills/planning/draft-plan/SKILL.md")
 	staleGuideProjection, staleGuideOK := findProjectionRecord(staleProjectionView.Documents, "/knowledge_base/reference/guide.md")
 	staleResourceProjection, staleResourceOK := findProjectionRecord(staleProjectionView.Resources, "/resources/checklists/plan.json")
+	staleSkillProjection, staleSkillOK := findProjectionRecord(staleProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
 	refreshedGuideProjection, refreshedGuideOK := findProjectionRecord(refreshedProjectionView.Documents, "/knowledge_base/reference/guide.md")
 	refreshedResourceProjection, refreshedResourceOK := findProjectionRecord(refreshedProjectionView.Resources, "/resources/checklists/plan.json")
+	refreshedSkillProjection, refreshedSkillOK := findProjectionRecord(refreshedProjectionView.Skills, "/skills/planning/draft-plan/SKILL.md")
 	overrideWorkflow, overrideWorkflowOK := findWorkflowView(overrideWorkflowState, "draft-plan")
 	traceWorkflow, traceWorkflowOK := findWorkflowView(traceWorkflowState, "draft-plan")
-	assertionPassed, assertionTotal := countChecks(
-		strings.Contains(readGuide.Result.Stdout, "# Guide"),
-		strings.Contains(readResource.Result.Stdout, "\"steps\""),
-		initialGuideOK && initialGuideProjection.Source == "knowledge_sync" && initialGuideProjection.Freshness == "snapshot",
-		initialResourceOK && initialResourceProjection.Source == "workflow_catalog" && initialResourceProjection.Freshness == "live",
-		strings.Contains(workflowsView.Result.Stdout, "[in_progress] Draft plan (draft-plan)"),
-		writeOutput.Result.ExitCode == 0,
-		deniedWrite.Result.ExitCode != 0,
-		len(checkpoint.State.Opaque[adapter.AdapterID()]) > 0,
-		len(resumed.State.Opaque[adapter.AdapterID()]) > 0,
-		staleGuideOK && staleGuideProjection.Source == "knowledge_sync" && staleGuideProjection.Freshness == "stale",
-		staleResourceOK && staleResourceProjection.Source == "workflow_catalog" && staleResourceProjection.Freshness == "stale",
-		strings.Contains(staleSummaryView.Result.Stdout, "- stale: 2"),
-		strings.Contains(refreshedGuide.Result.Stdout, "hello refreshed"),
-		strings.Contains(refreshedResource.Result.Stdout, "\"refresh\""),
-		refreshedGuideOK && refreshedGuideProjection.Source == "knowledge_sync" && refreshedGuideProjection.Freshness == "live",
-		refreshedResourceOK && refreshedResourceProjection.Source == "workflow_catalog" && refreshedResourceProjection.Freshness == "live",
-		overrideWorkflowOK &&
+	workflowSkillBacked, workflowSkillBackedOK := findWorkflowView(workflowState, "draft-plan")
+	assertionPassed, assertionTotal, failedChecks := countNamedChecks(
+		namedCheck{name: "read_guide_content", ok: strings.Contains(readGuide.Result.Stdout, "# Guide")},
+		namedCheck{name: "read_resource_content", ok: strings.Contains(readResource.Result.Stdout, "\"steps\"")},
+		namedCheck{name: "read_skill_content", ok: strings.Contains(readSkill.Result.Stdout, "Draft-plan skill")},
+		namedCheck{name: "initial_document_projection", ok: initialGuideOK && initialGuideProjection.Source == "knowledge_sync" && initialGuideProjection.Freshness == "snapshot"},
+		namedCheck{name: "initial_resource_projection", ok: initialResourceOK && initialResourceProjection.Source == "workflow_catalog" && initialResourceProjection.Freshness == "live"},
+		namedCheck{name: "initial_document_materialization_state", ok: initialGuideOK && projectionHasMaterializationState(initialGuideProjection)},
+		namedCheck{name: "initial_resource_materialization_state", ok: initialResourceOK && projectionHasMaterializationState(initialResourceProjection)},
+		namedCheck{name: "initial_skill_projection", ok: initialSkillOK &&
+			initialSkillProjection.Source == "workspace_catalog" &&
+			initialSkillProjection.Freshness == "live" &&
+			skillEligibilityState(initialSkillProjection) == "eligible" &&
+			skillPrecedenceTier(initialSkillProjection) == "workspace" &&
+			skillPrecedenceRank(initialSkillProjection) == 1 &&
+			skillSelected(initialSkillProjection)},
+		namedCheck{name: "initial_skill_selection_provenance", ok: initialSkillOK &&
+			skillSelectionScope(initialSkillProjection) != "" &&
+			skillSelectionMode(initialSkillProjection) != ""},
+		namedCheck{name: "initial_skill_materialization_state", ok: initialSkillOK && projectionHasMaterializationState(initialSkillProjection)},
+		namedCheck{name: "alternate_skill_projection", ok: initialSkillAlternateOK &&
+			initialSkillAlternate.Source == "workspace_catalog" &&
+			initialSkillAlternate.Freshness == "live" &&
+			skillEligibilityState(initialSkillAlternate) == "eligible" &&
+			skillPrecedenceTier(initialSkillAlternate) == "workspace" &&
+			skillPrecedenceRank(initialSkillAlternate) == 5 &&
+			!skillSelected(initialSkillAlternate)},
+		namedCheck{name: "alternate_skill_selection_provenance", ok: initialSkillAlternateOK &&
+			skillSelectionScope(initialSkillAlternate) != "" &&
+			skillSelectionMode(initialSkillAlternate) != "" &&
+			skillSelectionReason(initialSkillAlternate) != "" &&
+			skillSelectionScope(initialSkillAlternate) == skillSelectionScope(initialSkillProjection)},
+		namedCheck{name: "alternate_skill_materialization_state", ok: initialSkillAlternateOK && projectionHasMaterializationState(initialSkillAlternate)},
+		namedCheck{name: "fallback_skill_projection", ok: initialSkillFallbackOK &&
+			initialSkillFallback.Source == "bundled_catalog" &&
+			initialSkillFallback.Freshness == "snapshot" &&
+			skillEligibilityState(initialSkillFallback) == "ineligible" &&
+			skillEligibilityReason(initialSkillFallback) == "missing_env:PLAN_FALLBACK_TOKEN" &&
+			skillPrecedenceTier(initialSkillFallback) == "bundled" &&
+			skillPrecedenceRank(initialSkillFallback) == 90 &&
+			!skillSelected(initialSkillFallback)},
+		namedCheck{name: "fallback_skill_selection_provenance", ok: initialSkillFallbackOK &&
+			skillSelectionScope(initialSkillFallback) != "" &&
+			skillSelectionMode(initialSkillFallback) != "" &&
+			skillSelectionReason(initialSkillFallback) != ""},
+		namedCheck{name: "fallback_skill_materialization_state", ok: initialSkillFallbackOK && projectionHasMaterializationState(initialSkillFallback)},
+		namedCheck{name: "skills_index_projection", ok: skillIndexDraftOK &&
+			skillIndexDraft.Source == "workspace_catalog" &&
+			skillEligibilityState(skillIndexDraft) == "eligible" &&
+			skillPrecedenceTier(skillIndexDraft) == "workspace" &&
+			skillSelected(skillIndexDraft) &&
+			skillSelectionScope(skillIndexDraft) != "" &&
+			skillSelectionMode(skillIndexDraft) != ""},
+		namedCheck{name: "workflows_markdown_state", ok: strings.Contains(workflowsView.Result.Stdout, "[in_progress] Draft plan (draft-plan)")},
+		namedCheck{name: "workflow_skill_backed_state", ok: workflowSkillBackedOK &&
+			(workflowSkillBacked.Status == "pending" || workflowSkillBacked.Status == "in_progress") &&
+			workflowSkillBacked.StatusSource == "trace" &&
+			skillEligibilityState(initialSkillProjection) == "eligible"},
+		namedCheck{name: "write_output_exit_code", ok: writeOutput.Result.ExitCode == 0},
+		namedCheck{name: "deny_reference_write_exit_code", ok: deniedWrite.Result.ExitCode != 0},
+		namedCheck{name: "deny_skill_write_exit_code", ok: deniedSkillWrite.Result.ExitCode != 0},
+		namedCheck{name: "checkpoint_has_opaque_state", ok: len(checkpoint.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "resume_has_opaque_state", ok: len(resumed.State.Opaque[adapter.AdapterID()]) > 0},
+		namedCheck{name: "stale_document_projection", ok: staleGuideOK && staleGuideProjection.Source == "knowledge_sync" && staleGuideProjection.Freshness == "stale"},
+		namedCheck{name: "stale_resource_projection", ok: staleResourceOK && staleResourceProjection.Source == "workflow_catalog" && staleResourceProjection.Freshness == "stale"},
+		namedCheck{name: "stale_skill_projection", ok: staleSkillOK && staleSkillProjection.Source == "workspace_catalog" && staleSkillProjection.Freshness == "live" && skillEligibilityState(staleSkillProjection) == "eligible"},
+		namedCheck{name: "stale_document_materialization_partial_or_error", ok: staleGuideOK &&
+			projectionMaterializationStateIn(staleGuideProjection, "partial", "error") &&
+			projectionHasMaterializationFailureDetail(staleGuideProjection)},
+		namedCheck{name: "stale_resource_materialization_partial_or_error", ok: staleResourceOK &&
+			projectionMaterializationStateIn(staleResourceProjection, "partial", "error") &&
+			projectionHasMaterializationFailureDetail(staleResourceProjection)},
+		namedCheck{name: "stale_skill_materialization_state", ok: staleSkillOK && projectionHasMaterializationState(staleSkillProjection)},
+		namedCheck{name: "stale_summary_count", ok: strings.Contains(staleSummaryView.Result.Stdout, "- stale: 2")},
+		namedCheck{name: "refreshed_guide_content", ok: strings.Contains(refreshedGuide.Result.Stdout, "hello refreshed")},
+		namedCheck{name: "refreshed_resource_content", ok: strings.Contains(refreshedResource.Result.Stdout, "\"refresh\"")},
+		namedCheck{name: "refreshed_document_projection", ok: refreshedGuideOK && refreshedGuideProjection.Source == "knowledge_sync" && refreshedGuideProjection.Freshness == "live"},
+		namedCheck{name: "refreshed_resource_projection", ok: refreshedResourceOK && refreshedResourceProjection.Source == "workflow_catalog" && refreshedResourceProjection.Freshness == "live"},
+		namedCheck{name: "refreshed_skill_projection", ok: refreshedSkillOK && refreshedSkillProjection.Source == "workspace_catalog" && refreshedSkillProjection.Freshness == "live" && skillPrecedenceRank(refreshedSkillProjection) == 1 && skillSelected(refreshedSkillProjection)},
+		namedCheck{name: "refreshed_document_materialization_state", ok: refreshedGuideOK && projectionHasMaterializationState(refreshedGuideProjection)},
+		namedCheck{name: "refreshed_resource_materialization_state", ok: refreshedResourceOK && projectionHasMaterializationState(refreshedResourceProjection)},
+		namedCheck{name: "refreshed_skill_materialization_state", ok: refreshedSkillOK && projectionHasMaterializationState(refreshedSkillProjection)},
+		namedCheck{name: "workflow_override_control_plane", ok: overrideWorkflowOK &&
 			overrideWorkflow.Status == "blocked" &&
 			overrideWorkflow.StatusSource == "control_plane" &&
 			overrideWorkflow.StatusReason == "awaiting review" &&
-			containsPath(overrideWorkflow.Evidence, "/task_outputs/plan.txt"),
-		traceWorkflowOK &&
+			containsPath(overrideWorkflow.Evidence, "/task_outputs/plan.txt")},
+		namedCheck{name: "workflow_trace_after_clear", ok: traceWorkflowOK &&
 			traceWorkflow.Status == "completed" &&
 			traceWorkflow.StatusSource == "trace" &&
-			traceWorkflow.StatusReason == "",
-		strings.Contains(memoryView.Result.Stdout, "read-ref:/knowledge_base/reference/guide.md") &&
+			traceWorkflow.StatusReason == ""},
+		namedCheck{name: "memory_observations", ok: strings.Contains(memoryView.Result.Stdout, "read-ref:/knowledge_base/reference/guide.md") &&
 			strings.Contains(memoryView.Result.Stdout, "read-resource:/resources/checklists/plan.json") &&
+			strings.Contains(memoryView.Result.Stdout, "read-skill:/skills/planning/draft-plan/SKILL.md") &&
 			strings.Contains(memoryView.Result.Stdout, "wrote:/task_outputs/plan.txt") &&
-			strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md"),
-		strings.Contains(summaryView.Result.Stdout, "resource_reads: 1") &&
-			strings.Contains(summaryView.Result.Stdout, "written_outputs: 1"),
+			strings.Contains(memoryView.Result.Stdout, "denied:/knowledge_base/reference/guide.md") &&
+			strings.Contains(memoryView.Result.Stdout, "denied:/skills/planning/draft-plan/SKILL.md")},
+		namedCheck{name: "memory_summary_counts", ok: strings.Contains(summaryView.Result.Stdout, "resource_reads: 1") &&
+			strings.Contains(summaryView.Result.Stdout, "skill_reads: 2") &&
+			strings.Contains(summaryView.Result.Stdout, "written_outputs: 1") &&
+			strings.Contains(summaryView.Result.Stdout, "projections.skills: 3")},
+		namedCheck{name: "curated_memory_entry", ok: curatedSnapshot.EntryCount > 0 &&
+			containsPath(curatedSnapshot.SourcePaths, "/knowledge_base/reference/guide.md") &&
+			containsPath(curatedSnapshot.SourcePaths, "/resources/checklists/plan.json") &&
+			containsPath(curatedSnapshot.SourcePaths, "/task_outputs/plan.txt") &&
+			containsPath(curatedSnapshot.SourcePaths, "/skills/planning/draft-plan/SKILL.md")},
 	)
 
 	notes := []string{}
 	success := scenarioSucceeded(tracePassed, traceTotal, assertionPassed, assertionTotal)
 	if !success {
 		notes = append(notes, "adapter-backed projection or managed /memory lifecycle regressed")
+		if len(failedChecks) > 0 {
+			notes = append(notes, "failed_checks: "+strings.Join(failedChecks, ", "))
+		}
 	}
 	return ScenarioReport{
 		Name:                  "adapter_projection_memory_lifecycle",
@@ -873,6 +1088,19 @@ func countChecks(checks ...bool) (int, int) {
 	return passed, len(checks)
 }
 
+func countNamedChecks(checks ...namedCheck) (int, int, []string) {
+	passed := 0
+	failed := make([]string, 0)
+	for _, check := range checks {
+		if check.ok {
+			passed++
+			continue
+		}
+		failed = append(failed, check.name)
+	}
+	return passed, len(checks), failed
+}
+
 func scenarioSucceeded(tracePassed int, traceTotal int, assertionPassed int, assertionTotal int) bool {
 	if assertionTotal > 0 && assertionPassed != assertionTotal {
 		return false
@@ -887,6 +1115,115 @@ func decodeProjectionIndex(raw string) (projectionIndexView, error) {
 	var view projectionIndexView
 	err := json.Unmarshal([]byte(raw), &view)
 	return view, err
+}
+
+func decodeProjectionRecordsView(raw string) ([]projectionRecordView, error) {
+	var records []projectionRecordView
+	err := json.Unmarshal([]byte(raw), &records)
+	return records, err
+}
+
+func decodeCuratedMemorySnapshot(raw string) (curatedMemorySnapshot, error) {
+	var payload any
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		return curatedMemorySnapshot{}, err
+	}
+	entryCount, sourcePaths := collectCuratedEntrySources(payload)
+	if entryCount == 0 || len(sourcePaths) == 0 {
+		return curatedMemorySnapshot{}, os.ErrInvalid
+	}
+	return curatedMemorySnapshot{
+		EntryCount:  entryCount,
+		SourcePaths: sourcePaths,
+	}, nil
+}
+
+func collectCuratedEntrySources(payload any) (int, []string) {
+	unique := map[string]struct{}{}
+	entryCount := 0
+	var walk func(any)
+	walk = func(node any) {
+		switch typed := node.(type) {
+		case map[string]any:
+			paths := sourcePathsFromCuratedRecord(typed)
+			if len(paths) > 0 {
+				entryCount++
+				for _, pathValue := range paths {
+					unique[pathValue] = struct{}{}
+				}
+			}
+			for _, child := range typed {
+				walk(child)
+			}
+		case []any:
+			for _, child := range typed {
+				walk(child)
+			}
+		}
+	}
+	walk(payload)
+	paths := make([]string, 0, len(unique))
+	for pathValue := range unique {
+		paths = append(paths, pathValue)
+	}
+	sort.Strings(paths)
+	return entryCount, paths
+}
+
+func sourcePathsFromCuratedRecord(record map[string]any) []string {
+	keys := []string{"source_path", "source_paths", "sourcePath", "sourcePaths"}
+	paths := make([]string, 0)
+	for _, key := range keys {
+		value, ok := record[key]
+		if !ok {
+			continue
+		}
+		paths = append(paths, extractCuratedPaths(value)...)
+	}
+	return dedupePaths(paths)
+}
+
+func extractCuratedPaths(value any) []string {
+	switch typed := value.(type) {
+	case string:
+		pathValue := strings.TrimSpace(typed)
+		if strings.HasPrefix(pathValue, "/") {
+			return []string{pathValue}
+		}
+	case []any:
+		paths := make([]string, 0, len(typed))
+		for _, item := range typed {
+			text, ok := item.(string)
+			if !ok {
+				continue
+			}
+			pathValue := strings.TrimSpace(text)
+			if strings.HasPrefix(pathValue, "/") {
+				paths = append(paths, pathValue)
+			}
+		}
+		return dedupePaths(paths)
+	}
+	return nil
+}
+
+func dedupePaths(paths []string) []string {
+	if len(paths) == 0 {
+		return nil
+	}
+	unique := map[string]struct{}{}
+	for _, pathValue := range paths {
+		if strings.TrimSpace(pathValue) == "" {
+			continue
+		}
+		unique[pathValue] = struct{}{}
+	}
+	out := make([]string, 0, len(unique))
+	for pathValue := range unique {
+		out = append(out, pathValue)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func findProjectionRecord(records []projectionRecordView, target string) (projectionRecordView, bool) {
@@ -911,6 +1248,95 @@ func findWorkflowView(workflows []workflowViewRecord, id string) (workflowViewRe
 		}
 	}
 	return workflowViewRecord{}, false
+}
+
+func skillEligibilityState(record projectionRecordView) string {
+	if record.Eligibility == nil {
+		return ""
+	}
+	return record.Eligibility.State
+}
+
+func skillEligibilityReason(record projectionRecordView) string {
+	if record.Eligibility == nil {
+		return ""
+	}
+	return record.Eligibility.Reason
+}
+
+func skillPrecedenceTier(record projectionRecordView) string {
+	if record.Precedence == nil {
+		return ""
+	}
+	return record.Precedence.Tier
+}
+
+func skillPrecedenceRank(record projectionRecordView) int {
+	if record.Precedence == nil {
+		return -1
+	}
+	return record.Precedence.Rank
+}
+
+func skillSelected(record projectionRecordView) bool {
+	return record.Selected
+}
+
+func skillSelectionScope(record projectionRecordView) string {
+	if record.Selection == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Selection.Scope)
+}
+
+func skillSelectionMode(record projectionRecordView) string {
+	if record.Selection == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Selection.Mode)
+}
+
+func skillSelectionReason(record projectionRecordView) string {
+	if record.Selection == nil {
+		return ""
+	}
+	return strings.TrimSpace(record.Selection.Reason)
+}
+
+func projectionHasMaterializationState(record projectionRecordView) bool {
+	if record.Materialization == nil {
+		return false
+	}
+	return strings.TrimSpace(record.Materialization.State) != ""
+}
+
+func projectionMaterializationStateIn(record projectionRecordView, states ...string) bool {
+	if record.Materialization == nil {
+		return false
+	}
+	state := strings.TrimSpace(record.Materialization.State)
+	if state == "" {
+		return false
+	}
+	for _, candidate := range states {
+		if state == candidate {
+			return true
+		}
+	}
+	return false
+}
+
+func projectionHasMaterializationFailureDetail(record projectionRecordView) bool {
+	if record.Materialization == nil {
+		return false
+	}
+	if strings.TrimSpace(record.Materialization.Reason) != "" {
+		return true
+	}
+	if record.Materialization.Failure == nil {
+		return false
+	}
+	return strings.TrimSpace(record.Materialization.Failure.Code) != ""
 }
 
 func boolPtr(value bool) *bool {
