@@ -181,7 +181,7 @@ Examples:
     pwd
 
 #### rg
-    rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...]
+    rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...] | rg --files [-g GLOB]... [PATH ...]
 - rg searches recursively by default and falls back to the current working directory when no path is given.
 - Use --files to list searchable files, optionally narrowed with one or more -g globs.
 - Use --fmt jsonl as the canonical structured mode; --json is accepted only as a compatibility alias.

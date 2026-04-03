@@ -1,6 +1,6 @@
 ---
 name: rg
-synopsis: "rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...]"
+synopsis: "rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...] | rg --files [-g GLOB]... [PATH ...]"
 category: search
 ---
 
@@ -72,7 +72,7 @@ Machine-readable JSONL output:
 - Recursive search is the default; `-r` is accepted as a compatibility no-op.
 - Line numbers are already part of the default text output; `-n` is accepted as a compatibility no-op.
 - `--json` is accepted as a compatibility alias for `--fmt jsonl`, but `--fmt jsonl` is the canonical structured-mode contract.
-- `-g` matches shell-style globs against file basenames and slash-normalized virtual paths.
+- `-g` first matches shell-style globs against file basenames, then against the slash-normalized virtual path.
 - Negated glob patterns are not supported in the current implementation.
 - Exit code is 1 when no matches are found.
 

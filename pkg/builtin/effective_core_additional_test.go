@@ -231,6 +231,53 @@ func TestParseRGArgs(t *testing.T) {
 			t.Fatalf("parseRGArgs(--files -l) error = %q, want conflict message", errMsg)
 		}
 	})
+
+	t.Run("reject files and list conflict in reverse order", func(t *testing.T) {
+		_, errMsg := parseRGArgs([]string{"-l", "--files"}, requireAbsolutePath, "/workspace")
+		if errMsg != "rg: -l is not supported with --files" {
+			t.Fatalf("parseRGArgs(-l --files) error = %q, want conflict message", errMsg)
+		}
+	})
+}
+
+func TestMatchRGGlobs(t *testing.T) {
+	tests := []struct {
+		name     string
+		filePath string
+		globs    []string
+		want     bool
+	}{
+		{
+			name:     "basename glob matches",
+			filePath: "/workspace/readme.md",
+			globs:    []string{"*.md"},
+			want:     true,
+		},
+		{
+			name:     "full path glob matches",
+			filePath: "/workspace/readme.md",
+			globs:    []string{"workspace/*.md"},
+			want:     true,
+		},
+		{
+			name:     "non-matching glob rejected",
+			filePath: "/workspace/readme.md",
+			globs:    []string{"docs/*.md"},
+			want:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := matchRGGlobs(tt.filePath, tt.globs)
+			if err != nil {
+				t.Fatalf("matchRGGlobs(%q, %#v) error = %v", tt.filePath, tt.globs, err)
+			}
+			if got != tt.want {
+				t.Fatalf("matchRGGlobs(%q, %#v) = %t, want %t", tt.filePath, tt.globs, got, tt.want)
+			}
+		})
+	}
 }
 
 func TestDiffHelpers(t *testing.T) {

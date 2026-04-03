@@ -25,7 +25,7 @@ type rgArgs struct {
 func specRG() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandRG,
-		Manual: "rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...]",
+		Manual: "rg [-F] [-i|-S] [-l] [-g GLOB]... [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH ...] | rg --files [-g GLOB]... [PATH ...]",
 		Tips: []string{
 			"rg searches recursively by default and falls back to the current working directory when no path is given.",
 			"Use --files to list searchable files, optionally narrowed with one or more -g globs.",
@@ -189,6 +189,9 @@ func parseRGArgs(args []string, requireAbsolutePath func(string) (string, error)
 		}
 		idx++
 	}
+	if opts.filesOnly && opts.listFiles {
+		return opts, "rg: -l is not supported with --files"
+	}
 
 	if opts.filesOnly {
 		for idx < len(args) {
@@ -321,17 +324,14 @@ func matchRGGlobs(filePath string, globs []string) (bool, error) {
 		if strings.HasPrefix(pattern, "/") {
 			pattern = strings.TrimPrefix(pattern, "/")
 		}
-		if strings.Contains(pattern, "/") {
-			ok, err := path.Match(pattern, fullPath)
-			if err != nil {
-				return false, fmt.Errorf("invalid glob pattern: %v", err)
-			}
-			if ok {
-				return true, nil
-			}
-			continue
-		}
 		ok, err := path.Match(pattern, baseName)
+		if err != nil {
+			return false, fmt.Errorf("invalid glob pattern: %v", err)
+		}
+		if ok {
+			return true, nil
+		}
+		ok, err = path.Match(pattern, fullPath)
 		if err != nil {
 			return false, fmt.Errorf("invalid glob pattern: %v", err)
 		}
