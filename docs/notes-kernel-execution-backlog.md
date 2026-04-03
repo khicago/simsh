@@ -842,6 +842,7 @@ Optional but recommended:
   - Start with `inspect_edit_write_loop` as the direct-fit slice.
   - Prefer `relative_navigation_session` or `cancel_timeout_interruptions` as the one translated slice.
   - Reuse existing native scenario ids/categories and existing Terminal-Bench mapping statuses as the only identity/mapping sources; do not introduce benchmark-only scenario ids.
+  - The comparison layer should consume a checked-in native report artifact by default; do not make live native-suite execution a hidden runtime dependency of the comparison prototype.
 - Non-goals:
   - Do not adopt Terminal-Bench wholesale.
   - Do not map SWE-bench-Live end to end.

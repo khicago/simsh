@@ -21,6 +21,7 @@ The same evaluation layer may also include a lightweight comparison prototype:
 - it consumes the checked-in native benchmark report plus the checked-in inventory/mapping layer
 - it emits one compact comparison artifact for a narrowly chosen external family slice
 - it must not create a second scenario catalog or rename native scenarios
+- it should treat live benchmark re-execution as optional regeneration work, not as a hidden prerequisite for reading or validating the comparison artifact
 
 ## Status Values
 
