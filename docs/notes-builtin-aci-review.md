@@ -125,7 +125,7 @@ There is a useful emerging pattern already:
 | `cat` | Raw text or numbered text; appropriate for content reads. | Large file reads can still be too unconstrained. | Keep raw-text default. Do not over-structure. Rely on `head`/`tail`/`sed -n` for slicing. | Low |
 | `head` / `tail` | Good single-purpose text tools. | Minimal issue; mostly fine already. | Keep simple text shape. | Low |
 | `grep` | Familiar text output with context support. | Match records were not explicit objects; context line shape was awkward for machine parsing. | Keep current text mode. Add `--fmt jsonl` with flat `match|context|file` records. | High |
-| `rg` | Not present yet, even though many agent loops naturally reach for ripgrep-style search first. | The current surface splits text search (`grep`) and path discovery (`find`) into separate tools, which is principled but creates avoidable prompt friction for agent callers with strong `rg` muscle memory. | Add a first-class `rg` builtin as the agent-oriented search front door. Keep the scope intentionally smaller than ripgrep: cover common inspect/search flows, reuse kernel path semantics, preserve project output taxonomy, and refuse host-binary passthrough or full CLI cloning. | High |
+| `rg` | Not present yet, even though many agent loops naturally reach for ripgrep-style search first. | The current surface splits text search (`grep`) and path discovery (`find`) into separate tools, which is principled but creates avoidable prompt friction for agent callers with strong `rg` muscle memory. | Add a first-class `rg` builtin as the agent-oriented search front door. Keep the scope intentionally smaller than ripgrep: cover common inspect/search flows, reuse kernel path semantics, preserve project output taxonomy, and refuse host-binary passthrough or full CLI cloning. Keep `grep` as the simple text-first primitive and `find` as the path-discovery primitive rather than collapsing all three roles into one command. | High |
 | `frontmatter` | Best-in-class builtin today. | Could become the template for other commands. | Preserve as reference pattern; no major redesign needed. | Low |
 | `json` | New structure-aware inspector for JSON. | Risk of scope creep into a jq-like language. | Keep the first release small: `json stat` and `json get` with minimal path syntax, no filters, no mutation, no stdin. | High |
 | `echo` | Deterministic plain text. | None worth optimizing in kernel. | Keep as-is. | Low |
@@ -165,6 +165,7 @@ Compatibility aliases are acceptable only when they reduce high-frequency agent 
 That rule matters for commands such as a future `rg`:
 - the project may accept a familiar compatibility flag when it maps cleanly onto an existing output taxonomy;
 - the project should still document one canonical structured mode and one canonical output contract;
+- compatibility aliases should stay parser-level only; they should not become the documented primary contract or force duplicate `BuiltinCommandDoc` surfaces for the same behavior;
 - the project should not let compatibility flags become a back door for command-surface drift.
 
 But the default should still optimize for dual-readability and token efficiency. In other words:
