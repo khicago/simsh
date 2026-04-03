@@ -17,6 +17,11 @@ It does **not** mean `simsh` adopts those external benchmarks wholesale.
 - `swe_bench_live_mapping.json`
   - mapping from native scenarios to `SWE-bench-Live`
 
+The same evaluation layer may also include a lightweight comparison prototype:
+- it consumes the checked-in native benchmark report plus the checked-in inventory/mapping layer
+- it emits one compact comparison artifact for a narrowly chosen external family slice
+- it must not create a second scenario catalog or rename native scenarios
+
 ## Status Values
 
 - `as_is`
@@ -34,3 +39,4 @@ This folder is a downstream evaluation layer:
 - stable native scenario ids and categories stay canonical; task-shape summaries and truth-surface lists are curated evaluation metadata layered on top
 - it must not rename or mutate native scenarios to look more benchmark-compatible
 - it must not introduce environment synthesis or new runtime nouns
+- a comparison prototype should prefer one direct-fit slice plus at most one translated proof slice instead of broad external-family coverage

@@ -824,24 +824,24 @@ Optional but recommended:
   - Optionally include one translated Terminal-Bench-aligned slice to prove the translation approach without broadening the runtime.
   - Emit a compact comparison artifact or report, not a full external benchmark harness.
 - Files to touch:
-  - `benchmarks/internal/*`
-  - `benchmarks/simsh_native_reference/*`
+  - `benchmarks/internal/scenarios/*`
+  - `benchmarks/simsh_native_reference/README.md`
   - `benchmarks/external_mapping/*`
   - `benchmarks/terminal_bench_compare/*`
   - `task_outputs/research/*`
   - `docs/notes-kernel-execution-backlog.md`
-  - `.bagakit/long-run/bk-execution-handoff.md`
 - Validation command:
-  - `go test ./benchmarks/... -count=1`
+  - `go test ./benchmarks/external_mapping ./benchmarks/simsh_native_reference ./benchmarks/terminal_bench_compare -count=1`
   - `go test ./...`
 - Done gate:
   - A checked-in comparison/export layer exists for Terminal-Bench and stays downstream from the native benchmark report plus K-027 mapping artifacts.
-  - The prototype includes exactly one direct-fit scenario and one translated scenario.
-  - Tests fail if the prototype config drifts away from the current Terminal-Bench mapping layer.
-  - A compact report artifact or example output demonstrates the comparison layer without broadening into full benchmark adoption.
+  - The prototype centers `inspect_edit_write_loop` as the direct-fit slice and allows at most one translated proof slice.
+  - Tests fail if the prototype config drifts away from the current Terminal-Bench mapping layer or stops matching the native scenario inventory/report shape it depends on.
+  - A compact machine-readable comparison artifact is checked in, and an adjacent human-readable report explains the direct-fit vs translated comparison without broadening into full benchmark adoption.
 - Notes:
   - Start with `inspect_edit_write_loop` as the direct-fit slice.
   - Prefer `relative_navigation_session` or `cancel_timeout_interruptions` as the one translated slice.
+  - Reuse existing native scenario ids/categories and existing Terminal-Bench mapping statuses as the only identity/mapping sources; do not introduce benchmark-only scenario ids.
 - Non-goals:
   - Do not adopt Terminal-Bench wholesale.
   - Do not map SWE-bench-Live end to end.
