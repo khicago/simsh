@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement a lightweight Terminal-Bench comparison/export slice
+- [x] T-001 Implement a lightweight Terminal-Bench comparison/export slice
 
 ## Status Legend
 - todo

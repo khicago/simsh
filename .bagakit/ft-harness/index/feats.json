@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-03T19:38:38Z",
+  "updated_at": "2026-04-03T20:17:22Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -280,11 +280,11 @@
     {
       "feat_id": "f-20260403-lightweight-terminal-bench-comparison-prototype",
       "title": "Lightweight Terminal-Bench comparison prototype",
-      "status": "in_progress",
+      "status": "archived",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-04-03T19:38:38Z"
+      "updated_at": "2026-04-03T20:17:22Z"
     },
     {
       "feat_id": "f-20260403-runtime-comparables-benchmark-fit-research",

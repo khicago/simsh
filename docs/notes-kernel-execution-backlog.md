@@ -854,6 +854,22 @@ Optional but recommended:
 - Rollback note:
   - If the prototype starts mutating native benchmark semantics or growing into a full benchmark harness, cut it back to one direct-fit item, one translated item, and a compact export/report layer only.
 
+### K-029: Automate Terminal-Bench comparison freshness
+- Status: proposed
+- Why now: `K-028` proved the comparison layer is useful, but it still depends on manual regeneration of the native baseline plus the comparison artifact/report pair. The next highest-value move is to make that refresh path explicit and repeatable without broadening benchmark scope.
+- Kernel invariant: freshness automation must stay downstream from the native benchmark and the checked-in prototype scope; it must not turn the comparison layer into a second benchmark harness.
+- Proposed scope:
+  - Add one deterministic refresh command or script that regenerates:
+    - `benchmarks/simsh_native_reference/reports/baseline-20260404.json` successor
+    - `benchmarks/terminal_bench_compare/reports/*.json`
+    - `benchmarks/terminal_bench_compare/reports/*.md`
+  - Add one narrow guard that fails if the checked-in artifact pair drifts from the refresh path.
+  - Keep the current prototype scope unchanged.
+- Non-goals:
+  - Do not broaden the prototype beyond one direct-fit and one translated slice.
+  - Do not adopt Terminal-Bench wholesale.
+  - Do not add a second external benchmark family to the comparison layer.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.
