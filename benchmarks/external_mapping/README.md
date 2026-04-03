@@ -1,0 +1,36 @@
+# External Benchmark Mapping
+
+This directory captures the checked-in evaluation-feasibility layer for `simsh`.
+
+It answers a narrow question:
+
+- how current `simsh` native benchmark scenarios relate to external benchmark families.
+
+It does **not** mean `simsh` adopts those external benchmarks wholesale.
+
+## Artifacts
+
+- `scenario_inventory.json`
+  - curated evaluation inventory of native benchmark scenarios, keyed by stable native scenario ids
+- `terminal_bench_mapping.json`
+  - mapping from native scenarios to `Terminal-Bench`
+- `swe_bench_live_mapping.json`
+  - mapping from native scenarios to `SWE-bench-Live`
+
+## Status Values
+
+- `as_is`
+  - native scenario already matches the external family closely enough to compare without reshaping the task
+- `translated`
+  - the scenario is relevant, but only after a narrow translation layer
+- `excluded`
+  - the scenario should remain outside that external family because forcing a fit would distort `simsh` scope
+
+## Design Rule
+
+The native benchmark remains the primary SSOT.
+
+This folder is a downstream evaluation layer:
+- stable native scenario ids and categories stay canonical; task-shape summaries and truth-surface lists are curated evaluation metadata layered on top
+- it must not rename or mutate native scenarios to look more benchmark-compatible
+- it must not introduce environment synthesis or new runtime nouns

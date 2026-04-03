@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "external_family": "Terminal-Bench",
+  "relationship": "closest_external_family",
+  "scenarios": [
+    {
+      "scenario_id": "relative_navigation_session",
+      "status": "translated",
+      "rationale": "Relevant to terminal task flow, but the native scenario is still a narrow session-local navigation proof rather than a one-to-one external benchmark item.",
+      "translation_notes": "Use as a sub-behavior inside larger terminal tasks rather than as a direct external scenario analogue."
+    },
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "status": "as_is",
+      "rationale": "Already matches the read-edit-write patch loop that terminal-oriented coding benchmarks pressure most directly.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "mount_boundary_relative_path",
+      "status": "translated",
+      "rationale": "Relevant as a boundary or denial task, but external terminal families do not natively model simsh mount and synthetic path semantics.",
+      "translation_notes": "Translate mount and synthetic path boundaries into terminal-task preconditions plus explicit denial expectations instead of requiring simsh-style namespaces."
+    },
+    {
+      "scenario_id": "command_namespace_consistency",
+      "status": "excluded",
+      "rationale": "Validates simsh-specific builtin namespace and manual consistency rather than terminal-task behavior.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "trace_consumable_planning",
+      "status": "excluded",
+      "rationale": "Validates internal runtime evidence quality and planning legibility rather than a terminal task family item.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "adapter_projection_memory_lifecycle",
+      "status": "translated",
+      "rationale": "Relevant because it pressures realistic terminal-side projected data, but the current scenario depends on adapter-local memory, skills, and audit surfaces beyond terminal-only assumptions.",
+      "translation_notes": "Split into a smaller terminal-facing task shape that treats projected files as the task environment while preserving adapter-local truth surfaces as evaluation evidence."
+    },
+    {
+      "scenario_id": "adapter_composition_evolution_stress",
+      "status": "excluded",
+      "rationale": "Exercises dynamic evolution, projection refresh, control-plane mutation, and checkpoint truth more than terminal-task realism, so it belongs with dynamic-workload references instead of Terminal-Bench.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "resource_set_adapter_seam",
+      "status": "excluded",
+      "rationale": "Validates seam genericity across adapter shapes rather than terminal-task realism.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "cancel_timeout_interruptions",
+      "status": "translated",
+      "rationale": "Relevant because long-running terminal tasks need interruption semantics, but current simsh assertions are runtime-contract oriented rather than benchmark-task oriented.",
+      "translation_notes": "Translate into benchmark time-budget or cancellation expectations without weakening the underlying simsh interruption truth surfaces."
+    }
+  ]
+}

@@ -775,7 +775,7 @@ Optional but recommended:
 
 ### K-027: Map simsh to external benchmark families and evaluation feasibility
 - Feat: `f-20260403-external-benchmark-mapping-evaluation-feasibility`
-- Status: in_progress
+- Status: done
 - Why now: `K-026` concluded that the highest-value next move is not another primitive or adapter noun, but a benchmark-mapping / evaluation-feasibility wave. `simsh` now needs an explicit answer for what can be evaluated against Terminal-Bench or adjacent families as-is, what needs translation, and what should be intentionally excluded.
 - Kernel invariant: external benchmark mapping should reuse existing `simsh` truth surfaces and benchmark assets; it must not weaken native gates or push the runtime into full environment synthesis.
 - Proposed scope:
@@ -801,12 +801,31 @@ Optional but recommended:
 - Notes:
   - Keep Terminal-Bench as the primary external comparison family and SWE-bench-Live as the dynamic-workload reference.
   - Native benchmark scenarios remain the primary SSOT; translation stays in the mapping layer.
+  - `benchmarks/internal/scenarios/catalog.go` now keeps stable native scenario ids/categories separate from curated evaluation inventory metadata.
+  - `benchmarks/external_mapping/scenario_inventory.json` records the checked-in evaluation inventory and explicitly distinguishes canonical identity fields from curated task-shape/truth-surface metadata.
+  - `benchmarks/external_mapping/terminal_bench_mapping.json` currently lands at 1 `as_is`, 4 `translated`, and 4 `excluded`.
+  - `benchmarks/external_mapping/swe_bench_live_mapping.json` currently lands at 4 `translated` and 5 `excluded`.
+  - Guardrails now fail if native benchmark scenario ids drift, if mapping files lose scenario coverage, or if mapping-family headers/status fields drift.
+  - Validated with `go test ./benchmarks/external_mapping ./benchmarks/simsh_native_reference -count=1` and `go test ./...`.
 - Non-goals:
   - Do not adopt an external benchmark wholesale.
   - Do not add new product nouns or a third adapter just to chase benchmark fit.
   - Do not widen `simsh` toward environment synthesis.
 - Rollback note:
   - If the mapping work starts mutating native scenarios to look more benchmark-compatible, pull that behavior back out and keep the slice limited to inventory, mapping, and evaluation-feasibility artifacts.
+
+### K-028: Prototype a lightweight Terminal-Bench comparison layer
+- Status: proposed
+- Why now: `K-027` showed that Terminal-Bench is the only near-term family with a meaningful direct fit, but most relevant native scenarios still require translation. The next highest-value move is a small comparison prototype, not full benchmark adoption.
+- Kernel invariant: any external comparison layer must stay downstream from the native benchmark SSOT and must not require changing runtime semantics or widening `simsh` toward environment synthesis.
+- Proposed scope:
+  - Build one small comparison/export layer around the strongest current fit, starting with `inspect_edit_write_loop`.
+  - Optionally include one translated Terminal-Bench-aligned slice to prove the translation approach without broadening the runtime.
+  - Emit a compact comparison artifact or report, not a full external benchmark harness.
+- Non-goals:
+  - Do not adopt Terminal-Bench wholesale.
+  - Do not map SWE-bench-Live end to end.
+  - Do not add new runtime or adapter nouns just to improve external coverage.
 
 ## Backlog Rules
 

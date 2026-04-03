@@ -150,6 +150,8 @@ Mount conformance is now a sibling proof layer, not an afterthought inside lifec
 
 Once seam helpers are strong in isolation, the next proof layer SHOULD be composition/evolution stress validation: one harder workload that proves projection state, control-plane mutation, freshness/materialization, audit, metrics, denials, and checkpoint/resume still agree after multi-step evolution. This layer should reuse existing nouns and machine-readable surfaces rather than inventing new product concepts just to make the scenario broader.
 
+Once native proof layers are strong enough to compare against external benchmark families, that comparison SHOULD remain a downstream evaluation artifact rather than a new runtime-design driver. A good current shape is a checked-in mapping layer that keeps native scenario ids/categories canonical, treats richer task-shape or truth-surface summaries as curated evaluation metadata, and classifies each scenario as `as_is`, `translated`, or `excluded` for one or two benchmark families without mutating the native suite itself.
+
 ## Promotion Rule
 Kernel abstractions that only look good in isolated unit tests SHOULD remain provisional.
 

@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "source_benchmark": "simsh_native_reference",
+  "identity_contract": {
+    "canonical_fields": [
+      "id",
+      "category"
+    ],
+    "curated_fields": [
+      "task_shape",
+      "summary",
+      "truth_surfaces"
+    ]
+  },
+  "scenarios": [
+    {
+      "id": "relative_navigation_session",
+      "category": "relative_path_navigation",
+      "task_shape": "session_local_navigation",
+      "summary": "Exercises session-scoped cwd changes, relative path traversal, and low-noise path feedback inside the default workspace.",
+      "truth_surfaces": [
+        "virtual_cwd",
+        "relative_path_resolution",
+        "execution_trace"
+      ]
+    },
+    {
+      "id": "inspect_edit_write_loop",
+      "category": "file_inspect_edit_write_loops",
+      "task_shape": "inspect_edit_write_patch_workflow",
+      "summary": "Exercises the common read-edit-write loop for file inspection, mutation, and patch-style iteration.",
+      "truth_surfaces": [
+        "file_mutation",
+        "execution_trace",
+        "session_continuity"
+      ]
+    },
+    {
+      "id": "mount_boundary_relative_path",
+      "category": "mount_synthetic_capability_boundaries",
+      "task_shape": "mount_boundary_and_denial",
+      "summary": "Exercises mount-backed and synthetic capability boundaries, including relative access and explicit denial semantics.",
+      "truth_surfaces": [
+        "path_capabilities",
+        "denied_paths",
+        "relative_path_resolution"
+      ]
+    },
+    {
+      "id": "command_namespace_consistency",
+      "category": "command_namespace_consistency",
+      "task_shape": "command_introspection",
+      "summary": "Exercises builtin namespace discovery and command-manual consistency rather than repo-task execution pressure.",
+      "truth_surfaces": [
+        "builtin_namespace",
+        "manual_summary"
+      ]
+    },
+    {
+      "id": "trace_consumable_planning",
+      "category": "trace_consumable_planning",
+      "task_shape": "trace_to_planning_feedback",
+      "summary": "Exercises whether structured trace and result surfaces are legible enough to drive downstream planning behavior.",
+      "truth_surfaces": [
+        "execution_trace",
+        "structured_result_feedback"
+      ]
+    },
+    {
+      "id": "adapter_projection_memory_lifecycle",
+      "category": "adapter_backed_projection_validation",
+      "task_shape": "adapter_projection_lifecycle",
+      "summary": "Exercises rich adapter-backed projection, managed memory, skills selection, audit, metrics, denials, and workflow state.",
+      "truth_surfaces": [
+        "projection_indexes",
+        "managed_memory",
+        "workflow_views",
+        "skills_selection",
+        "control_plane_audit",
+        "projection_metrics",
+        "denial_surfaces"
+      ]
+    },
+    {
+      "id": "adapter_composition_evolution_stress",
+      "category": "adapter_composition_evolution_truth",
+      "task_shape": "multi_step_adapter_evolution",
+      "summary": "Exercises multi-step composition where projection refresh, control-plane mutation, denials, and resume must remain aligned together.",
+      "truth_surfaces": [
+        "projection_indexes",
+        "freshness_materialization",
+        "control_plane_audit",
+        "projection_metrics",
+        "denial_surfaces",
+        "checkpoint_resume"
+      ]
+    },
+    {
+      "id": "resource_set_adapter_seam",
+      "category": "adapter_second_seam_validation",
+      "task_shape": "second_adapter_minimal_seam",
+      "summary": "Exercises the smaller resourceset adapter so seam validation does not silently overfit to the richer reference adapter.",
+      "truth_surfaces": [
+        "resource_projection",
+        "managed_memory",
+        "denial_surfaces",
+        "checkpoint_resume"
+      ]
+    },
+    {
+      "id": "cancel_timeout_interruptions",
+      "category": "cancel_timeout_interruption",
+      "task_shape": "interruptibility_and_budget_enforcement",
+      "summary": "Exercises cancellation and timeout handling so interruption truth remains explicit to callers and traces.",
+      "truth_surfaces": [
+        "cancellation",
+        "timeout",
+        "execution_result"
+      ]
+    }
+  ]
+}

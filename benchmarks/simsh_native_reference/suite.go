@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	benchmarkscenarios "github.com/khicago/simsh/benchmarks/internal/scenarios"
 	referenceadapter "github.com/khicago/simsh/pkg/adapter/reference"
 	resourcesetadapter "github.com/khicago/simsh/pkg/adapter/resourceset"
 	"github.com/khicago/simsh/pkg/contract"
@@ -173,6 +174,11 @@ type namedCheck struct {
 	ok   bool
 }
 
+type scenarioSpec struct {
+	Identity benchmarkscenarios.Identity
+	Run      func() (ScenarioReport, error)
+}
+
 func defaultThresholds() GateThresholds {
 	return GateThresholds{
 		TraceCompleteness:        0.90,
@@ -183,26 +189,19 @@ func defaultThresholds() GateThresholds {
 }
 
 func runSuite() (SuiteReport, error) {
-	scenarios := []func() (ScenarioReport, error){
-		runRelativeNavigationScenario,
-		runInspectEditWriteScenario,
-		runMountBoundaryScenario,
-		runCommandNamespaceScenario,
-		runTracePlanningScenario,
-		runAdapterProjectionScenario,
-		runAdapterCompositionEvolutionStressScenario,
-		runResourceSetAdapterScenario,
-		runCancelTimeoutScenario,
-	}
+	scenarios := nativeReferenceScenarioSpecs()
 
 	report := SuiteReport{
 		GeneratedAt: time.Now().UTC(),
 		Thresholds:  defaultThresholds(),
 		Scenarios:   make([]ScenarioReport, 0, len(scenarios)),
 	}
-	for _, run := range scenarios {
-		scenario, err := run()
+	for _, spec := range scenarios {
+		scenario, err := spec.Run()
 		if err != nil {
+			return SuiteReport{}, err
+		}
+		if err := validateScenarioReport(spec.Identity, scenario); err != nil {
 			return SuiteReport{}, err
 		}
 		report.Scenarios = append(report.Scenarios, scenario)
@@ -211,6 +210,47 @@ func runSuite() (SuiteReport, error) {
 	report.Metrics = computeMetrics(report.Scenarios)
 	report.Gates = evaluateGates(report.Metrics, report.Thresholds)
 	return report, nil
+}
+
+func nativeReferenceScenarioSpecs() []scenarioSpec {
+	runByID := map[string]func() (ScenarioReport, error){
+		"relative_navigation_session":          runRelativeNavigationScenario,
+		"inspect_edit_write_loop":              runInspectEditWriteScenario,
+		"mount_boundary_relative_path":         runMountBoundaryScenario,
+		"command_namespace_consistency":        runCommandNamespaceScenario,
+		"trace_consumable_planning":            runTracePlanningScenario,
+		"adapter_projection_memory_lifecycle":  runAdapterProjectionScenario,
+		"adapter_composition_evolution_stress": runAdapterCompositionEvolutionStressScenario,
+		"resource_set_adapter_seam":            runResourceSetAdapterScenario,
+		"cancel_timeout_interruptions":         runCancelTimeoutScenario,
+	}
+
+	identities := benchmarkscenarios.NativeReferenceIdentities()
+	specs := make([]scenarioSpec, 0, len(identities))
+	for _, identity := range identities {
+		run, ok := runByID[identity.ID]
+		if !ok {
+			panic(fmt.Sprintf("missing native reference scenario runner for %q", identity.ID))
+		}
+		specs = append(specs, scenarioSpec{
+			Identity: identity,
+			Run:      run,
+		})
+	}
+	if len(specs) != len(runByID) {
+		panic(fmt.Sprintf("native reference scenario catalog has %d entries but runner binding has %d", len(specs), len(runByID)))
+	}
+	return specs
+}
+
+func validateScenarioReport(identity benchmarkscenarios.Identity, report ScenarioReport) error {
+	if report.Name != identity.ID {
+		return fmt.Errorf("scenario %q returned report name %q", identity.ID, report.Name)
+	}
+	if report.Category != identity.Category {
+		return fmt.Errorf("scenario %q returned category %q, want %q", identity.ID, report.Category, identity.Category)
+	}
+	return nil
 }
 
 func computeMetrics(scenarios []ScenarioReport) GateMetrics {

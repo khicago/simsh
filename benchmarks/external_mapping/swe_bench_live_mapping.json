@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "external_family": "SWE-bench-Live",
+  "relationship": "dynamic_workload_reference",
+  "scenarios": [
+    {
+      "scenario_id": "relative_navigation_session",
+      "status": "translated",
+      "rationale": "Navigation matters inside live SWE tasks, but this native scenario is smaller and more runtime-centric than issue-resolution task evaluation.",
+      "translation_notes": "Use as a sub-behavior inside repo-task workflows rather than as a standalone direct benchmark analogue."
+    },
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "status": "translated",
+      "rationale": "The edit loop is central to live SWE work, but the native scenario is narrower than issue-driven repair and verification flows.",
+      "translation_notes": "Translate into issue-oriented patch-and-verify slices instead of treating the current loop as a one-to-one benchmark item."
+    },
+    {
+      "scenario_id": "mount_boundary_relative_path",
+      "status": "excluded",
+      "rationale": "Mount and synthetic capability boundaries are runtime-truth checks, not a direct match for live software engineering task families.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "command_namespace_consistency",
+      "status": "excluded",
+      "rationale": "Builtin namespace consistency is simsh ACI validation, not live repository-task evaluation.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "trace_consumable_planning",
+      "status": "excluded",
+      "rationale": "Validates runtime evidence legibility directly, which should remain an internal rubric layered on top of mapped dynamic tasks rather than a direct SWE-bench-Live scenario mapping.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "adapter_projection_memory_lifecycle",
+      "status": "excluded",
+      "rationale": "Current scenario is too adapter- and projection-specific to serve as a direct live SWE benchmark comparison.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "adapter_composition_evolution_stress",
+      "status": "translated",
+      "rationale": "Closest fit for dynamic workload drift because it pressures multi-step evolution and revalidation over time.",
+      "translation_notes": "Translate into changing-task or changing-environment evaluation where simsh proof surfaces remain side evidence instead of the benchmark's primary API."
+    },
+    {
+      "scenario_id": "resource_set_adapter_seam",
+      "status": "excluded",
+      "rationale": "Second-adapter seam validation proves genericity, not live software engineering task quality.",
+      "translation_notes": ""
+    },
+    {
+      "scenario_id": "cancel_timeout_interruptions",
+      "status": "translated",
+      "rationale": "Long-running live tasks need interruption and timeout pressure, but current scenario is scoped to runtime contract truth rather than issue-resolution success.",
+      "translation_notes": "Translate into time-budget and interruption expectations attached to evolving tasks, not as a standalone direct benchmark analogue."
+    }
+  ]
+}

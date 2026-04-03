@@ -33,6 +33,11 @@ Metric note:
 - `trace_completeness` only counts trace assertions.
 - Scenario/business assertions are tracked separately inside each scenario report and do not dilute the trace gate.
 
+External benchmark mapping:
+- `benchmarks/external_mapping/` is the downstream evaluation-feasibility layer for this native suite.
+- Stable native scenario ids and categories remain the primary SSOT.
+- External mapping artifacts classify each native scenario as `as_is`, `translated`, or `excluded` for families such as Terminal-Bench and SWE-bench-Live without mutating the native suite to look more benchmark-compatible.
+
 Run it with:
 
 ```bash
