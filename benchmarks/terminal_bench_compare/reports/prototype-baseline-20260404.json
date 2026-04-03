@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "external_family": "Terminal-Bench",
+  "source": {
+    "benchmark": "simsh_native_reference",
+    "report_path": "benchmarks/simsh_native_reference/reports/baseline-20260404.json",
+    "generated_at": "2026-04-03T19:58:51.457887Z"
+  },
+  "scope": {
+    "version": 1,
+    "external_family": "Terminal-Bench",
+    "comparison_rule": "one_direct_fit_plus_one_translated_slice",
+    "scenarios": [
+      {
+        "scenario_id": "inspect_edit_write_loop",
+        "role": "direct_fit",
+        "expected_status": "as_is",
+        "external_task": "terminal_file_inspect_edit_loop",
+        "comparison_goal": "direct_fit",
+        "comparable_dimensions": [
+          "read_edit_write_patch_loop",
+          "trace_visible_task_result",
+          "reviewable_patch_workflow"
+        ],
+        "excluded_dimensions": [
+          "full_terminal_bench_task_suite"
+        ],
+        "why_selected": "Closest current native fit to terminal-oriented read-edit-write patch workflows."
+      },
+      {
+        "scenario_id": "relative_navigation_session",
+        "role": "translated_proof",
+        "expected_status": "translated",
+        "external_task": "terminal_relative_navigation_subflow",
+        "comparison_goal": "translation_proof",
+        "comparable_dimensions": [
+          "relative_navigation",
+          "session_cwd_continuity",
+          "path_resolution_feedback"
+        ],
+        "excluded_dimensions": [
+          "full_repo_task_context",
+          "broader_terminal_bench_environment_shape"
+        ],
+        "why_selected": "Smallest translated slice that exercises terminal-task navigation pressure without dragging in broader runtime or adapter semantics."
+      }
+    ],
+    "non_goals": [
+      "Do not adopt Terminal-Bench wholesale.",
+      "Do not introduce benchmark-only scenario ids.",
+      "Do not widen coverage beyond one translated proof slice."
+    ]
+  },
+  "summary": {
+    "compared_scenarios": 2,
+    "direct_fit_scenarios": 1,
+    "translated_proof_scenarios": 1,
+    "all_native_successful": true
+  },
+  "scenarios": [
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "category": "file_inspect_edit_write_loops",
+      "task_shape": "inspect_edit_write_patch_workflow",
+      "role": "direct_fit",
+      "mapping_status": "as_is",
+      "comparison_goal": "direct_fit",
+      "external_task": "terminal_file_inspect_edit_loop",
+      "summary": "Exercises the common read-edit-write loop for file inspection, mutation, and patch-style iteration.",
+      "truth_surfaces": [
+        "file_mutation",
+        "execution_trace",
+        "session_continuity"
+      ],
+      "comparable_dimensions": [
+        "read_edit_write_patch_loop",
+        "trace_visible_task_result",
+        "reviewable_patch_workflow"
+      ],
+      "excluded_dimensions": [
+        "full_terminal_bench_task_suite"
+      ],
+      "rationale": "Already matches the read-edit-write patch loop that terminal-oriented coding benchmarks pressure most directly.",
+      "why_selected": "Closest current native fit to terminal-oriented read-edit-write patch workflows.",
+      "evidence_refs": [
+        "benchmarks/external_mapping/scenario_inventory.json#inspect_edit_write_loop",
+        "benchmarks/external_mapping/terminal_bench_mapping.json#inspect_edit_write_loop",
+        "benchmarks/terminal_bench_compare/prototype_scope.json#inspect_edit_write_loop",
+        "benchmarks/simsh_native_reference/reports/baseline-20260404.json#inspect_edit_write_loop"
+      ],
+      "native_result": {
+        "success": true,
+        "session_scoped": true,
+        "async_candidate": true,
+        "patch_workflow": true,
+        "duration_ms": 4,
+        "trace_completeness": 1,
+        "assertion_completeness": 1
+      }
+    },
+    {
+      "scenario_id": "relative_navigation_session",
+      "category": "relative_path_navigation",
+      "task_shape": "session_local_navigation",
+      "role": "translated_proof",
+      "mapping_status": "translated",
+      "comparison_goal": "translation_proof",
+      "external_task": "terminal_relative_navigation_subflow",
+      "summary": "Exercises session-scoped cwd changes, relative path traversal, and low-noise path feedback inside the default workspace.",
+      "truth_surfaces": [
+        "virtual_cwd",
+        "relative_path_resolution",
+        "execution_trace"
+      ],
+      "comparable_dimensions": [
+        "relative_navigation",
+        "session_cwd_continuity",
+        "path_resolution_feedback"
+      ],
+      "excluded_dimensions": [
+        "full_repo_task_context",
+        "broader_terminal_bench_environment_shape"
+      ],
+      "rationale": "Relevant to terminal task flow, but the native scenario is still a narrow session-local navigation proof rather than a one-to-one external benchmark item.",
+      "translation_notes": "Use as a sub-behavior inside larger terminal tasks rather than as a direct external scenario analogue.",
+      "why_selected": "Smallest translated slice that exercises terminal-task navigation pressure without dragging in broader runtime or adapter semantics.",
+      "evidence_refs": [
+        "benchmarks/external_mapping/scenario_inventory.json#relative_navigation_session",
+        "benchmarks/external_mapping/terminal_bench_mapping.json#relative_navigation_session",
+        "benchmarks/terminal_bench_compare/prototype_scope.json#relative_navigation_session",
+        "benchmarks/simsh_native_reference/reports/baseline-20260404.json#relative_navigation_session"
+      ],
+      "native_result": {
+        "success": true,
+        "session_scoped": true,
+        "async_candidate": false,
+        "patch_workflow": false,
+        "duration_ms": 4,
+        "trace_completeness": 1,
+        "assertion_completeness": 1
+      }
+    }
+  ]
+}

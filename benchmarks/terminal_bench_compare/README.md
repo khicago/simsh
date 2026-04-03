@@ -1,43 +1,52 @@
 # Terminal-Bench Comparison Prototype
 
-This directory is the lightweight K-028 comparison layer for `simsh`.
+This directory is the K-028 lightweight comparison layer for `simsh`.
 
-It exists to answer one narrow question:
+It answers a narrower question than the mapping layer:
 
-- what does the current native benchmark suite look like when projected through the smallest useful Terminal-Bench comparison slice?
+- given the current native benchmark suite and Terminal-Bench mapping, what is the smallest checked-in comparison artifact worth maintaining right now?
 
-It is downstream from two existing truth sources:
+This layer stays strictly downstream from:
 
-1. the native benchmark report emitted by `benchmarks/simsh_native_reference`
-2. the checked-in evaluation-feasibility layer under `benchmarks/external_mapping/`
+- `benchmarks/internal/scenarios/`
+- `benchmarks/simsh_native_reference/`
+- `benchmarks/external_mapping/`
 
-It does **not** adopt Terminal-Bench wholesale.
+## Scope Contract
 
-## Design Contract
+`prototype_scope.json` is the checked-in scope SSOT for the prototype.
 
-- Native scenario ids and categories remain canonical.
-- Mapping statuses (`as_is`, `translated`, `excluded`) remain interpretation metadata from `benchmarks/external_mapping/terminal_bench_mapping.json`.
-- The comparison prototype consumes those inputs and emits compact artifacts; it does not create a second benchmark suite.
-- The prototype should center the strongest direct fit (`inspect_edit_write_loop`) and may include at most one translated proof slice.
-- The comparison layer must stay report-driven and read-only with respect to native benchmark semantics.
+Current design rules:
+- exactly one direct-fit native scenario
+- exactly one translated proof slice
+- all scenario ids must come from the native benchmark catalog
+- all expected statuses must match `benchmarks/external_mapping/terminal_bench_mapping.json`
 
 ## Non-Goals
 
-- no full Terminal-Bench harness
-- no benchmark-only scenario ids
-- no runtime or adapter expansion to improve external coverage
-- no pressure to rename native scenarios to look more benchmark-native
+- full Terminal-Bench harness adoption
+- benchmark-only scenario ids
+- changes to native benchmark semantics or runtime behavior
+- broad translated coverage beyond one proof slice
 
 ## Expected Outputs
 
-The implementation in this directory should emit:
+The completed comparison layer emits:
+- one compact machine-readable comparison artifact
+- one adjacent human-readable summary/report
 
-- one machine-readable comparison artifact
-- one adjacent human-readable report
+Both outputs should be derived from the native benchmark report plus the K-027 mapping artifacts rather than hand-maintained in parallel.
 
-Those outputs should make provenance explicit:
+Current checked-in outputs:
+- `reports/prototype-baseline-20260404.json`
+- `reports/prototype-baseline-20260404.md`
 
-- which native report was consumed
-- which native scenarios were selected
-- whether each selected slice is `as_is` or `translated`
-- what translation notes or exclusions still bound the result
+Regenerate with:
+
+```bash
+go run ./benchmarks/terminal_bench_compare \
+  -scope benchmarks/terminal_bench_compare/prototype_scope.json \
+  -report benchmarks/simsh_native_reference/reports/baseline-20260404.json \
+  -out-json benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.json \
+  -out-md benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.md
+```

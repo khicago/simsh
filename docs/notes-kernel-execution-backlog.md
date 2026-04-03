@@ -816,7 +816,7 @@ Optional but recommended:
 
 ### K-028: Prototype a lightweight Terminal-Bench comparison layer
 - Feat: `f-20260403-lightweight-terminal-bench-comparison-prototype`
-- Status: in_progress
+- Status: done
 - Why now: `K-027` showed that Terminal-Bench is the only near-term family with a meaningful direct fit, but most relevant native scenarios still require translation. The next highest-value move is a small comparison prototype, not full benchmark adoption.
 - Kernel invariant: any external comparison layer must stay downstream from the native benchmark SSOT and must not require changing runtime semantics or widening `simsh` toward environment synthesis.
 - Proposed scope:
@@ -840,9 +840,13 @@ Optional but recommended:
   - A compact machine-readable comparison artifact is checked in, and an adjacent human-readable report explains the direct-fit vs translated comparison without broadening into full benchmark adoption.
 - Notes:
   - Start with `inspect_edit_write_loop` as the direct-fit slice.
-  - Prefer `relative_navigation_session` or `cancel_timeout_interruptions` as the one translated slice.
+  - The shipped translated proof slice is `relative_navigation_session`.
   - Reuse existing native scenario ids/categories and existing Terminal-Bench mapping statuses as the only identity/mapping sources; do not introduce benchmark-only scenario ids.
   - The comparison layer should consume a checked-in native report artifact by default; do not make live native-suite execution a hidden runtime dependency of the comparison prototype.
+  - The checked-in scope SSOT is `benchmarks/terminal_bench_compare/prototype_scope.json`.
+  - The checked-in artifact/report pair is `benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.{json,md}`.
+  - The current native input is `benchmarks/simsh_native_reference/reports/baseline-20260404.json`.
+  - Validated with `go test ./benchmarks/external_mapping ./benchmarks/terminal_bench_compare -count=1`, `go test ./benchmarks/... -count=1`, and `go test ./...`.
 - Non-goals:
   - Do not adopt Terminal-Bench wholesale.
   - Do not map SWE-bench-Live end to end.

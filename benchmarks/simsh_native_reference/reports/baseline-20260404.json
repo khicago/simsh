@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-04-03T19:58:51.457887Z",
+  "thresholds": {
+    "trace_completeness": 0.9,
+    "session_success": 0.8,
+    "reviewable_patch_latency_ms": 900000,
+    "async_completion_success": 0.6
+  },
+  "metrics": {
+    "trace_completeness": 1,
+    "session_success": 1,
+    "reviewable_patch_latency_ms": 4,
+    "async_completion_success": 1
+  },
+  "gates": [
+    {
+      "name": "trace_completeness",
+      "actual": 1,
+      "threshold": 0.9,
+      "pass": true
+    },
+    {
+      "name": "session_success",
+      "actual": 1,
+      "threshold": 0.8,
+      "pass": true
+    },
+    {
+      "name": "reviewable_patch_latency_ms",
+      "actual": 4,
+      "threshold": 900000,
+      "pass": true
+    },
+    {
+      "name": "async_completion_success",
+      "actual": 1,
+      "threshold": 0.6,
+      "pass": true
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "relative_navigation_session",
+      "category": "relative_path_navigation",
+      "success": true,
+      "session_scoped": true,
+      "async_candidate": false,
+      "patch_workflow": false,
+      "duration_ms": 4,
+      "trace_checks_passed": 2,
+      "trace_checks_total": 2,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 6,
+      "assertion_checks_total": 6,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "inspect_edit_write_loop",
+      "category": "file_inspect_edit_write_loops",
+      "success": true,
+      "session_scoped": true,
+      "async_candidate": true,
+      "patch_workflow": true,
+      "duration_ms": 4,
+      "trace_checks_passed": 4,
+      "trace_checks_total": 4,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 2,
+      "assertion_checks_total": 2,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "mount_boundary_relative_path",
+      "category": "mount_synthetic_capability_boundaries",
+      "success": true,
+      "session_scoped": false,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 0,
+      "trace_checks_passed": 2,
+      "trace_checks_total": 2,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 1,
+      "assertion_checks_total": 1,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "command_namespace_consistency",
+      "category": "command_namespace_consistency",
+      "success": true,
+      "session_scoped": false,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 0,
+      "trace_checks_passed": 0,
+      "trace_checks_total": 0,
+      "assertion_checks_passed": 4,
+      "assertion_checks_total": 4,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "trace_consumable_planning",
+      "category": "trace_consumable_planning",
+      "success": true,
+      "session_scoped": false,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 1,
+      "trace_checks_passed": 5,
+      "trace_checks_total": 5,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 2,
+      "assertion_checks_total": 2,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "adapter_projection_memory_lifecycle",
+      "category": "adapter_backed_projection_validation",
+      "success": true,
+      "session_scoped": true,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 7,
+      "trace_checks_passed": 10,
+      "trace_checks_total": 10,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 67,
+      "assertion_checks_total": 67,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "adapter_composition_evolution_stress",
+      "category": "adapter_composition_evolution_truth",
+      "success": true,
+      "session_scoped": true,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 5,
+      "trace_checks_passed": 10,
+      "trace_checks_total": 10,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 27,
+      "assertion_checks_total": 27,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "resource_set_adapter_seam",
+      "category": "adapter_second_seam_validation",
+      "success": true,
+      "session_scoped": true,
+      "async_candidate": false,
+      "patch_workflow": false,
+      "duration_ms": 0,
+      "trace_checks_passed": 6,
+      "trace_checks_total": 6,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 15,
+      "assertion_checks_total": 15,
+      "assertion_completeness": 1
+    },
+    {
+      "name": "cancel_timeout_interruptions",
+      "category": "cancel_timeout_interruption",
+      "success": true,
+      "session_scoped": false,
+      "async_candidate": true,
+      "patch_workflow": false,
+      "duration_ms": 0,
+      "trace_checks_passed": 2,
+      "trace_checks_total": 2,
+      "trace_completeness": 1,
+      "assertion_checks_passed": 2,
+      "assertion_checks_total": 2,
+      "assertion_completeness": 1
+    }
+  ]
+}

@@ -16,12 +16,18 @@ It does **not** mean `simsh` adopts those external benchmarks wholesale.
   - mapping from native scenarios to `Terminal-Bench`
 - `swe_bench_live_mapping.json`
   - mapping from native scenarios to `SWE-bench-Live`
+- `../terminal_bench_compare/prototype_scope.json`
+  - narrow scope SSOT for the checked-in Terminal-Bench comparison prototype
+- `../terminal_bench_compare/reports/prototype-baseline-20260404.json`
+  - machine-readable comparison artifact derived from the checked-in native baseline plus Terminal-Bench mapping
+- `../terminal_bench_compare/reports/prototype-baseline-20260404.md`
+  - human-readable summary derived from the same comparison artifact inputs
 
-The same evaluation layer may also include a lightweight comparison prototype:
+The same evaluation layer now feeds a lightweight comparison prototype:
 - it consumes the checked-in native benchmark report plus the checked-in inventory/mapping layer
 - it emits one compact comparison artifact for a narrowly chosen external family slice
-- it must not create a second scenario catalog or rename native scenarios
-- it should treat live benchmark re-execution as optional regeneration work, not as a hidden prerequisite for reading or validating the comparison artifact
+- it does not create a second scenario catalog or rename native scenarios
+- it treats live benchmark re-execution as optional regeneration work, not as a hidden prerequisite for reading or validating the comparison artifact
 
 ## Status Values
 
@@ -40,4 +46,6 @@ This folder is a downstream evaluation layer:
 - stable native scenario ids and categories stay canonical; task-shape summaries and truth-surface lists are curated evaluation metadata layered on top
 - it must not rename or mutate native scenarios to look more benchmark-compatible
 - it must not introduce environment synthesis or new runtime nouns
+
+Downstream consumers such as `benchmarks/terminal_bench_compare/` should read these artifacts as typed inputs rather than duplicating JSON schemas ad hoc.
 - a comparison prototype should prefer one direct-fit slice plus at most one translated proof slice instead of broad external-family coverage

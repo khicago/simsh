@@ -50,3 +50,9 @@ Write a report to disk with:
 ```bash
 go run ./benchmarks/simsh_native_reference -out benchmarks/simsh_native_reference/reports/baseline-latest.json
 ```
+
+Latest checked-in full baseline used by the Terminal-Bench comparison prototype:
+
+```text
+benchmarks/simsh_native_reference/reports/baseline-20260404.json
+```

@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "external_family": "Terminal-Bench",
+  "comparison_rule": "one_direct_fit_plus_one_translated_slice",
+  "scenarios": [
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "role": "direct_fit",
+      "expected_status": "as_is",
+      "external_task": "terminal_file_inspect_edit_loop",
+      "comparison_goal": "direct_fit",
+      "comparable_dimensions": [
+        "read_edit_write_patch_loop",
+        "trace_visible_task_result",
+        "reviewable_patch_workflow"
+      ],
+      "excluded_dimensions": [
+        "full_terminal_bench_task_suite"
+      ],
+      "why_selected": "Closest current native fit to terminal-oriented read-edit-write patch workflows."
+    },
+    {
+      "scenario_id": "relative_navigation_session",
+      "role": "translated_proof",
+      "expected_status": "translated",
+      "external_task": "terminal_relative_navigation_subflow",
+      "comparison_goal": "translation_proof",
+      "comparable_dimensions": [
+        "relative_navigation",
+        "session_cwd_continuity",
+        "path_resolution_feedback"
+      ],
+      "excluded_dimensions": [
+        "full_repo_task_context",
+        "broader_terminal_bench_environment_shape"
+      ],
+      "why_selected": "Smallest translated slice that exercises terminal-task navigation pressure without dragging in broader runtime or adapter semantics."
+    }
+  ],
+  "non_goals": [
+    "Do not adopt Terminal-Bench wholesale.",
+    "Do not introduce benchmark-only scenario ids.",
+    "Do not widen coverage beyond one translated proof slice."
+  ]
+}
