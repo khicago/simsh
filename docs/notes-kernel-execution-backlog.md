@@ -752,6 +752,42 @@ Optional but recommended:
 
 ### K-026: Research comparable runtimes and benchmark fit for the next wave
 - Feat: `f-20260403-runtime-comparables-benchmark-fit-research`
+- Status: done
+- Why now: the current adapter-seam proof wave is closed, so the next investment choice became a strategy question rather than an implementation-debt question. Before opening another build wave, `simsh` needed a narrow comparison against directly relevant runtimes and benchmark families.
+- Kernel invariant: research must stay decision-oriented and pressure-tested against current `simsh` scope; it must not become an open-ended survey or a hidden product-expansion wave.
+- Files to touch:
+  - `task_outputs/research/*`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - review the resulting research brief for a concrete next-feat recommendation, explicit rejected alternatives, and explicit non-goals
+- Done gate:
+  - The research output compares directly relevant runtime implementations.
+  - The research output compares benchmark families by fit to current `simsh` scope.
+  - The output ends with one recommended next feat and a short rejected-alternatives section.
+  - The slice leaves behind a decision-quality artifact rather than only link collection.
+- Notes:
+  - The formal output is `task_outputs/research/runtime-comparables-benchmark-fit-study-2026-04-04.md`.
+  - The strongest conclusion is to start with a benchmark-mapping / evaluation-feasibility wave rather than another raw feature wave.
+  - Terminal-Bench is the closest external benchmark family for current `simsh`; SWE-bench-Live is the strongest dynamic-workload reference; EnvBench/ResearchEnvBench stay boundary references.
+- Rollback note:
+  - If the research starts broadening into a generic field survey, cut it back to runtime fit, benchmark fit, and one next-feat recommendation only.
+
+### K-027: Map simsh to external benchmark families and evaluation feasibility
+- Status: proposed
+- Why now: `K-026` concluded that the highest-value next move is not another primitive or adapter noun, but a benchmark-mapping / evaluation-feasibility wave. `simsh` now needs an explicit answer for what can be evaluated against Terminal-Bench or adjacent families as-is, what needs translation, and what should be intentionally excluded.
+- Kernel invariant: external benchmark mapping should reuse existing `simsh` truth surfaces and benchmark assets; it must not weaken native gates or push the runtime into full environment synthesis.
+- Proposed scope:
+  - Map current `simsh`-native benchmark scenarios to one or two external benchmark families.
+  - Define what `simsh` can evaluate faithfully, what requires translation, and what is out of scope.
+  - Produce one or two lightweight evaluation adapters or mapping artifacts, not full benchmark adoption.
+- Non-goals:
+  - Do not adopt an external benchmark wholesale.
+  - Do not add new product nouns or a third adapter just to chase benchmark fit.
+  - Do not widen `simsh` toward environment synthesis.
+
+### K-026: Research comparable runtimes and benchmark fit for the next wave
+- Feat: `f-20260403-runtime-comparables-benchmark-fit-research`
 - Status: in_progress
 - Why now: the current adapter-seam proof wave is closed, but the next investment choice is now a strategy question rather than an implementation-debt question. Before opening the next build wave, `simsh` should compare itself to a few directly relevant runtime implementations and benchmark families, then select the next feat deliberately.
 - Kernel invariant: research should stay decision-oriented and pressure-tested against current `simsh` scope; it should not become an open-ended survey or a hidden product expansion wave.
