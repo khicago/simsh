@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-03T18:45:42Z",
+  "updated_at": "2026-04-03T19:00:37Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -271,11 +271,11 @@
     {
       "feat_id": "f-20260403-external-benchmark-mapping-evaluation-feasibility",
       "title": "External benchmark mapping and evaluation feasibility",
-      "status": "in_progress",
+      "status": "archived",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-04-03T18:45:42Z"
+      "updated_at": "2026-04-03T19:00:37Z"
     },
     {
       "feat_id": "f-20260403-runtime-comparables-benchmark-fit-research",

@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260403-external-benchmark-mapping-evaluation-feasibility",
-  "updated_at": "2026-04-03T18:45:42Z",
+  "updated_at": "2026-04-03T19:00:37Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Build external benchmark mapping artifacts and drift guardrails",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Create a canonical native benchmark scenario inventory, map it to Terminal-Bench and SWE-bench-Live, and add narrow tests so native benchmark evolution cannot drift away from the mapping layer.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-03T19:00:20Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
       "started_at": "2026-04-03T18:45:42Z",
-      "finished_at": null,
-      "updated_at": "2026-04-03T18:45:42Z",
+      "finished_at": "2026-04-03T19:00:37Z",
+      "updated_at": "2026-04-03T19:00:37Z",
       "notes": []
     }
   ]

@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Build external benchmark mapping artifacts and drift guardrails
+- [x] T-001 Build external benchmark mapping artifacts and drift guardrails
 
 ## Status Legend
 - todo
