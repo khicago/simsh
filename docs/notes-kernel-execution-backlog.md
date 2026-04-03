@@ -815,17 +815,39 @@ Optional but recommended:
   - If the mapping work starts mutating native scenarios to look more benchmark-compatible, pull that behavior back out and keep the slice limited to inventory, mapping, and evaluation-feasibility artifacts.
 
 ### K-028: Prototype a lightweight Terminal-Bench comparison layer
-- Status: proposed
+- Feat: `f-20260403-lightweight-terminal-bench-comparison-prototype`
+- Status: in_progress
 - Why now: `K-027` showed that Terminal-Bench is the only near-term family with a meaningful direct fit, but most relevant native scenarios still require translation. The next highest-value move is a small comparison prototype, not full benchmark adoption.
 - Kernel invariant: any external comparison layer must stay downstream from the native benchmark SSOT and must not require changing runtime semantics or widening `simsh` toward environment synthesis.
 - Proposed scope:
   - Build one small comparison/export layer around the strongest current fit, starting with `inspect_edit_write_loop`.
   - Optionally include one translated Terminal-Bench-aligned slice to prove the translation approach without broadening the runtime.
   - Emit a compact comparison artifact or report, not a full external benchmark harness.
+- Files to touch:
+  - `benchmarks/internal/*`
+  - `benchmarks/simsh_native_reference/*`
+  - `benchmarks/external_mapping/*`
+  - `benchmarks/terminal_bench_compare/*`
+  - `task_outputs/research/*`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./benchmarks/... -count=1`
+  - `go test ./...`
+- Done gate:
+  - A checked-in comparison/export layer exists for Terminal-Bench and stays downstream from the native benchmark report plus K-027 mapping artifacts.
+  - The prototype includes exactly one direct-fit scenario and one translated scenario.
+  - Tests fail if the prototype config drifts away from the current Terminal-Bench mapping layer.
+  - A compact report artifact or example output demonstrates the comparison layer without broadening into full benchmark adoption.
+- Notes:
+  - Start with `inspect_edit_write_loop` as the direct-fit slice.
+  - Prefer `relative_navigation_session` or `cancel_timeout_interruptions` as the one translated slice.
 - Non-goals:
   - Do not adopt Terminal-Bench wholesale.
   - Do not map SWE-bench-Live end to end.
   - Do not add new runtime or adapter nouns just to improve external coverage.
+- Rollback note:
+  - If the prototype starts mutating native benchmark semantics or growing into a full benchmark harness, cut it back to one direct-fit item, one translated item, and a compact export/report layer only.
 
 ## Backlog Rules
 

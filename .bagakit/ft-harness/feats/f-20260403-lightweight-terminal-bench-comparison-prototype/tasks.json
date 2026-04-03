@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260403-lightweight-terminal-bench-comparison-prototype",
+  "updated_at": "2026-04-03T19:38:38Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement a lightweight Terminal-Bench comparison/export slice",
+      "status": "in_progress",
+      "summary": "Build a downstream comparison layer that turns one direct-fit native scenario and one translated native scenario into a compact Terminal-Bench-oriented comparison artifact without changing the native benchmark suite.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": "2026-04-03T19:38:38Z",
+      "finished_at": null,
+      "updated_at": "2026-04-03T19:38:38Z",
+      "notes": []
+    }
+  ]
+}
