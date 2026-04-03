@@ -786,29 +786,6 @@ Optional but recommended:
   - Do not add new product nouns or a third adapter just to chase benchmark fit.
   - Do not widen `simsh` toward environment synthesis.
 
-### K-026: Research comparable runtimes and benchmark fit for the next wave
-- Feat: `f-20260403-runtime-comparables-benchmark-fit-research`
-- Status: in_progress
-- Why now: the current adapter-seam proof wave is closed, but the next investment choice is now a strategy question rather than an implementation-debt question. Before opening the next build wave, `simsh` should compare itself to a few directly relevant runtime implementations and benchmark families, then select the next feat deliberately.
-- Kernel invariant: research should stay decision-oriented and pressure-tested against current `simsh` scope; it should not become an open-ended survey or a hidden product expansion wave.
-- Files to touch:
-  - `task_outputs/research/*`
-  - `docs/notes-kernel-execution-backlog.md`
-  - `.bagakit/long-run/bk-execution-handoff.md`
-- Validation command:
-  - review the resulting research brief for a concrete next-feat recommendation, explicit rejected alternatives, and explicit non-goals
-- Done gate:
-  - The research output compares directly relevant runtime implementations.
-  - The research output compares benchmark families by fit to current `simsh` scope.
-  - The output ends with one recommended next feat and a short rejected-alternatives section.
-  - The slice leaves behind a decision-quality artifact rather than only link collection.
-- Notes:
-  - Favor a narrow set of highly relevant comparables over broad market scans.
-  - Reuse local papers and prior research notes first; only use external material to close real gaps.
-  - The output should guide the next build wave, not become a permanent research backlog on its own.
-- Rollback note:
-  - If the research starts broadening into a generic field survey, cut it back to runtime/benchmark fit and next-feat recommendation only.
-
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.
