@@ -37,6 +37,7 @@ External benchmark mapping:
 - `benchmarks/external_mapping/` is the downstream evaluation-feasibility layer for this native suite.
 - Stable native scenario ids and categories remain the primary SSOT.
 - External mapping artifacts classify each native scenario as `as_is`, `translated`, or `excluded` for families such as Terminal-Bench and SWE-bench-Live without mutating the native suite to look more benchmark-compatible.
+- `benchmarks/terminal_bench_compare/` is the next downstream layer: a lightweight comparison/export prototype that consumes the native report plus Terminal-Bench mapping artifacts without becoming a second benchmark suite.
 
 Run it with:
 
