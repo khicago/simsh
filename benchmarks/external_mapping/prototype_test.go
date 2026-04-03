@@ -162,3 +162,47 @@ func TestCheckedInTerminalBenchComparisonMatchesGenerator(t *testing.T) {
 		t.Fatalf("checked-in comparison artifact drifted from generator")
 	}
 }
+
+func TestCheckedInTerminalBenchSummaryMatchesGenerator(t *testing.T) {
+	scope, err := LoadTerminalBenchPrototypeScope("")
+	if err != nil {
+		t.Fatalf("LoadTerminalBenchPrototypeScope() error = %v", err)
+	}
+	inventory, err := LoadScenarioInventory("")
+	if err != nil {
+		t.Fatalf("LoadScenarioInventory() error = %v", err)
+	}
+	mapping, err := LoadFamilyMapping(DefaultTerminalBenchMappingPath)
+	if err != nil {
+		t.Fatalf("LoadFamilyMapping() error = %v", err)
+	}
+	source, err := LoadNativeSuiteReport(DefaultNativeBaselineReportPath)
+	if err != nil {
+		t.Fatalf("LoadNativeSuiteReport() error = %v", err)
+	}
+	report, err := BuildTerminalBenchComparison(inventory, mapping, source, scope, DefaultNativeBaselineReportPath)
+	if err != nil {
+		t.Fatalf("BuildTerminalBenchComparison(...) error = %v", err)
+	}
+	want := RenderTerminalBenchComparisonMarkdown(report)
+	got, err := readCandidateFile(
+		filepath.Clean(DefaultTerminalBenchSummaryPath),
+		filepath.Join("..", "terminal_bench_compare", "reports", filepath.Base(DefaultTerminalBenchSummaryPath)),
+	)
+	if err != nil {
+		t.Fatalf("read checked-in comparison summary: %v", err)
+	}
+	if string(got) != want {
+		t.Fatalf("checked-in comparison summary drifted from generator")
+	}
+}
+
+func readCandidateFile(paths ...string) ([]byte, error) {
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err == nil {
+			return data, nil
+		}
+	}
+	return nil, os.ErrNotExist
+}
