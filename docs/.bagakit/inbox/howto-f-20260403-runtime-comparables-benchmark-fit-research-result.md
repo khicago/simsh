@@ -1,0 +1,17 @@
+---
+title: Feat Result HowTo f-20260403-runtime-comparables-benchmark-fit-research
+kind: howto
+status: inbox
+tags:
+  - feat
+  - result
+sources:
+  - .bagakit/ft-harness/feats/f-20260403-runtime-comparables-benchmark-fit-research/summary.md
+created: 2026-04-03T17:51:18Z
+---
+
+## Candidate
+- How to reproduce, verify, or extend the feat result.
+
+## Promote To
+- `docs/.bagakit/memory/howto-f-20260403-runtime-comparables-benchmark-fit-research-result.md`
