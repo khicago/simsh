@@ -321,9 +321,7 @@ func matchRGGlobs(filePath string, globs []string) (bool, error) {
 		if pattern == "" {
 			continue
 		}
-		if strings.HasPrefix(pattern, "/") {
-			pattern = strings.TrimPrefix(pattern, "/")
-		}
+		pattern = strings.TrimPrefix(pattern, "/")
 		ok, err := path.Match(pattern, baseName)
 		if err != nil {
 			return false, fmt.Errorf("invalid glob pattern: %v", err)
