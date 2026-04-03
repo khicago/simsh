@@ -459,6 +459,51 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "rg-default-cwd",
+			cmd:  "cd workspace; rg hello",
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, readme+":1:hello") {
+					t.Fatalf("rg default cwd failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rg-ignore-case",
+			cmd:  "rg -i HELLO " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, readme+":1:hello") {
+					t.Fatalf("rg -i failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rg-jsonl-canonical",
+			cmd:  "rg --fmt jsonl -g \"*.md\" hello " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"kind\":\"match\"") || !strings.Contains(out, "\"path\":\""+readme+"\"") {
+					t.Fatalf("rg --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rg-jsonl-compat-alias",
+			cmd:  "rg --json hello " + readme,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "\"kind\":\"match\"") || !strings.Contains(out, "\"path\":\""+readme+"\"") {
+					t.Fatalf("rg --json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "rg-files",
+			cmd:  "rg --files -g \"*.md\" " + rt.abs("workspace"),
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, readme) || !strings.Contains(out, fmDoc) || strings.Contains(out, jsonDoc) {
+					t.Fatalf("rg --files failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "find",
 			cmd:  "find " + rt.abs("workspace") + " -name \"*.md\"",
 			want: func(t *testing.T, out string, code int) {
@@ -945,6 +990,7 @@ func TestBuiltinCommandErrorCoverage(t *testing.T) {
 		{name: "head-missing-input", cmd: "head -n 1"},
 		{name: "tail-bad-flag", cmd: "tail -x"},
 		{name: "grep-missing-pattern", cmd: "grep"},
+		{name: "rg-missing-pattern", cmd: "rg"},
 		{name: "find-bad-expr", cmd: "find -o"},
 		{name: "which-missing-operand", cmd: "which"},
 		{name: "type-missing-operand", cmd: "type"},

@@ -134,7 +134,7 @@ These names are intentionally explicit so an agent can reason about where output
 
 The default workspace includes a focused builtin command set for inspection, search, text manipulation, and safe file mutation:
 - inspection and workspace awareness: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `json`, `date`
-- text and search: `cat`, `head`, `tail`, `grep`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
+- text and search: `cat`, `head`, `tail`, `grep`, `rg`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
 - file mutation: `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `tee`
 
 The command surface is intentionally constrained. The goal is a high-signal agent workspace, not a full shell clone.
@@ -148,6 +148,7 @@ Structured output conventions in the default workspace:
 Examples:
 - `wc --json ...` for one structured count summary
 - `grep --fmt jsonl ...` for one JSON record per match/context row
+- `rg --fmt jsonl ...` for one JSON record per recursive match/file row
 - `find --fmt jsonl ...` for one JSON record per discovered path
 - `json stat --fmt json ...` for one structured JSON-shape report
 - `json get --path items[0].name ...` for one targeted JSON subtree extraction

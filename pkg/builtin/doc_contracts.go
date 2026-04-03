@@ -119,6 +119,19 @@ var builtinDocContracts = map[string]builtinDocContract{
 			"non-zero when no matches are found",
 		},
 	},
+	CommandRG: {
+		StdinMode:        contract.BuiltinStdinOptional,
+		Operands:         "PATTERN plus zero or more PATH targets, or `--files` with optional PATH targets",
+		DefaultOutput:    "recursive match rows prefixed with path and line number, or path-per-line file lists",
+		StructuredOutput: "flat match/context/file records",
+		StructuredFlags:  []string{"--fmt jsonl"},
+		MutationKind:     contract.BuiltinMutationReadOnly,
+		SuccessOutput:    contract.BuiltinSuccessContent,
+		PipeBehavior:     contract.BuiltinPipeStrong,
+		ExitCodes: []string{
+			"non-zero when no matches are found",
+		},
+	},
 	CommandFind: {
 		StdinMode:        contract.BuiltinStdinNone,
 		Operands:         "optional DIR plus expression flags",

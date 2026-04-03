@@ -119,11 +119,118 @@ func TestLoadAllManualNamesSortedAndUsable(t *testing.T) {
 	if !slices.IsSorted(names) {
 		t.Fatalf("LoadAllManualNames() = %#v, want sorted names", names)
 	}
-	for _, want := range []string{"ls", "grep", "json", "man"} {
+	for _, want := range []string{"ls", "grep", "rg", "json", "man"} {
 		if !slices.Contains(names, want) {
 			t.Fatalf("LoadAllManualNames() missing %q in %#v", want, names)
 		}
 	}
+}
+
+func TestBuildSearchMatcherCaseModes(t *testing.T) {
+	tests := []struct {
+		name    string
+		pattern string
+		line    string
+		opts    searchMatcherOptions
+		want    bool
+	}{
+		{
+			name:    "fixed default is case sensitive",
+			pattern: "hello",
+			line:    "HELLO",
+			opts:    searchMatcherOptions{Regex: false, CaseMode: searchCaseSensitive},
+			want:    false,
+		},
+		{
+			name:    "fixed ignore case",
+			pattern: "hello",
+			line:    "HELLO",
+			opts:    searchMatcherOptions{Regex: false, CaseMode: searchCaseIgnore},
+			want:    true,
+		},
+		{
+			name:    "smart case lowers to ignore case",
+			pattern: "hello",
+			line:    "HELLO",
+			opts:    searchMatcherOptions{Regex: false, CaseMode: searchCaseSmart},
+			want:    true,
+		},
+		{
+			name:    "smart case keeps uppercase pattern sensitive",
+			pattern: "Hello",
+			line:    "hello",
+			opts:    searchMatcherOptions{Regex: false, CaseMode: searchCaseSmart},
+			want:    false,
+		},
+		{
+			name:    "regex ignore case",
+			pattern: "hello",
+			line:    "HELLO",
+			opts:    searchMatcherOptions{Regex: true, CaseMode: searchCaseIgnore},
+			want:    true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			match, err := buildSearchMatcher(tt.pattern, tt.opts)
+			if err != nil {
+				t.Fatalf("buildSearchMatcher(%q) error = %v", tt.pattern, err)
+			}
+			if got := match(tt.line); got != tt.want {
+				t.Fatalf("buildSearchMatcher(%q)(%q) = %t, want %t", tt.pattern, tt.line, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseRGArgs(t *testing.T) {
+	requireAbsolutePath := func(raw string) (string, error) {
+		if strings.HasPrefix(raw, "/") {
+			return raw, nil
+		}
+		return "/" + raw, nil
+	}
+
+	t.Run("search mode parses compatibility and globs", func(t *testing.T) {
+		got, errMsg := parseRGArgs([]string{"-n", "-r", "-g", "*.md", "--json", "-S", "todo", "workspace"}, requireAbsolutePath, "/workspace")
+		if errMsg != "" {
+			t.Fatalf("parseRGArgs(...) error = %q", errMsg)
+		}
+		want := rgArgs{
+			pattern:  "todo",
+			targets:  []string{"/workspace"},
+			globs:    []string{"*.md"},
+			caseMode: searchCaseSmart,
+			jsonl:    true,
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("parseRGArgs(...) = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("files mode defaults target to cwd", func(t *testing.T) {
+		got, errMsg := parseRGArgs([]string{"--files", "-g", "*.json"}, requireAbsolutePath, "/workspace")
+		if errMsg != "" {
+			t.Fatalf("parseRGArgs(--files) error = %q", errMsg)
+		}
+		want := rgArgs{
+			targets:   []string{"/workspace"},
+			globs:     []string{"*.json"},
+			caseMode:  searchCaseSensitive,
+			filesOnly: true,
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Fatalf("parseRGArgs(--files) = %#v, want %#v", got, want)
+		}
+	})
+
+	t.Run("reject files and list conflict", func(t *testing.T) {
+		_, errMsg := parseRGArgs([]string{"--files", "-l"}, requireAbsolutePath, "/workspace")
+		if errMsg != "rg: -l is not supported with --files" {
+			t.Fatalf("parseRGArgs(--files -l) error = %q, want conflict message", errMsg)
+		}
+	})
 }
 
 func TestDiffHelpers(t *testing.T) {

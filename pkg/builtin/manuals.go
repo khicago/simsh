@@ -63,6 +63,7 @@ var commandExamples = map[string][]string{
 	"head":  {"head /task_outputs/report.md", "head -n 5 /task_outputs/report.md"},
 	"tail":  {"tail /task_outputs/report.md", "tail -n 5 /task_outputs/report.md"},
 	"grep":  {"grep TODO /task_outputs/notes.md", "grep -E \"func\\s+\" -r /knowledge_base", "grep -l error -r /task_outputs"},
+	"rg":    {"rg \"TODO\" /task_outputs", "rg -g \"*.md\" \"hello\" /knowledge_base", "rg --files -g \"*.json\" /task_outputs"},
 	"find":  {"find / -name \"*.md\"", "find /task_outputs -name \"*.json\"", "find /knowledge_base -name \"*.md\" -exec cat {} ;"},
 	"echo":  {"echo hello world", "echo \"report data\" | tee /task_outputs/report.txt"},
 	"tee":   {"echo content | tee /task_outputs/file.md", "echo more | tee -a /task_outputs/file.md"},

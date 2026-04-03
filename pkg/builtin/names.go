@@ -8,6 +8,7 @@ const (
 	CommandFind        = "find"
 	CommandFrontmatter = "frontmatter"
 	CommandGrep        = "grep"
+	CommandRG          = "rg"
 	CommandHead        = "head"
 	CommandJSON        = "json"
 	CommandLS          = "ls"

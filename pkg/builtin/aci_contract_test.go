@@ -21,7 +21,7 @@ func TestCwdAwareCommandDocsAvoidAbsoluteOnlyLanguage(t *testing.T) {
 	}
 
 	commands := []string{
-		"ls", "tree", "find", "cat", "grep", "head", "tail", "wc",
+		"ls", "tree", "find", "cat", "grep", "rg", "head", "tail", "wc",
 		"sort", "uniq", "touch", "tee", "sed", "mkdir", "rm", "rmdir",
 		"cp", "mv", "diff", "frontmatter",
 	}

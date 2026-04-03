@@ -1917,7 +1917,7 @@ func TestManListMode(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("man --list failed: code=%d out=%q", code, out)
 	}
-	for _, cmd := range []string{"cat", "ls", "grep", "mkdir", "wc", "sort", "diff"} {
+	for _, cmd := range []string{"cat", "ls", "grep", "rg", "mkdir", "wc", "sort", "diff"} {
 		if !strings.Contains(out, cmd) {
 			t.Fatalf("expected %q in man --list output: %q", cmd, out)
 		}
@@ -1987,6 +1987,47 @@ func TestGrepExitCodeNoMatch(t *testing.T) {
 		out, code := eng.Execute(context.Background(), "grep --fmt jsonl zzzznotfound /workspace/readme.md", ops)
 		if code != 1 {
 			t.Fatalf("expected exit 1 for jsonl no match: code=%d out=%q", code, out)
+		}
+	})
+}
+
+func TestRGCommand(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	fs.mustWrite("/workspace/guide.md", "Hello rg\n")
+	ops := readOnlyOps(fs)
+
+	t.Run("default recursive search from cwd", func(t *testing.T) {
+		out, code := eng.Execute(context.Background(), "cd /workspace; rg hello", ops)
+		if code != 0 || !strings.Contains(out, "/workspace/readme.md:1:hello") {
+			t.Fatalf("rg default recursive search failed: code=%d out=%q", code, out)
+		}
+	})
+
+	t.Run("files mode respects glob filters", func(t *testing.T) {
+		out, code := eng.Execute(context.Background(), "rg --files -g \"*.md\" /workspace", ops)
+		if code != 0 {
+			t.Fatalf("rg --files failed: code=%d out=%q", code, out)
+		}
+		if !strings.Contains(out, "/workspace/readme.md") || !strings.Contains(out, "/workspace/guide.md") || strings.Contains(out, "/workspace/todo.txt") {
+			t.Fatalf("rg --files glob output mismatch: %q", out)
+		}
+	})
+
+	t.Run("compat json alias maps to jsonl records", func(t *testing.T) {
+		out, code := eng.Execute(context.Background(), "rg --json hello /workspace", ops)
+		if code != 0 {
+			t.Fatalf("rg --json failed: code=%d out=%q", code, out)
+		}
+		if !strings.Contains(out, `"kind":"match"`) || !strings.Contains(out, `"path":"/workspace/readme.md"`) {
+			t.Fatalf("rg --json output mismatch: %q", out)
+		}
+	})
+
+	t.Run("no match returns 1", func(t *testing.T) {
+		out, code := eng.Execute(context.Background(), "rg zzzznotfound /workspace", ops)
+		if code != 1 {
+			t.Fatalf("expected exit 1 for rg no match: code=%d out=%q", code, out)
 		}
 	})
 }
@@ -2167,7 +2208,7 @@ func TestPipelineIntegration(t *testing.T) {
 // ==================== Embed Manual Tests ====================
 
 func TestEmbedManualLoading(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		manual := builtin.LoadEmbeddedManual(name)
 		if manual == "" {
 			t.Errorf("missing embedded manual for %q", name)
@@ -2179,7 +2220,7 @@ func TestEmbedManualLoading(t *testing.T) {
 }
 
 func TestExamplesForAllCommands(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
 		examples := builtin.ExamplesFor(name)
 		if len(examples) == 0 {
 			t.Errorf("missing examples for %q", name)

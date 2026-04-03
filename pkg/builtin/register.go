@@ -17,6 +17,7 @@ func RegisterDefaults(reg *engine.Registry) {
 	reg.MustRegister(applyCommandDocContract(specHead()))
 	reg.MustRegister(applyCommandDocContract(specTail()))
 	reg.MustRegister(applyCommandDocContract(specGrep()))
+	reg.MustRegister(applyCommandDocContract(specRG()))
 	reg.MustRegister(applyCommandDocContract(specFind()))
 	reg.MustRegister(applyCommandDocContract(specWhich()))
 	reg.MustRegister(applyCommandDocContract(specType()))
