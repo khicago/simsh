@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-04T07:06:48Z",
+  "updated_at": "2026-04-04T07:18:43Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -307,11 +307,11 @@
     {
       "feat_id": "f-20260404-automate-terminal-bench-comparison-freshness",
       "title": "Automate Terminal-Bench comparison freshness",
-      "status": "in_progress",
+      "status": "archived",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-04-04T07:06:48Z"
+      "updated_at": "2026-04-04T07:18:43Z"
     }
   ]
 }

@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Implement deterministic refresh for the checked-in Terminal-Bench comparison artifacts
+- [x] T-001 Implement deterministic refresh for the checked-in Terminal-Bench comparison artifacts
 
 ## Status Legend
 - todo

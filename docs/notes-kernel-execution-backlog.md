@@ -856,7 +856,7 @@ Optional but recommended:
 
 ### K-029: Automate Terminal-Bench comparison freshness
 - Feat: `f-20260404-automate-terminal-bench-comparison-freshness`
-- Status: in_progress
+- Status: done
 - Why now: `K-028` proved the comparison layer is useful, but it still depends on manual regeneration of the native baseline plus the comparison artifact/report pair. The next highest-value move is to make that refresh path explicit and repeatable without broadening benchmark scope.
 - Kernel invariant: freshness automation must stay downstream from the native benchmark and the checked-in prototype scope; it must not turn the comparison layer into a second benchmark harness.
 - Proposed scope:
@@ -884,12 +884,29 @@ Optional but recommended:
   - Narrow guards fail when the checked-in comparison artifact or summary drifts from the refresh path.
   - The refresh path does not broaden the prototype scope or create a second benchmark harness.
   - Docs and research explain the refresh contract and the remaining next-step boundary.
+- Notes:
+  - The canonical refresh command is `make benchmark-refresh`.
+  - The native baseline remains a freshness snapshot; `generated_at` and duration-derived fields are expected to change on refresh.
+  - The byte-guarded pair is the Terminal-Bench comparison JSON/Markdown output derived from the current native baseline plus current scope/mapping inputs.
 - Non-goals:
   - Do not broaden the prototype beyond one direct-fit and one translated slice.
   - Do not adopt Terminal-Bench wholesale.
   - Do not add a second external benchmark family to the comparison layer.
 - Rollback note:
   - If refresh automation starts embedding broader benchmark orchestration semantics, cut it back to regenerating the current checked-in artifacts only.
+
+### K-030: Build a paired A/B uplift proof harness
+- Status: proposed
+- Why now: `K-029` gives the repository a repeatable artifact-refresh path. The next highest-value evidence question is no longer freshness, but whether `simsh` measurably improves agent outcomes relative to a thinner baseline runtime under controlled paired tasks.
+- Kernel invariant: uplift proof should hold the agent, task set, and budgets fixed while changing only the runtime substrate; it must not collapse into leaderboard chasing or uncontrolled benchmark comparisons.
+- Proposed scope:
+  - Define one paired task set that runs both with and without `simsh`.
+  - Record success, retries, wasted steps/tokens, and environment-misunderstanding failures in a machine-readable per-run format.
+  - Produce one aggregate report and one failure taxonomy report.
+- Non-goals:
+  - Do not claim cross-project leaderboard parity yet.
+  - Do not change native benchmark semantics just to improve the A/B result.
+  - Do not widen the experiment into full Terminal-Bench or SWE-bench adoption.
 
 ## Backlog Rules
 
