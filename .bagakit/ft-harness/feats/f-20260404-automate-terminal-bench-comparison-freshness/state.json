@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "feat_id": "f-20260404-automate-terminal-bench-comparison-freshness",
+  "title": "Automate Terminal-Bench comparison freshness",
+  "slug": "automate-terminal-bench-comparison-freshness",
+  "goal": "Add one deterministic refresh path that regenerates the checked-in native benchmark baseline and the Terminal-Bench comparison artifact/report pair without broadening the benchmark scope or creating a second harness.",
+  "status": "in_progress",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-04-04T07:05:33Z",
+  "updated_at": "2026-04-04T07:06:48Z",
+  "current_task_id": "T-001",
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_checked_at": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "at": "2026-04-04T07:05:33Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-04-04T07:06:48Z",
+      "action": "task_started",
+      "detail": "T-001"
+    }
+  ]
+}

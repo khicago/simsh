@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-04T04:18:00Z
+- Updated At (UTC): 2026-04-04T07:10:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,12 +14,12 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-028: lightweight Terminal-Bench comparison prototype` is now complete, and the recommended next wave is `K-029: automate Terminal-Bench comparison freshness`. Long-run should remain explicitly idle until that next manual row is deliberately created.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row, but `K-029: automate Terminal-Bench comparison freshness` is now the active current-tree feat in feat-task harness. Long-run remains explicitly idle until a matching manual row is deliberately created.
 
 ## Acceptance Criteria
 
 - [ ] Refresh long-run rows before using `ralphloop` again.
-- [ ] Keep handoff aligned with `next-action.json` while the current Terminal-Bench prototype slice is fully closed.
+- [ ] Keep handoff aligned with `next-action.json` while the current comparison-freshness slice is fully closed.
 
 ## Execution Plan
 
@@ -47,16 +47,16 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: `K-028: lightweight Terminal-Bench comparison prototype` is complete. The repository now has a checked-in native baseline, a checked-in prototype scope, and a checked-in Terminal-Bench comparison artifact/report pair. The recommended next wave is `K-029: automate Terminal-Bench comparison freshness`, but no new row is active yet.
-- Tests: `go test ./benchmarks/... -count=1`, `go test ./...`, `make lint`, and `make check`.
+- Summary: `K-028` is complete and `K-029: automate Terminal-Bench comparison freshness` is now the active feat. Long-run still has no manual row, so handoff remains explicitly blocked until the execution table is refreshed.
+- Tests: no new K-029 code gate has run yet; the checkpoint only opens the feat and syncs planning state.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-028` is closed and the repo is explicitly idle with `K-029` recommended as the next wave.
-- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-028 prototype artifacts landed | K-029 recommended but not started; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-029` is now the active feat while long-run remains explicitly idle until a matching manual row exists.
+- LongRun: Item=none; Status=blocked; Confidence=0.96; Evidence=next_row null | K-029 feat opened in ft-harness | manual row not yet created; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

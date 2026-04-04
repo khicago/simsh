@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "feat_id": "f-20260404-automate-terminal-bench-comparison-freshness",
+  "updated_at": "2026-04-04T07:06:48Z",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Implement deterministic refresh for the checked-in Terminal-Bench comparison artifacts",
+      "status": "in_progress",
+      "summary": "Add one explicit refresh path that regenerates the native baseline and Terminal-Bench comparison artifact/report pair, plus narrow guards that keep the checked-in pair aligned with that refresh path.",
+      "gate_result": null,
+      "last_gate_at": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "started_at": "2026-04-04T07:06:48Z",
+      "finished_at": null,
+      "updated_at": "2026-04-04T07:06:48Z",
+      "notes": []
+    }
+  ]
+}

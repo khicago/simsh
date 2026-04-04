@@ -855,7 +855,8 @@ Optional but recommended:
   - If the prototype starts mutating native benchmark semantics or growing into a full benchmark harness, cut it back to one direct-fit item, one translated item, and a compact export/report layer only.
 
 ### K-029: Automate Terminal-Bench comparison freshness
-- Status: proposed
+- Feat: `f-20260404-automate-terminal-bench-comparison-freshness`
+- Status: in_progress
 - Why now: `K-028` proved the comparison layer is useful, but it still depends on manual regeneration of the native baseline plus the comparison artifact/report pair. The next highest-value move is to make that refresh path explicit and repeatable without broadening benchmark scope.
 - Kernel invariant: freshness automation must stay downstream from the native benchmark and the checked-in prototype scope; it must not turn the comparison layer into a second benchmark harness.
 - Proposed scope:
@@ -865,10 +866,30 @@ Optional but recommended:
     - `benchmarks/terminal_bench_compare/reports/*.md`
   - Add one narrow guard that fails if the checked-in artifact pair drifts from the refresh path.
   - Keep the current prototype scope unchanged.
+- Files to touch:
+  - `benchmarks/external_mapping/*`
+  - `benchmarks/simsh_native_reference/reports/*`
+  - `benchmarks/terminal_bench_compare/*`
+  - `Makefile`
+  - `task_outputs/research/*`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./benchmarks/... -count=1`
+  - `go test ./...`
+  - `make lint`
+  - `make check`
+- Done gate:
+  - One deterministic refresh entrypoint regenerates the checked-in native baseline and the checked-in Terminal-Bench comparison JSON/Markdown pair.
+  - Narrow guards fail when the checked-in comparison artifact or summary drifts from the refresh path.
+  - The refresh path does not broaden the prototype scope or create a second benchmark harness.
+  - Docs and research explain the refresh contract and the remaining next-step boundary.
 - Non-goals:
   - Do not broaden the prototype beyond one direct-fit and one translated slice.
   - Do not adopt Terminal-Bench wholesale.
   - Do not add a second external benchmark family to the comparison layer.
+- Rollback note:
+  - If refresh automation starts embedding broader benchmark orchestration semantics, cut it back to regenerating the current checked-in artifacts only.
 
 ## Backlog Rules
 
