@@ -9,7 +9,7 @@ LISTEN ?= :18080
 PROFILE ?= core-strict
 CMD ?= env PATH
 
-.PHONY: help test test-race lint check doc cli cli-c cli-serve simshd codex-locale codex-locale-resume
+.PHONY: help test test-race lint check doc cli cli-c cli-serve simshd benchmark-refresh codex-locale codex-locale-resume
 
 help:
 	@echo "Common targets:"
@@ -22,6 +22,7 @@ help:
 	@echo "  make cli-c CMD='ls -l /'    # run one command via simsh-cli"
 	@echo "  make cli-serve PORT=18080   # run simsh-cli serve"
 	@echo "  make simshd LISTEN=':18080' # run simshd service"
+	@echo "  make benchmark-refresh      # regenerate checked-in benchmark artifacts"
 	@echo "  make codex-locale           # launch codex local profile"
 
 test:
@@ -53,6 +54,9 @@ cli-serve:
 
 simshd:
 	$(GO) run ./cmd/simshd -listen "$(LISTEN)" -root "$(ROOT)" -profile $(PROFILE)
+
+benchmark-refresh:
+	$(GO) run ./benchmarks/refresh_terminal_bench_compare
 
 # BAGAKIT:LONGRUN:LAUNCHER:START
 ralphloop:

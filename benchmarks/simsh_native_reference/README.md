@@ -56,3 +56,11 @@ Latest checked-in full baseline used by the Terminal-Bench comparison prototype:
 ```text
 benchmarks/simsh_native_reference/reports/baseline-20260404.json
 ```
+
+Refresh the native baseline and downstream Terminal-Bench comparison artifacts with:
+
+```bash
+make benchmark-refresh
+```
+
+This checked-in baseline is a freshness snapshot, not a byte-stable golden file; `generated_at` and duration-derived fields are expected to change when refreshed.

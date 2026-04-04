@@ -28,6 +28,8 @@ The same evaluation layer now feeds a lightweight comparison prototype:
 - it emits one compact comparison artifact for a narrowly chosen external family slice
 - it does not create a second scenario catalog or rename native scenarios
 - it treats live benchmark re-execution as optional regeneration work, not as a hidden prerequisite for reading or validating the comparison artifact
+- the canonical refresh entrypoint is `make benchmark-refresh`, which regenerates the checked-in native baseline plus the checked-in Terminal-Bench comparison pair
+- the native baseline is a freshness snapshot, while the comparison JSON/Markdown pair is the byte-guarded downstream artifact pair
 
 ## Status Values
 

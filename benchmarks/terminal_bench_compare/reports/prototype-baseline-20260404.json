@@ -4,7 +4,7 @@
   "source": {
     "benchmark": "simsh_native_reference",
     "report_path": "benchmarks/simsh_native_reference/reports/baseline-20260404.json",
-    "generated_at": "2026-04-03T19:58:51.457887Z"
+    "generated_at": "2026-04-04T07:13:06.842195Z"
   },
   "scope": {
     "version": 1,
@@ -93,7 +93,7 @@
         "session_scoped": true,
         "async_candidate": true,
         "patch_workflow": true,
-        "duration_ms": 4,
+        "duration_ms": 109,
         "trace_completeness": 1,
         "assertion_completeness": 1
       }
@@ -135,7 +135,7 @@
         "session_scoped": true,
         "async_candidate": false,
         "patch_workflow": false,
-        "duration_ms": 4,
+        "duration_ms": 91,
         "trace_completeness": 1,
         "assertion_completeness": 1
       }

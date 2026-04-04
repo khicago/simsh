@@ -44,9 +44,13 @@ Current checked-in outputs:
 Regenerate with:
 
 ```bash
-go run ./benchmarks/terminal_bench_compare \
-  -scope benchmarks/terminal_bench_compare/prototype_scope.json \
-  -report benchmarks/simsh_native_reference/reports/baseline-20260404.json \
-  -out-json benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.json \
-  -out-md benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.md
+make benchmark-refresh
 ```
+
+The refresh target is orchestration-only:
+- it regenerates the checked-in native baseline
+- it regenerates the checked-in comparison JSON/MD pair
+- it does not change prototype scope or mapping files
+
+The native baseline is a freshness snapshot, so fields like `generated_at` and duration-based latency numbers are expected to move when refreshed.
+The comparison JSON/MD pair remains the byte-guarded downstream artifact pair.

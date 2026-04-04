@@ -24,3 +24,8 @@
 - Do not adopt Terminal-Bench wholesale.
 - Do not widen beyond one translated proof slice.
 - Do not mutate native benchmark semantics to look more benchmark-compatible.
+
+## Freshness note
+
+- The native baseline is now treated as a refreshed snapshot input, not a byte-stable golden artifact.
+- The byte-guarded pair is the checked-in Terminal-Bench comparison JSON/Markdown output derived from the current baseline, current mapping, and current prototype scope.
