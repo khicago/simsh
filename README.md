@@ -188,6 +188,21 @@ Typical shape:
 See:
 - [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md)
 - [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md)
+- [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md)
+
+### Mount Selection
+
+Mounts are not interchangeable.
+If an integration backs mounts with DB, OS, RPC, search, or mixed persistence layers, it should not treat the result as a transparent local directory by default.
+
+`simsh` expects integrators to choose mount models deliberately:
+- what truth the mount exposes (`projection` vs `factual`)
+- how data is materialized (`snapshot`, `cached`, `live`)
+- what write semantics apply
+- what consistency and latency guarantees actually hold under `ls`, `tree`, `find`, `grep`, `rg`, `cat`, and mutation-heavy loops
+
+The detailed contract lives in [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md).
+Use that doc before exposing any non-trivial mount to agent-facing CLI workloads.
 
 ### Entry Surfaces
 

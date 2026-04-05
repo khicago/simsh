@@ -115,3 +115,8 @@ Validation:
 - `bash "$BAGAKIT_LONG_RUN_SKILL_DIR/scripts/long-run-doctor.sh" .`
 <!-- BAGAKIT:LONGRUN:END -->
 
+## Local Addendum
+
+- Before changing tool behavior, mount abstractions, adapter-backed filesystem projection behavior, or any CLI flow that can amplify mount access, read `docs/architecture-high-performance-mount-system.md`.
+- For tool and mount-system changes, explicitly evaluate CLI pressure, capability requirements, fallback behavior, latency class, and consistency guarantees rather than treating mounts as transparent local directories by default.
+- Do not add or preserve fallback paths that silently degrade into per-file RPC fanout for `ls`, `tree`, `find`, `grep`, `rg`, `cat`, or mutation-heavy workflows without documenting the tradeoff and adding validation coverage.

@@ -30,6 +30,8 @@ Use these as the only required integration surface:
 
 Core guarantees that mount-backed paths and synthetic mount-parent paths are immutable for write/mkdir/remove/copy/move flows.
 
+For the broader performance and capability model of non-trivial mounts, especially when the backend is RPC-, DB-, or search-backed, see `docs/architecture-high-performance-mount-system.md`.
+
 ## Recommended Business-Layer Framework
 
 ### 1) Driver layer (filesystem adapters)

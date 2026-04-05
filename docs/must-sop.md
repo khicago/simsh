@@ -11,6 +11,12 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## SOP Items
 
+### High-Performance Mount System
+Source: `docs/architecture-high-performance-mount-system.md`
+- Read this doc before changing mount abstractions, adapter-backed filesystem projection behavior, or tool flows that can amplify mount access patterns.
+- Keep mount design explicit along semantic axes, capability contracts, and latency/consistency guarantees instead of relying on ad hoc fallback behavior.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Memory/Skills Extension Architecture
 Source: `docs/architecture-memory-skills-extension.md`
 - Read this doc before adding memory/resource/skill mounts or context-framework features.

@@ -152,6 +152,8 @@ Once seam helpers are strong in isolation, the next proof layer SHOULD be compos
 
 Once native proof layers are strong enough to compare against external benchmark families, that comparison SHOULD remain a downstream evaluation artifact rather than a new runtime-design driver. A good current shape is a checked-in mapping layer that keeps native scenario ids/categories canonical, treats richer task-shape or truth-surface summaries as curated evaluation metadata, and classifies each scenario as `as_is`, `translated`, or `excluded` for one or two benchmark families without mutating the native suite itself.
 
+For the mount-performance and capability-dispatch side of this problem, especially when adapters expose RPC-to-file views over slower backends, see `docs/architecture-high-performance-mount-system.md`.
+
 If the project later adds a lightweight comparison/export layer above that mapping, keep the layering explicit:
 - native benchmark report output remains the evidence source;
 - native scenario ids/categories remain the canonical identity;

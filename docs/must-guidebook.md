@@ -33,6 +33,7 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/architecture-platform-adapter-contract.md`
   - `docs/architecture-path-access-metadata.md`
   - `docs/architecture-memory-skills-extension.md`
+  - `docs/architecture-high-performance-mount-system.md`
 - Historical implementation retrospective:
   - `docs/first_version_plan.md`
 
