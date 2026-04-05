@@ -217,6 +217,9 @@ func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool
 	if mounted, ok, err := r.activeForPath(ctx, dir); err != nil {
 		return contract.ListEntriesResult{}, false, err
 	} else if ok {
+		if !contract.MountSupportsCLIClass(mounted.mount.Profile(), contract.MountCLIList) {
+			return contract.ListEntriesResult{}, true, fmt.Errorf("%s: mount profile does not declare list support", dir)
+		}
 		lister, ok := mounted.mount.(contract.EntryLister)
 		if !ok {
 			return contract.ListEntriesResult{}, true, fmt.Errorf("%s: mount does not support entry listing", dir)
@@ -252,6 +255,9 @@ func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursiv
 	if mounted, ok, err := r.activeForPath(ctx, target); err != nil {
 		return contract.EnumeratePathsResult{}, false, err
 	} else if ok {
+		if !contract.MountSupportsCLIClass(mounted.mount.Profile(), contract.MountCLIFind) {
+			return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: mount profile does not declare find support", target)
+		}
 		if enumerator, ok := mounted.mount.(contract.PathEnumerator); ok {
 			result, err := enumerator.EnumeratePaths(ctx, contract.EnumeratePathsRequest{
 				Target:    target,
@@ -521,15 +527,19 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		if len(req.Paths) == 0 {
 			return contract.ReadManyResult{}, nil
 		}
-		results := make([]contract.MountContentEntry, 0, len(req.Paths))
+		resultsByPath := map[string][]contract.MountContentEntry{}
 		groups := map[string][]string{}
 		groupMounts := map[string]contract.VirtualMount{}
+		groupOrder := make([]string, 0)
 		for _, rawPath := range req.Paths {
 			pathValue := normalizeAbsolutePath(rawPath)
 			if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
 				return contract.ReadManyResult{}, err
 			} else if ok {
 				groupKey := mounted.point
+				if _, exists := groups[groupKey]; !exists {
+					groupOrder = append(groupOrder, groupKey)
+				}
 				groups[groupKey] = append(groups[groupKey], pathValue)
 				groupMounts[groupKey] = mounted.mount
 				continue
@@ -539,35 +549,33 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 				if err != nil {
 					return contract.ReadManyResult{}, err
 				}
-				results = append(results, partial.Entries...)
+				appendReadManyEntries(resultsByPath, partial.Entries)
 				continue
 			}
 			raw, err := origReadRawContent(ctx, pathValue)
 			if err != nil {
 				return contract.ReadManyResult{}, err
 			}
-			results = append(results, contract.MountContentEntry{Path: pathValue, Content: raw})
+			appendReadManyEntries(resultsByPath, []contract.MountContentEntry{{Path: pathValue, Content: raw}})
 		}
-		for groupKey, groupedPaths := range groups {
+		for _, groupKey := range groupOrder {
+			groupedPaths := groups[groupKey]
 			mount := groupMounts[groupKey]
-			if reader, ok := mount.(contract.BulkReader); ok {
-				bulk, err := reader.ReadMany(ctx, contract.ReadManyRequest{Paths: groupedPaths})
-				if err != nil {
-					return contract.ReadManyResult{}, err
-				}
-				results = append(results, bulk.Entries...)
-				continue
+			entries, err := contract.ReadManyFromMount(ctx, mount, groupedPaths)
+			if err != nil {
+				return contract.ReadManyResult{}, err
 			}
-			if mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
-				return contract.ReadManyResult{}, fmt.Errorf("%s: bulk read requires BulkReader for remote_high_latency mount", groupKey)
+			appendReadManyEntries(resultsByPath, entries)
+		}
+		results := make([]contract.MountContentEntry, 0, len(req.Paths))
+		for _, rawPath := range req.Paths {
+			pathValue := normalizeAbsolutePath(rawPath)
+			queued := resultsByPath[pathValue]
+			if len(queued) == 0 {
+				return contract.ReadManyResult{}, fmt.Errorf("%s: missing read result", pathValue)
 			}
-			for _, pathValue := range groupedPaths {
-				raw, err := contract.ReadMountContent(ctx, mount, pathValue)
-				if err != nil {
-					return contract.ReadManyResult{}, err
-				}
-				results = append(results, contract.MountContentEntry{Path: pathValue, Content: raw})
-			}
+			results = append(results, queued[0])
+			resultsByPath[pathValue] = queued[1:]
 		}
 		return contract.ReadManyResult{Entries: results}, nil
 	}
@@ -584,26 +592,45 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 			targets = append(targets, normalizeAbsolutePath(target))
 		}
 		req.Targets = targets
-		firstMounted, ok, err := r.activeForPath(ctx, targets[0])
-		if err != nil {
-			return contract.SearchResult{}, err
+		var (
+			mountedPoint   string
+			mountedMount   contract.VirtualMount
+			mountedTargets []string
+			fsTargets      []string
+		)
+		for _, target := range targets {
+			mounted, ok, err := r.activeForPath(ctx, target)
+			if err != nil {
+				return contract.SearchResult{}, err
+			}
+			if ok {
+				if mountedPoint == "" {
+					mountedPoint = mounted.point
+					mountedMount = mounted.mount
+				} else if mounted.point != mountedPoint {
+					return contract.SearchResult{}, fmt.Errorf("cross-mount search targets are not supported")
+				}
+				mountedTargets = append(mountedTargets, target)
+				continue
+			}
+			if synthetic, err := r.isSyntheticDir(ctx, target); err != nil {
+				return contract.SearchResult{}, err
+			} else if synthetic {
+				return contract.SearchResult{}, fmt.Errorf("cross-mount search targets are not supported")
+			}
+			fsTargets = append(fsTargets, target)
 		}
-		if !ok {
+		if len(mountedTargets) > 0 && len(fsTargets) > 0 {
+			return contract.SearchResult{}, fmt.Errorf("mixed mounted and filesystem search targets are not supported")
+		}
+		if len(mountedTargets) == 0 {
 			if origSearchContent != nil {
 				return origSearchContent(ctx, req)
 			}
 			return contract.SearchResult{}, contract.ErrUnsupported
 		}
-		for _, target := range targets[1:] {
-			nextMounted, nextOK, nextErr := r.activeForPath(ctx, target)
-			if nextErr != nil {
-				return contract.SearchResult{}, nextErr
-			}
-			if !nextOK || nextMounted.point != firstMounted.point {
-				return contract.SearchResult{}, fmt.Errorf("cross-mount search targets are not supported")
-			}
-		}
-		return contract.SearchMountContent(ctx, firstMounted.mount, req)
+		req.Targets = mountedTargets
+		return contract.SearchMountContent(ctx, mountedMount, req)
 	}
 
 	ops.WriteFile = func(ctx context.Context, filePath string, content string) error {
@@ -761,7 +788,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 	ops.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {
 		abs := normalizeAbsolutePath(pathValue)
 		switch op {
-		case contract.PathOpRead:
+		case contract.PathOpRead, contract.PathOpTransferSource:
 			if mounted, ok, err := r.activeForPath(ctx, abs); err != nil {
 				return err
 			} else if ok {
@@ -789,4 +816,12 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 	}
 
 	return ops
+}
+
+func appendReadManyEntries(index map[string][]contract.MountContentEntry, entries []contract.MountContentEntry) {
+	for _, entry := range entries {
+		pathValue := normalizeAbsolutePath(entry.Path)
+		entry.Path = pathValue
+		index[pathValue] = append(index[pathValue], entry)
+	}
 }

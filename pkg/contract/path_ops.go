@@ -9,8 +9,9 @@ package contract
 type PathOp string
 
 const (
-	PathOpRead   PathOp = "read"
-	PathOpWrite  PathOp = "write"
-	PathOpMkdir  PathOp = "mkdir"
-	PathOpRemove PathOp = "remove"
+	PathOpRead           PathOp = "read"
+	PathOpTransferSource PathOp = "transfer_source"
+	PathOpWrite          PathOp = "write"
+	PathOpMkdir          PathOp = "mkdir"
+	PathOpRemove         PathOp = "remove"
 )

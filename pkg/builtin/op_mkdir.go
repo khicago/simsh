@@ -16,7 +16,7 @@ func specMkdir() engine.CommandSpec {
 		Tips: []string{
 			"Creates directories. -p creates parent directories as needed.",
 			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
-			"Mount-backed virtual paths are immutable and cannot be created.",
+			"Projection-backed virtual paths are immutable; only mounts that declare mutate support accept directory creation.",
 		},
 		StructuredOutput: "path status entries",
 		StructuredFlags:  []string{"--confirm", "--json"},

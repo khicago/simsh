@@ -10,16 +10,16 @@ import (
 )
 
 type MountConformanceSpec struct {
-	MountPoint               string
-	DirectoryPath            string
-	WantDirectoryKind        string
-	FilePath                 string
-	WantFileKind             string
-	MissingPath              string
-	RecursivePath            string
-	WantChildren             []string
-	WantCollectedFiles       []string
-	WantRecursiveSearchPaths []string
+	MountPoint                  string
+	DirectoryPath               string
+	WantDirectoryKind           string
+	FilePath                    string
+	WantFileKind                string
+	MissingPath                 string
+	RecursivePath               string
+	WantChildren                []string
+	WantCollectedFiles          []string
+	WantRecursiveSearchPaths    []string
 	WantFileLineCount           int
 	RequireNonRecursiveDirError bool
 }
@@ -48,7 +48,7 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 	}
 
 	if len(spec.WantChildren) > 0 {
-		children, err := mount.ListChildren(context.Background(), spec.DirectoryPath)
+		children, err := contract.ListMountChildren(context.Background(), mount, spec.DirectoryPath)
 		if err != nil {
 			return fmt.Errorf("%s ListChildren(%q) error = %v, want nil", s.Phase, spec.DirectoryPath, err)
 		}
@@ -57,14 +57,14 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 		}
 	}
 
-	dirIsDir, err := mount.IsDirPath(context.Background(), spec.DirectoryPath)
+	dirIsDir, err := contract.IsMountDir(context.Background(), mount, spec.DirectoryPath)
 	if err != nil {
 		return fmt.Errorf("%s IsDirPath(%q) error = %v, want nil", s.Phase, spec.DirectoryPath, err)
 	}
 	if !dirIsDir {
 		return fmt.Errorf("%s IsDirPath(%q) = false, want true", s.Phase, spec.DirectoryPath)
 	}
-	fileIsDir, err := mount.IsDirPath(context.Background(), spec.FilePath)
+	fileIsDir, err := contract.IsMountDir(context.Background(), mount, spec.FilePath)
 	if err != nil {
 		return fmt.Errorf("%s IsDirPath(%q) error = %v, want nil", s.Phase, spec.FilePath, err)
 	}
@@ -72,12 +72,12 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 		return fmt.Errorf("%s IsDirPath(%q) = true, want false", s.Phase, spec.FilePath)
 	}
 
-	if _, err := mount.ReadRawContent(context.Background(), spec.FilePath); err != nil {
+	if _, err := contract.ReadMountContent(context.Background(), mount, spec.FilePath); err != nil {
 		return fmt.Errorf("%s ReadRawContent(%q) error = %v, want nil", s.Phase, spec.FilePath, err)
 	}
 
 	if len(spec.WantCollectedFiles) > 0 {
-		collected, err := mount.CollectFilesUnder(context.Background(), spec.RecursivePath)
+		collected, err := contract.EnumerateMountFiles(context.Background(), mount, spec.RecursivePath, true)
 		if err != nil {
 			return fmt.Errorf("%s CollectFilesUnder(%q) error = %v, want nil", s.Phase, spec.RecursivePath, err)
 		}
@@ -86,7 +86,7 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 		}
 	}
 
-	fileSearch, err := mount.ResolveSearchPaths(context.Background(), spec.FilePath, false)
+	fileSearch, err := contract.EnumerateMountFiles(context.Background(), mount, spec.FilePath, false)
 	if err != nil {
 		return fmt.Errorf("%s ResolveSearchPaths(%q, false) error = %v, want nil", s.Phase, spec.FilePath, err)
 	}
@@ -95,7 +95,7 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 	}
 
 	if len(spec.WantRecursiveSearchPaths) > 0 {
-		searchPaths, err := mount.ResolveSearchPaths(context.Background(), spec.RecursivePath, true)
+		searchPaths, err := contract.EnumerateMountFiles(context.Background(), mount, spec.RecursivePath, true)
 		if err != nil {
 			return fmt.Errorf("%s ResolveSearchPaths(%q, true) error = %v, want nil", s.Phase, spec.RecursivePath, err)
 		}
@@ -104,12 +104,12 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 		}
 	}
 	if spec.RequireNonRecursiveDirError {
-		if _, err := mount.ResolveSearchPaths(context.Background(), spec.RecursivePath, false); err == nil {
+		if _, err := contract.EnumerateMountFiles(context.Background(), mount, spec.RecursivePath, false); err == nil {
 			return fmt.Errorf("%s ResolveSearchPaths(%q, false) unexpectedly succeeded", s.Phase, spec.RecursivePath)
 		}
 	}
 
-	dirMeta, err := mount.DescribePath(context.Background(), spec.DirectoryPath)
+	dirMeta, err := contract.DescribeMountPath(context.Background(), mount, spec.DirectoryPath)
 	if err != nil {
 		return fmt.Errorf("%s DescribePath(%q) error = %v, want nil", s.Phase, spec.DirectoryPath, err)
 	}
@@ -117,7 +117,7 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 		return err
 	}
 
-	fileMeta, err := mount.DescribePath(context.Background(), spec.FilePath)
+	fileMeta, err := contract.DescribeMountPath(context.Background(), mount, spec.FilePath)
 	if err != nil {
 		return fmt.Errorf("%s DescribePath(%q) error = %v, want nil", s.Phase, spec.FilePath, err)
 	}
@@ -126,10 +126,10 @@ func (s Snapshot) checkReadOnlyMountConformance(spec MountConformanceSpec) error
 	}
 
 	if spec.MissingPath != "" {
-		if _, err := mount.DescribePath(context.Background(), spec.MissingPath); err == nil {
+		if _, err := contract.DescribeMountPath(context.Background(), mount, spec.MissingPath); err == nil {
 			return fmt.Errorf("%s DescribePath(%q) unexpectedly succeeded", s.Phase, spec.MissingPath)
 		}
-		if _, err := mount.ReadRawContent(context.Background(), spec.MissingPath); err == nil {
+		if _, err := contract.ReadMountContent(context.Background(), mount, spec.MissingPath); err == nil {
 			return fmt.Errorf("%s ReadRawContent(%q) unexpectedly succeeded", s.Phase, spec.MissingPath)
 		}
 	}

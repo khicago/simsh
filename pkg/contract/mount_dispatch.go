@@ -86,6 +86,9 @@ func IsMountDir(ctx context.Context, mount VirtualMount, pathValue string) (bool
 }
 
 func ListMountChildren(ctx context.Context, mount VirtualMount, dir string) ([]string, error) {
+	if err := requireMountCLIClass(mount, MountCLIList, "entry listing"); err != nil {
+		return nil, err
+	}
 	lister, ok := mount.(EntryLister)
 	if !ok {
 		return nil, unsupportedMountCapability(mount, "entry listing")
@@ -113,6 +116,13 @@ func ListMountChildren(ctx context.Context, mount VirtualMount, dir string) ([]s
 func EnumerateMountFiles(ctx context.Context, mount VirtualMount, target string, recursive bool) ([]string, error) {
 	entry, err := StatMountPath(ctx, mount, target)
 	if err != nil {
+		return nil, err
+	}
+	requiredClass := MountCLIRead
+	if recursive || entry.Meta.IsDir {
+		requiredClass = MountCLIFind
+	}
+	if err := requireMountCLIClass(mount, requiredClass, "path enumeration"); err != nil {
 		return nil, err
 	}
 	if !entry.Meta.IsDir {
@@ -154,6 +164,13 @@ func ReadMountContent(ctx context.Context, mount VirtualMount, pathValue string)
 }
 
 func ReadManyFromMount(ctx context.Context, mount VirtualMount, paths []string) ([]MountContentEntry, error) {
+	requiredClass := MountCLIRead
+	if len(paths) > 1 {
+		requiredClass = MountCLIBulkRead
+	}
+	if err := requireMountCLIClass(mount, requiredClass, "bulk read"); err != nil {
+		return nil, err
+	}
 	if bulk, ok := mount.(BulkReader); ok {
 		result, err := bulk.ReadMany(ctx, ReadManyRequest{Paths: append([]string(nil), paths...)})
 		if err != nil {
@@ -176,6 +193,9 @@ func ReadManyFromMount(ctx context.Context, mount VirtualMount, paths []string) 
 }
 
 func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchRequest) (SearchResult, error) {
+	if err := requireMountCLIClass(mount, MountCLIContentSearch, "content search"); err != nil {
+		return SearchResult{}, err
+	}
 	if searcher, ok := mount.(ContentSearcher); ok {
 		return searcher.SearchContent(ctx, req)
 	}
@@ -227,8 +247,14 @@ func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchReque
 
 func ApplyMountMutations(ctx context.Context, mount VirtualMount, batch MutationBatch) (MutationResult, error) {
 	profile := NormalizeMountProfile(mount.Profile())
+	if err := requireMountCLIClass(mount, MountCLIMutate, "mutation batch"); err != nil {
+		return MutationResult{}, err
+	}
 	if profile.WriteSemantics == MountWriteReadOnly {
 		return MutationResult{}, ErrUnsupported
+	}
+	if !mountDeclaresConsistency(profile) {
+		return MutationResult{}, fmt.Errorf("%w: %s: writable mounts must declare consistency or refresh semantics", ErrUnsupported, mount.MountPoint())
 	}
 	mutator, ok := mount.(Mutator)
 	if !ok {
@@ -241,13 +267,27 @@ func CheckMountPathOp(mount VirtualMount, op PathOp) error {
 	profile := NormalizeMountProfile(mount.Profile())
 	switch op {
 	case PathOpRead:
+		if err := requireMountCLIClass(mount, MountCLIRead, "read"); err != nil {
+			return err
+		}
+		return nil
+	case PathOpTransferSource:
+		if err := requireMountCLIClass(mount, MountCLIRead, "transfer source read"); err != nil {
+			return err
+		}
 		if profile.TruthModel == MountTruthProjection {
 			return ErrUnsupported
 		}
 		return nil
 	case PathOpWrite, PathOpMkdir, PathOpRemove:
+		if err := requireMountCLIClass(mount, MountCLIMutate, "mutation"); err != nil {
+			return err
+		}
 		if profile.WriteSemantics == MountWriteReadOnly {
 			return ErrUnsupported
+		}
+		if !mountDeclaresConsistency(profile) {
+			return fmt.Errorf("%w: %s: writable mounts must declare consistency or refresh semantics", ErrUnsupported, mount.MountPoint())
 		}
 		return nil
 	default:
@@ -261,9 +301,28 @@ func unsupportedMountCapability(mount VirtualMount, capability string) error {
 	}
 	profile := NormalizeMountProfile(mount.Profile())
 	if profile.LatencyClass == MountLatencyRemoteHigh {
-		return fmt.Errorf("%s: %s requires an explicit mount capability on remote_high_latency mounts", mount.MountPoint(), capability)
+		return fmt.Errorf("%w: %s: %s requires an explicit mount capability on remote_high_latency mounts", ErrUnsupported, mount.MountPoint(), capability)
 	}
-	return fmt.Errorf("%s: mount does not implement %s", mount.MountPoint(), capability)
+	return fmt.Errorf("%w: %s: mount does not implement %s", ErrUnsupported, mount.MountPoint(), capability)
+}
+
+func requireMountCLIClass(mount VirtualMount, class MountCLIClass, capability string) error {
+	if mount == nil {
+		return ErrUnsupported
+	}
+	profile := NormalizeMountProfile(mount.Profile())
+	if MountSupportsCLIClass(profile, class) {
+		return nil
+	}
+	return fmt.Errorf("%w: %s: mount profile does not declare %s support for %s", ErrUnsupported, mount.MountPoint(), class, capability)
+}
+
+func mountDeclaresConsistency(profile MountProfile) bool {
+	profile = NormalizeMountProfile(profile)
+	return profile.Consistency.PathReadAfterWrite ||
+		profile.Consistency.ListAfterWrite ||
+		profile.Consistency.SearchAfterWrite ||
+		profile.Consistency.RefreshRequired
 }
 
 func mountPathsFromEntries(entries []MountEntry) []string {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"slices"
 	"strings"
 	"testing"
@@ -316,7 +317,7 @@ func TestRunLifecycleStopsOnHandlerError(t *testing.T) {
 
 func fakeProjection(memory contract.VirtualMount, opaque string) contract.AdapterProjection {
 	return contract.AdapterProjection{
-		Memory:     contract.MemoryProjection{Mount: memory},
+		Memory:      contract.MemoryProjection{Mount: memory},
 		OpaqueState: json.RawMessage(opaque),
 	}
 }
@@ -343,38 +344,56 @@ func newFakeMount(point string, files map[string]string, dirs []string) *fakeMou
 }
 
 func (m *fakeMount) MountPoint() string { return m.point }
+func (m *fakeMount) Profile() contract.MountProfile {
+	return contract.NormalizeMountProfile(contract.MountProfile{
+		TruthModel:          contract.MountTruthProjection,
+		MaterializationMode: contract.MountMaterializationSnapshot,
+		WriteSemantics:      contract.MountWriteReadOnly,
+		LatencyClass:        contract.MountLatencyLocalFast,
+		SupportedCLIClasses: []contract.MountCLIClass{contract.MountCLIRead},
+	})
+}
 func (m *fakeMount) Exists(ctx context.Context) (bool, error) {
 	_ = ctx
 	return true, nil
 }
-func (m *fakeMount) ListChildren(ctx context.Context, dir string) ([]string, error) {
+func (m *fakeMount) StatPath(ctx context.Context, pathValue string) (contract.MountEntry, error) {
 	_ = ctx
-	return nil, fmt.Errorf("not implemented")
-}
-func (m *fakeMount) IsDirPath(ctx context.Context, path string) (bool, error) {
-	_ = ctx
-	_, ok := m.dirs[path]
-	return ok, nil
-}
-func (m *fakeMount) ReadRawContent(ctx context.Context, path string) (string, error) {
-	_ = ctx
-	raw, ok := m.files[path]
+	if _, ok := m.dirs[pathValue]; ok {
+		return contract.MountEntry{
+			Path: pathValue,
+			Name: path.Base(pathValue),
+			Meta: contract.PathMeta{
+				Exists:       true,
+				IsDir:        true,
+				Kind:         "memory_dir",
+				Access:       contract.PathAccessReadOnly,
+				Capabilities: []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+			},
+		}, nil
+	}
+	raw, ok := m.files[pathValue]
 	if !ok {
-		return "", fmt.Errorf("missing file: %s", path)
+		return contract.MountEntry{}, fmt.Errorf("missing file: %s", pathValue)
+	}
+	return contract.MountEntry{
+		Path: pathValue,
+		Name: path.Base(pathValue),
+		Meta: contract.PathMeta{
+			Exists:       true,
+			IsDir:        false,
+			Kind:         "memory_file",
+			Access:       contract.PathAccessReadOnly,
+			Capabilities: []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+			LineCount:    len(strings.Split(strings.TrimSuffix(raw, "\n"), "\n")),
+		},
+	}, nil
+}
+func (m *fakeMount) ReadContent(ctx context.Context, pathValue string) (string, error) {
+	_ = ctx
+	raw, ok := m.files[pathValue]
+	if !ok {
+		return "", fmt.Errorf("missing file: %s", pathValue)
 	}
 	return raw, nil
-}
-func (m *fakeMount) CollectFilesUnder(ctx context.Context, target string) ([]string, error) {
-	_ = ctx
-	return nil, fmt.Errorf("not implemented")
-}
-func (m *fakeMount) ResolveSearchPaths(ctx context.Context, target string, recursive bool) ([]string, error) {
-	_ = ctx
-	_ = target
-	_ = recursive
-	return nil, fmt.Errorf("not implemented")
-}
-func (m *fakeMount) DescribePath(ctx context.Context, path string) (contract.PathMeta, error) {
-	_ = ctx
-	return contract.PathMeta{}, fmt.Errorf("not implemented")
 }

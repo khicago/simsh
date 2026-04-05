@@ -233,7 +233,7 @@ func (s Snapshot) readFile(target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	raw, err := mount.ReadRawContent(context.Background(), target)
+	raw, err := contract.ReadMountContent(context.Background(), mount, target)
 	if err != nil {
 		return "", err
 	}

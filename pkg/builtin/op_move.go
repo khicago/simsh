@@ -15,7 +15,7 @@ func specMv() engine.CommandSpec {
 		Tips: []string{
 			"Moves a file from source to destination.",
 			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
-			"Mount-backed virtual paths are immutable and cannot be moved.",
+			"Projection-backed virtual paths are not valid move operands; factual mounts may opt into transfer support.",
 		},
 		StructuredOutput: "move summary",
 		StructuredFlags:  []string{"--confirm", "--json"},
@@ -46,7 +46,7 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "mv: write is not supported", contract.ExitCodeUnsupported
 	}
 	if out, code, ok := preflightPathChecks(runtime, "mv", []pathCheck{
-		{path: src, op: contract.PathOpRead, unsupportedMessage: "mv: source path is not supported"},
+		{path: src, op: contract.PathOpTransferSource, unsupportedMessage: "mv: source path is not supported"},
 		{path: src, op: contract.PathOpRemove, unsupportedMessage: "mv: remove is not supported"},
 		{path: dest, op: contract.PathOpWrite, unsupportedMessage: "mv: write is not supported"},
 	}); !ok {

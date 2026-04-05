@@ -16,7 +16,7 @@ func specRm() engine.CommandSpec {
 		Tips: []string{
 			"Removes files. Does not support directory removal.",
 			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
-			"Mount-backed virtual paths are immutable and cannot be removed.",
+			"Projection-backed virtual paths are immutable; only mounts that declare mutate support accept removals.",
 		},
 		StructuredOutput: "path status entries",
 		StructuredFlags:  []string{"--confirm", "--json"},

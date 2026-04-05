@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
+	"strings"
 	"testing"
 
 	"github.com/khicago/simsh/pkg/contract"
@@ -163,15 +165,6 @@ func TestMountConformanceFailures(t *testing.T) {
 			},
 		},
 		{
-			name: "file_search_error",
-			run: func() error {
-				mount := newMountFixture()
-				mount.resolveErr["/docs/guide.md"] = map[bool]error{false: errors.New("boom")}
-				snapshot := snapshotWithMount(mount)
-				return snapshot.checkReadOnlyMountConformance(baseMountSpec())
-			},
-		},
-		{
 			name: "recursive_search_error",
 			run: func() error {
 				mount := newMountFixture()
@@ -187,18 +180,6 @@ func TestMountConformanceFailures(t *testing.T) {
 				spec := baseMountSpec()
 				spec.WantRecursiveSearchPaths = []string{"/docs/guide.md"}
 				return snapshot.checkReadOnlyMountConformance(spec)
-			},
-		},
-		{
-			name: "non_recursive_dir_succeeds",
-			run: func() error {
-				mount := newMountFixture()
-				if m, ok := mount.resolveErr["/docs"]; ok {
-					delete(m, false)
-				}
-				mount.resolve["/docs"][false] = []string{"/docs/guide.md"}
-				snapshot := snapshotWithMount(mount)
-				return snapshot.checkReadOnlyMountConformance(baseMountSpec())
 			},
 		},
 		{
@@ -354,9 +335,9 @@ func newMountFixture() *fakeConformanceMount {
 			"/docs/tutorials": {"/docs/tutorials/setup.md"},
 		},
 		dirs: map[string]bool{
-			"/docs":           true,
-			"/docs/tutorials": true,
-			"/docs/guide.md":  false,
+			"/docs":                    true,
+			"/docs/tutorials":          true,
+			"/docs/guide.md":           false,
 			"/docs/tutorials/setup.md": false,
 		},
 		reads: map[string]string{
@@ -396,8 +377,8 @@ func newMountFixture() *fakeConformanceMount {
 		metaErr: map[string]error{
 			"/docs/missing.md": errors.New("missing"),
 		},
-		childrenErr: map[string]error{},
-		isDirErrs:   map[string]error{},
+		childrenErr:  map[string]error{},
+		isDirErrs:    map[string]error{},
 		collectedErr: map[string]error{},
 	}
 }
@@ -410,7 +391,6 @@ func snapshotWithMount(mount contract.VirtualMount) Snapshot {
 		},
 	}
 }
-
 
 func baseMountSpec() MountConformanceSpec {
 	return MountConformanceSpec{
@@ -430,62 +410,139 @@ func baseMountSpec() MountConformanceSpec {
 }
 
 func (m *fakeConformanceMount) MountPoint() string { return m.point }
+func (m *fakeConformanceMount) Profile() contract.MountProfile {
+	return contract.NormalizeMountProfile(contract.MountProfile{
+		TruthModel:          contract.MountTruthProjection,
+		MaterializationMode: contract.MountMaterializationSnapshot,
+		WriteSemantics:      contract.MountWriteReadOnly,
+		LatencyClass:        contract.MountLatencyLocalFast,
+		SupportedCLIClasses: []contract.MountCLIClass{
+			contract.MountCLIList,
+			contract.MountCLIFind,
+			contract.MountCLIRead,
+		},
+	})
+}
 func (m *fakeConformanceMount) Exists(ctx context.Context) (bool, error) {
 	_ = ctx
 	return m.exists, m.existsErr
 }
-func (m *fakeConformanceMount) ListChildren(ctx context.Context, dir string) ([]string, error) {
+func (m *fakeConformanceMount) StatPath(ctx context.Context, pathValue string) (contract.MountEntry, error) {
 	_ = ctx
-	if err, ok := m.childrenErr[dir]; ok {
-		return nil, err
+	if err, ok := m.isDirErrs[pathValue]; ok {
+		return contract.MountEntry{}, err
 	}
-	return append([]string(nil), m.children[dir]...), nil
-}
-func (m *fakeConformanceMount) IsDirPath(ctx context.Context, path string) (bool, error) {
-	_ = ctx
-	if err, ok := m.isDirErrs[path]; ok {
-		return false, err
+	if err, ok := m.metaErr[pathValue]; ok {
+		return contract.MountEntry{}, err
 	}
-	return m.dirs[path], nil
+	meta, ok := m.meta[pathValue]
+	if ok {
+		if isDir, hasDir := m.dirs[pathValue]; hasDir {
+			meta.IsDir = isDir
+		}
+		return contract.MountEntry{Path: pathValue, Name: path.Base(pathValue), Meta: meta}, nil
+	}
+	if isDir, hasDir := m.dirs[pathValue]; hasDir {
+		meta := contract.PathMeta{
+			Exists: true,
+			IsDir:  isDir,
+			Access: contract.PathAccessReadOnly,
+		}
+		if isDir {
+			meta.Kind = "docs_dir"
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch}
+		} else {
+			meta.Kind = "docs_file"
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead}
+			if raw, ok := m.reads[pathValue]; ok {
+				meta.LineCount = len(strings.Split(strings.TrimSuffix(raw, "\n"), "\n"))
+			}
+		}
+		return contract.MountEntry{Path: pathValue, Name: path.Base(pathValue), Meta: meta}, nil
+	}
+	if raw, ok := m.reads[pathValue]; ok {
+		return contract.MountEntry{
+			Path: pathValue,
+			Name: path.Base(pathValue),
+			Meta: contract.PathMeta{
+				Exists:       true,
+				IsDir:        false,
+				Kind:         "docs_file",
+				Access:       contract.PathAccessReadOnly,
+				Capabilities: []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+				LineCount:    len(strings.Split(strings.TrimSuffix(raw, "\n"), "\n")),
+			},
+		}, nil
+	}
+	return contract.MountEntry{}, fmt.Errorf("missing meta: %s", pathValue)
 }
-func (m *fakeConformanceMount) ReadRawContent(ctx context.Context, path string) (string, error) {
+func (m *fakeConformanceMount) ListEntries(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
 	_ = ctx
-	if err, ok := m.readErrs[path]; ok {
+	if err, ok := m.childrenErr[req.Dir]; ok {
+		return contract.ListEntriesResult{}, err
+	}
+	children := m.children[req.Dir]
+	entries := make([]contract.MountEntry, 0, len(children))
+	for _, child := range children {
+		entry, err := m.StatPath(ctx, child)
+		if err != nil {
+			return contract.ListEntriesResult{}, err
+		}
+		entries = append(entries, entry)
+	}
+	return contract.ListEntriesResult{Entries: entries}, nil
+}
+func (m *fakeConformanceMount) ReadContent(ctx context.Context, pathValue string) (string, error) {
+	_ = ctx
+	if err, ok := m.readErrs[pathValue]; ok {
 		return "", err
 	}
-	raw, ok := m.reads[path]
+	raw, ok := m.reads[pathValue]
 	if !ok {
-		return "", fmt.Errorf("missing file: %s", path)
+		return "", fmt.Errorf("missing file: %s", pathValue)
 	}
 	return raw, nil
 }
-func (m *fakeConformanceMount) CollectFilesUnder(ctx context.Context, target string) ([]string, error) {
+func (m *fakeConformanceMount) EnumeratePaths(ctx context.Context, req contract.EnumeratePathsRequest) (contract.EnumeratePathsResult, error) {
 	_ = ctx
-	if err, ok := m.collectedErr[target]; ok {
-		return nil, err
-	}
-	return append([]string(nil), m.collected[target]...), nil
-}
-func (m *fakeConformanceMount) ResolveSearchPaths(ctx context.Context, target string, recursive bool) ([]string, error) {
-	_ = ctx
-	if errByRecursive, ok := m.resolveErr[target]; ok {
-		if err, ok := errByRecursive[recursive]; ok {
-			return nil, err
+	if errByRecursive, ok := m.resolveErr[req.Target]; ok {
+		if err, ok := errByRecursive[req.Recursive]; ok {
+			return contract.EnumeratePathsResult{}, err
 		}
 	}
-	if pathsByRecursive, ok := m.resolve[target]; ok {
-		return append([]string(nil), pathsByRecursive[recursive]...), nil
+	if req.Recursive {
+		if err, ok := m.collectedErr[req.Target]; ok {
+			return contract.EnumeratePathsResult{}, err
+		}
 	}
-	return nil, fmt.Errorf("missing search target: %s", target)
+	if pathsByRecursive, ok := m.resolve[req.Target]; ok {
+		return m.entriesForPaths(ctx, pathsByRecursive[req.Recursive])
+	}
+	if req.Recursive {
+		if collected, ok := m.collected[req.Target]; ok {
+			return m.entriesForPaths(ctx, collected)
+		}
+	}
+	if !req.Recursive {
+		entry, err := m.StatPath(ctx, req.Target)
+		if err != nil {
+			return contract.EnumeratePathsResult{}, err
+		}
+		if entry.Meta.IsDir {
+			return contract.EnumeratePathsResult{}, fmt.Errorf("%s: Is a directory (use -r to search recursively)", req.Target)
+		}
+		return contract.EnumeratePathsResult{Entries: []contract.MountEntry{entry}}, nil
+	}
+	return contract.EnumeratePathsResult{}, fmt.Errorf("missing search target: %s", req.Target)
 }
-func (m *fakeConformanceMount) DescribePath(ctx context.Context, path string) (contract.PathMeta, error) {
-	_ = ctx
-	if err, ok := m.metaErr[path]; ok {
-		return contract.PathMeta{}, err
+func (m *fakeConformanceMount) entriesForPaths(ctx context.Context, paths []string) (contract.EnumeratePathsResult, error) {
+	entries := make([]contract.MountEntry, 0, len(paths))
+	for _, pathValue := range paths {
+		entry, err := m.StatPath(ctx, pathValue)
+		if err != nil {
+			return contract.EnumeratePathsResult{}, err
+		}
+		entries = append(entries, entry)
 	}
-	meta, ok := m.meta[path]
-	if !ok {
-		return contract.PathMeta{}, fmt.Errorf("missing meta: %s", path)
-	}
-	return meta, nil
+	return contract.EnumeratePathsResult{Entries: entries}, nil
 }

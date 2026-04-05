@@ -225,7 +225,7 @@ func decodeResourceRecords(t *testing.T, raw string) []resourceRecord {
 
 func readMemoryFile(t *testing.T, mount contract.VirtualMount, path string) string {
 	t.Helper()
-	raw, err := mount.ReadRawContent(context.Background(), path)
+	raw, err := contract.ReadMountContent(context.Background(), mount, path)
 	if err != nil {
 		t.Fatalf("read %s: %v", path, err)
 	}

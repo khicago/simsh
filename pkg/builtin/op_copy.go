@@ -15,7 +15,7 @@ func specCp() engine.CommandSpec {
 		Tips: []string{
 			"Copies a file from source to destination.",
 			"Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.",
-			"Mount-backed virtual paths are immutable and not valid copy operands.",
+			"Projection-backed virtual paths are not valid copy operands; factual mounts may opt into transfer support.",
 		},
 		StructuredOutput: "copy summary",
 		StructuredFlags:  []string{"--confirm", "--json"},
@@ -46,7 +46,7 @@ func runCp(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "cp: write is not supported", contract.ExitCodeUnsupported
 	}
 	if out, code, ok := preflightPathChecks(runtime, "cp", []pathCheck{
-		{path: src, op: contract.PathOpRead, unsupportedMessage: "cp: source path is not supported"},
+		{path: src, op: contract.PathOpTransferSource, unsupportedMessage: "cp: source path is not supported"},
 		{path: dest, op: contract.PathOpWrite, unsupportedMessage: "cp: write is not supported"},
 	}); !ok {
 		return out, code

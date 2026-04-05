@@ -285,14 +285,14 @@ func TestKnowledgeMountEmptyAndProjectionError(t *testing.T) {
 		t.Fatalf("knowledgeMount() error = %v", err)
 	}
 
-	raw, err := knowledgeMount.ReadRawContent(context.Background(), "/knowledge_base/reference/empty.md")
+	raw, err := contract.ReadMountContent(context.Background(), knowledgeMount, "/knowledge_base/reference/empty.md")
 	if err != nil {
 		t.Fatalf("ReadRawContent(empty.md) error = %v", err)
 	}
 	if raw != "# Empty\n" {
 		t.Fatalf("ReadRawContent(empty.md) = %q, want %q", raw, "# Empty\n")
 	}
-	indexRaw, err := knowledgeMount.ReadRawContent(context.Background(), "/knowledge_base/reference/_index.json")
+	indexRaw, err := contract.ReadMountContent(context.Background(), knowledgeMount, "/knowledge_base/reference/_index.json")
 	if err != nil {
 		t.Fatalf("ReadRawContent(_index.json) error = %v", err)
 	}
@@ -336,7 +336,7 @@ func TestBuildProjectionIncludesKnowledgeAndMemoryViews(t *testing.T) {
 		t.Fatalf("buildProjection(...).VirtualMounts = %#v, want knowledge and resource mounts", projection.VirtualMounts)
 	}
 
-	guide, err := projection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/guide.md")
+	guide, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[0], "/knowledge_base/reference/guide.md")
 	if err != nil {
 		t.Fatalf("knowledge mount ReadRawContent(...) error = %v", err)
 	}
@@ -344,7 +344,7 @@ func TestBuildProjectionIncludesKnowledgeAndMemoryViews(t *testing.T) {
 		t.Fatalf("knowledge mount content = %q, want guide markdown", guide)
 	}
 
-	obs, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/observations.md")
+	obs, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/observations.md")
 	if err != nil {
 		t.Fatalf("memory mount observations error = %v", err)
 	}
@@ -352,7 +352,7 @@ func TestBuildProjectionIncludesKnowledgeAndMemoryViews(t *testing.T) {
 		t.Fatalf("memory observations = %q, want reference and resource observations", obs)
 	}
 
-	projectionIndex, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	projectionIndex, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("memory mount projections error = %v", err)
 	}
@@ -424,7 +424,7 @@ func TestControlPlaneUpsertsAndProjectionMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(control plane) error = %v", err)
 	}
-	docIndexRaw, err := projection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/_index.json")
+	docIndexRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[0], "/knowledge_base/reference/_index.json")
 	if err != nil {
 		t.Fatalf("read document index error = %v", err)
 	}
@@ -432,7 +432,7 @@ func TestControlPlaneUpsertsAndProjectionMetadata(t *testing.T) {
 	if record := requireProjectionRecordHelper(t, docRecords, "/knowledge_base/reference/reports/today.md"); record.Source != "control_plane" || record.Freshness != "live" {
 		t.Fatalf("unexpected document control-plane metadata: %+v", record)
 	}
-	resourceIndexRaw, err := projection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	resourceIndexRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[1], "/resources/_index.json")
 	if err != nil {
 		t.Fatalf("read resource index error = %v", err)
 	}
@@ -440,7 +440,7 @@ func TestControlPlaneUpsertsAndProjectionMetadata(t *testing.T) {
 	if record := requireProjectionRecordHelper(t, resourceRecords, "/resources/catalog/index.json"); record.Source != "control_plane" || record.Freshness != "updated" {
 		t.Fatalf("unexpected resource control-plane metadata: %+v", record)
 	}
-	workflowsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.json")
+	workflowsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/workflows.json")
 	if err != nil {
 		t.Fatalf("read workflows json error = %v", err)
 	}
@@ -736,7 +736,7 @@ func TestBuildProjectionIncludesSkillProjectionMetadata(t *testing.T) {
 		t.Fatalf("unexpected skill precedence metadata: %+v", record.Precedence)
 	}
 
-	projectionsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	projectionsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("memory mount projections error = %v", err)
 	}
@@ -745,7 +745,7 @@ func TestBuildProjectionIncludesSkillProjectionMetadata(t *testing.T) {
 	if record.Eligibility == nil || record.Eligibility.State != skillEligibilityIneligible {
 		t.Fatalf("memory projection view skills = %+v, want ineligible state", record)
 	}
-	summaryRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	summaryRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("memory mount summary error = %v", err)
 	}
@@ -866,7 +866,7 @@ func TestSkillControlPlaneAuditVisibilityAndSummary(t *testing.T) {
 	if status.ProjectionGeneration != 1 || status.ControlPlaneEvents != 1 || status.LastControlPlaneKind != controlPlaneEventKindSkillAdded {
 		t.Fatalf("status after build = %+v, want generation=1 event_count=1 last=skill_added", status)
 	}
-	auditRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.json")
+	auditRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/skills_audit.json")
 	if err != nil {
 		t.Fatalf("read skills audit json error = %v", err)
 	}
@@ -877,7 +877,7 @@ func TestSkillControlPlaneAuditVisibilityAndSummary(t *testing.T) {
 	if audit[0].Visibility != "visible" || audit[0].WinnerBefore != "/skills/planning/fallback/SKILL.md" || audit[0].WinnerAfter != "/skills/planning/primary/SKILL.md" || !audit[0].SelectedAfter {
 		t.Fatalf("skills audit event = %+v, want visible winner flip to primary", audit[0])
 	}
-	summaryRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.md")
+	summaryRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/skills_audit.md")
 	if err != nil {
 		t.Fatalf("read skills audit summary error = %v", err)
 	}
@@ -912,7 +912,7 @@ func TestSkillControlPlaneAuditTracksUpdateAndRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(update/remove audit) error = %v", err)
 	}
-	auditRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills_audit.json")
+	auditRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/skills_audit.json")
 	if err != nil {
 		t.Fatalf("read skills audit json after update/remove error = %v", err)
 	}
@@ -951,7 +951,7 @@ func TestRefreshAndInvalidateProjectionMetadata(t *testing.T) {
 		t.Fatalf("buildProjection(stale) error = %v", err)
 	}
 
-	staleIndexRaw, err := staleProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	staleIndexRaw, err := contract.ReadMountContent(context.Background(), staleProjection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("read stale projections error = %v", err)
 	}
@@ -962,14 +962,14 @@ func TestRefreshAndInvalidateProjectionMetadata(t *testing.T) {
 	if record := requireProjectionRecordHelper(t, staleView.Resources, "/resources/catalog/index.json"); record.Source != "workflow_catalog" || record.Freshness != "stale" {
 		t.Fatalf("stale resource projection = %+v, want workflow_catalog/stale", record)
 	}
-	staleSummary, err := staleProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	staleSummary, err := contract.ReadMountContent(context.Background(), staleProjection.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("read stale summary error = %v", err)
 	}
 	if !strings.Contains(staleSummary, "- stale: 2") {
 		t.Fatalf("stale summary = %q, want stale count", staleSummary)
 	}
-	staleResourceIndex, err := staleProjection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	staleResourceIndex, err := contract.ReadMountContent(context.Background(), staleProjection.VirtualMounts[1], "/resources/_index.json")
 	if err != nil {
 		t.Fatalf("read stale resource index error = %v", err)
 	}
@@ -989,7 +989,7 @@ func TestRefreshAndInvalidateProjectionMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(live) error = %v", err)
 	}
-	liveIndexRaw, err := liveProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	liveIndexRaw, err := contract.ReadMountContent(context.Background(), liveProjection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("read live projections error = %v", err)
 	}
@@ -1000,21 +1000,21 @@ func TestRefreshAndInvalidateProjectionMetadata(t *testing.T) {
 	if record := requireProjectionRecordHelper(t, liveView.Resources, "/resources/catalog/index.json"); record.Source != "catalog_refresh" || record.Freshness != "live" {
 		t.Fatalf("live resource projection = %+v, want catalog_refresh/live", record)
 	}
-	guideRaw, err := liveProjection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/guide.md")
+	guideRaw, err := contract.ReadMountContent(context.Background(), liveProjection.VirtualMounts[0], "/knowledge_base/reference/guide.md")
 	if err != nil {
 		t.Fatalf("read refreshed guide error = %v", err)
 	}
 	if guideRaw != "# Guide\nfresh\n" {
 		t.Fatalf("refreshed guide = %q, want %q", guideRaw, "# Guide\nfresh\n")
 	}
-	liveSummary, err := liveProjection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	liveSummary, err := contract.ReadMountContent(context.Background(), liveProjection.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("read live summary error = %v", err)
 	}
 	if !strings.Contains(liveSummary, "- live: 2") {
 		t.Fatalf("live summary = %q, want live count", liveSummary)
 	}
-	liveResourceIndex, err := liveProjection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	liveResourceIndex, err := contract.ReadMountContent(context.Background(), liveProjection.VirtualMounts[1], "/resources/_index.json")
 	if err != nil {
 		t.Fatalf("read live resource index error = %v", err)
 	}
@@ -1054,10 +1054,10 @@ func TestProjectionMaterializationFailureAndPartialStatesAreAdapterLocalTruth(t 
 		t.Fatalf("buildProjection(materialization truth) error = %v", err)
 	}
 
-	if _, err := projection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/guide.md"); err == nil {
+	if _, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[0], "/knowledge_base/reference/guide.md"); err == nil {
 		t.Fatalf("failed materialization document unexpectedly readable")
 	}
-	guideIndexRaw, err := projection.VirtualMounts[0].ReadRawContent(context.Background(), "/knowledge_base/reference/_index.json")
+	guideIndexRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[0], "/knowledge_base/reference/_index.json")
 	if err != nil {
 		t.Fatalf("read guide index error = %v", err)
 	}
@@ -1067,14 +1067,14 @@ func TestProjectionMaterializationFailureAndPartialStatesAreAdapterLocalTruth(t 
 		t.Fatalf("guide materialization = %+v, want failed/source-timeout", guide.Materialization)
 	}
 
-	resourceRaw, err := projection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/catalog/index.json")
+	resourceRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[1], "/resources/catalog/index.json")
 	if err != nil {
 		t.Fatalf("read partial resource content error = %v", err)
 	}
 	if resourceRaw != "{\"ok\":true}\n" {
 		t.Fatalf("partial resource content = %q, want persisted content", resourceRaw)
 	}
-	resourceIndexRaw, err := projection.VirtualMounts[1].ReadRawContent(context.Background(), "/resources/_index.json")
+	resourceIndexRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[1], "/resources/_index.json")
 	if err != nil {
 		t.Fatalf("read resource index error = %v", err)
 	}
@@ -1084,7 +1084,7 @@ func TestProjectionMaterializationFailureAndPartialStatesAreAdapterLocalTruth(t 
 		t.Fatalf("resource materialization = %+v, want partial/truncated-payload", resource.Materialization)
 	}
 
-	projectionsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	projectionsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("read memory projections error = %v", err)
 	}
@@ -1098,7 +1098,7 @@ func TestProjectionMaterializationFailureAndPartialStatesAreAdapterLocalTruth(t 
 		t.Fatalf("memory resource materialization = %+v, want partial", resource.Materialization)
 	}
 
-	summaryRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	summaryRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("read memory summary error = %v", err)
 	}
@@ -1129,7 +1129,7 @@ func TestWorkflowControlPlaneOverridesTraceStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(workflow override) error = %v", err)
 	}
-	workflowsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.json")
+	workflowsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/workflows.json")
 	if err != nil {
 		t.Fatalf("read workflow override json error = %v", err)
 	}
@@ -1141,7 +1141,7 @@ func TestWorkflowControlPlaneOverridesTraceStatus(t *testing.T) {
 	if !containsLine(deliver.Evidence, "/task_outputs/final.md") {
 		t.Fatalf("workflow override evidence = %+v, want preserved trace evidence", deliver.Evidence)
 	}
-	workflowsSummary, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.md")
+	workflowsSummary, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/workflows.md")
 	if err != nil {
 		t.Fatalf("read workflow override summary error = %v", err)
 	}
@@ -1154,7 +1154,7 @@ func TestWorkflowControlPlaneOverridesTraceStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(clear workflow override) error = %v", err)
 	}
-	workflowsRaw, err = projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/workflows.json")
+	workflowsRaw, err = contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/workflows.json")
 	if err != nil {
 		t.Fatalf("read cleared workflow json error = %v", err)
 	}
@@ -1197,7 +1197,7 @@ func TestSkillProjectionViewsAndMemoryEvidence(t *testing.T) {
 		t.Fatalf("buildProjection(skills) error = %v", err)
 	}
 
-	skillIndexRaw, err := projection.VirtualMounts[1].ReadRawContent(context.Background(), "/skills/_index.json")
+	skillIndexRaw, err := contract.ReadMountContent(context.Background(), projection.VirtualMounts[1], "/skills/_index.json")
 	if err != nil {
 		t.Fatalf("read skills index error = %v", err)
 	}
@@ -1220,7 +1220,7 @@ func TestSkillProjectionViewsAndMemoryEvidence(t *testing.T) {
 		t.Fatalf("reporting skill selection = %+v, want derived ineligible loser", reporting.Selection)
 	}
 
-	projectionsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	projectionsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("read memory projections error = %v", err)
 	}
@@ -1228,14 +1228,14 @@ func TestSkillProjectionViewsAndMemoryEvidence(t *testing.T) {
 	if len(projectionView.Skills) != 2 {
 		t.Fatalf("memory projection skills = %+v, want 2", projectionView.Skills)
 	}
-	skillsRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/skills.md")
+	skillsRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/skills.md")
 	if err != nil {
 		t.Fatalf("read memory skills evidence error = %v", err)
 	}
 	if !strings.Contains(skillsRaw, "/skills/draft-plan/SKILL.md") {
 		t.Fatalf("memory skills evidence = %q, want draft-plan path", skillsRaw)
 	}
-	summaryRaw, err := projection.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	summaryRaw, err := contract.ReadMountContent(context.Background(), projection.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("read memory summary error = %v", err)
 	}
@@ -1264,7 +1264,7 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(curated initial) error = %v", err)
 	}
-	curatedRaw, err := initial.Memory.Mount.ReadRawContent(context.Background(), "/memory/curated.json")
+	curatedRaw, err := contract.ReadMountContent(context.Background(), initial.Memory.Mount, "/memory/curated.json")
 	if err != nil {
 		t.Fatalf("read curated json error = %v", err)
 	}
@@ -1279,14 +1279,14 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	if !reflect.DeepEqual(first.SourcePaths, []string{"/memory/observations.md", "/memory/projections.json"}) {
 		t.Fatalf("curated entry source paths = %#v, want normalized source path references", first.SourcePaths)
 	}
-	curatedMD, err := initial.Memory.Mount.ReadRawContent(context.Background(), "/memory/curated.md")
+	curatedMD, err := contract.ReadMountContent(context.Background(), initial.Memory.Mount, "/memory/curated.md")
 	if err != nil {
 		t.Fatalf("read curated md error = %v", err)
 	}
 	if !strings.Contains(curatedMD, "# Curated Memory") || !strings.Contains(curatedMD, "[decision/read-only-memory]") {
 		t.Fatalf("curated md = %q, want curated-only view with stable id", curatedMD)
 	}
-	projectionsRaw, err := initial.Memory.Mount.ReadRawContent(context.Background(), "/memory/projections.json")
+	projectionsRaw, err := contract.ReadMountContent(context.Background(), initial.Memory.Mount, "/memory/projections.json")
 	if err != nil {
 		t.Fatalf("read projections json error = %v", err)
 	}
@@ -1304,7 +1304,7 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(curated updated) error = %v", err)
 	}
-	curatedRaw, err = updated.Memory.Mount.ReadRawContent(context.Background(), "/memory/curated.json")
+	curatedRaw, err = contract.ReadMountContent(context.Background(), updated.Memory.Mount, "/memory/curated.json")
 	if err != nil {
 		t.Fatalf("read updated curated json error = %v", err)
 	}
@@ -1316,7 +1316,7 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	if !reflect.DeepEqual(first.SourcePaths, []string{"/memory/workflows.json"}) {
 		t.Fatalf("updated curated source paths = %#v, want workflows source path", first.SourcePaths)
 	}
-	summaryRaw, err := updated.Memory.Mount.ReadRawContent(context.Background(), "/memory/summary.md")
+	summaryRaw, err := contract.ReadMountContent(context.Background(), updated.Memory.Mount, "/memory/summary.md")
 	if err != nil {
 		t.Fatalf("read memory summary with curated entries error = %v", err)
 	}
@@ -1329,7 +1329,7 @@ func TestCuratedControlPlaneViewsAreDistinctAndAuditable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildProjection(curated removed) error = %v", err)
 	}
-	curatedRaw, err = removed.Memory.Mount.ReadRawContent(context.Background(), "/memory/curated.json")
+	curatedRaw, err = contract.ReadMountContent(context.Background(), removed.Memory.Mount, "/memory/curated.json")
 	if err != nil {
 		t.Fatalf("read curated json after remove error = %v", err)
 	}
@@ -1646,7 +1646,7 @@ func requireProjectionRecordHelper(t *testing.T, records []projectionRecord, tar
 func mustReadFromMounts(t *testing.T, mounts []contract.VirtualMount, target string) string {
 	t.Helper()
 	for _, mounted := range mounts {
-		raw, err := mounted.ReadRawContent(context.Background(), target)
+		raw, err := contract.ReadMountContent(context.Background(), mounted, target)
 		if err == nil {
 			return raw
 		}
