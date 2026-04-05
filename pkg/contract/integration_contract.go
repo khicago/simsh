@@ -91,15 +91,20 @@ type Ops struct {
 	IsDirPath           func(ctx context.Context, path string) (bool, error)
 	DescribePath        func(ctx context.Context, path string) (PathMeta, error)
 	FormatLSLongRow     LSLongRowFormatter
+	ListEntries         func(ctx context.Context, req ListEntriesRequest) (ListEntriesResult, error)
+	EnumeratePaths      func(ctx context.Context, req EnumeratePathsRequest) (EnumeratePathsResult, error)
 	ReadRawContent      func(ctx context.Context, path string) (string, error)
+	ReadMany            func(ctx context.Context, req ReadManyRequest) (ReadManyResult, error)
 	ResolveSearchPaths  func(ctx context.Context, target string, recursive bool) ([]string, error)
 	CollectFilesUnder   func(ctx context.Context, target string) ([]string, error)
+	SearchContent       func(ctx context.Context, req SearchRequest) (SearchResult, error)
 	WriteFile           func(ctx context.Context, filePath string, content string) error
 	AppendFile          func(ctx context.Context, filePath string, content string) error
 	EditFile            func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error
 	MakeDir             func(ctx context.Context, dirPath string) error
 	RemoveFile          func(ctx context.Context, filePath string) error
 	RemoveDir           func(ctx context.Context, dirPath string) error
+	ApplyMutations      func(ctx context.Context, req MutationBatch) (MutationResult, error)
 	// CheckPathOp is an optional preflight hook for commands to validate path
 	// access before executing multi-step mutations. Virtual overlays may use it
 	// to provide consistent "unsupported" errors and avoid partial writes.
@@ -140,6 +145,18 @@ func OpsFromFilesystem(fs Filesystem) Ops {
 	if describer, ok := fs.(PathDescriber); ok {
 		ops.DescribePath = describer.DescribePath
 	}
+	if lister, ok := fs.(EntryLister); ok {
+		ops.ListEntries = lister.ListEntries
+	}
+	if enumerator, ok := fs.(PathEnumerator); ok {
+		ops.EnumeratePaths = enumerator.EnumeratePaths
+	}
+	if bulkReader, ok := fs.(BulkReader); ok {
+		ops.ReadMany = bulkReader.ReadMany
+	}
+	if searcher, ok := fs.(ContentSearcher); ok {
+		ops.SearchContent = searcher.SearchContent
+	}
 	if lister, ok := fs.(ExternalCommandLister); ok {
 		ops.ListExternalCommands = lister.ListExternalCommands
 	}
@@ -157,6 +174,9 @@ func OpsFromFilesystem(fs Filesystem) Ops {
 	}
 	if dr, ok := fs.(DirectoryRemover); ok {
 		ops.RemoveDir = dr.RemoveDir
+	}
+	if mutator, ok := fs.(Mutator); ok {
+		ops.ApplyMutations = mutator.ApplyMutations
 	}
 	if provider, ok := fs.(VirtualMountProvider); ok {
 		ops.VirtualMounts = append(ops.VirtualMounts, provider.VirtualMounts()...)

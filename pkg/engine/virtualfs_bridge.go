@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -165,7 +166,7 @@ func (r mountRouter) collectFilesForSyntheticDir(ctx context.Context, dir string
 	files := make([]string, 0)
 	for _, mounted := range active {
 		if mounted.point == dir || strings.HasPrefix(mounted.point, dir+"/") {
-			mountFiles, collectErr := mounted.mount.CollectFilesUnder(ctx, mounted.point)
+			mountFiles, collectErr := contract.EnumerateMountFiles(ctx, mounted.mount, mounted.point, true)
 			if collectErr != nil {
 				return nil, collectErr
 			}
@@ -175,6 +176,140 @@ func (r mountRouter) collectFilesForSyntheticDir(ctx context.Context, dir string
 		}
 	}
 	return normalizePathList(files), nil
+}
+
+func syntheticDirEntry(pathValue string) contract.MountEntry {
+	return contract.MountEntry{
+		Path: pathValue,
+		Name: path.Base(pathValue),
+		Meta: contract.PathMeta{
+			Exists:           true,
+			IsDir:            true,
+			Kind:             "virtual_dir",
+			Access:           contract.PathAccessReadOnly,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+			LineCount:        -1,
+			FrontMatterLines: -1,
+			SpeakerRows:      -1,
+			UserRelevance:    "n/a",
+		},
+	}
+}
+
+func (r mountRouter) statEntry(ctx context.Context, pathValue string) (contract.MountEntry, bool, error) {
+	pathValue = normalizeAbsolutePath(pathValue)
+	if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
+		return contract.MountEntry{}, false, err
+	} else if ok {
+		entry, err := mounted.mount.StatPath(ctx, pathValue)
+		return entry, true, err
+	}
+	if isSynthetic, err := r.isSyntheticDir(ctx, pathValue); err != nil {
+		return contract.MountEntry{}, false, err
+	} else if isSynthetic {
+		return syntheticDirEntry(pathValue), true, nil
+	}
+	return contract.MountEntry{}, false, nil
+}
+
+func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool) (contract.ListEntriesResult, bool, error) {
+	dir = normalizeAbsolutePath(dir)
+	if mounted, ok, err := r.activeForPath(ctx, dir); err != nil {
+		return contract.ListEntriesResult{}, false, err
+	} else if ok {
+		lister, ok := mounted.mount.(contract.EntryLister)
+		if !ok {
+			return contract.ListEntriesResult{}, true, fmt.Errorf("%s: mount does not support entry listing", dir)
+		}
+		result, err := lister.ListEntries(ctx, contract.ListEntriesRequest{
+			Dir:       dir,
+			Recursive: recursive,
+		})
+		return result, true, err
+	}
+	if isSynthetic, err := r.isSyntheticDir(ctx, dir); err != nil {
+		return contract.ListEntriesResult{}, false, err
+	} else if isSynthetic {
+		children, err := r.syntheticChildren(ctx, dir)
+		if err != nil {
+			return contract.ListEntriesResult{}, false, err
+		}
+		entries := make([]contract.MountEntry, 0, len(children))
+		for _, child := range children {
+			entry, _, err := r.statEntry(ctx, child)
+			if err != nil {
+				return contract.ListEntriesResult{}, false, err
+			}
+			entries = append(entries, entry)
+		}
+		return contract.ListEntriesResult{Entries: entries}, true, nil
+	}
+	return contract.ListEntriesResult{}, false, nil
+}
+
+func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursive bool) (contract.EnumeratePathsResult, bool, error) {
+	target = normalizeAbsolutePath(target)
+	if mounted, ok, err := r.activeForPath(ctx, target); err != nil {
+		return contract.EnumeratePathsResult{}, false, err
+	} else if ok {
+		if enumerator, ok := mounted.mount.(contract.PathEnumerator); ok {
+			result, err := enumerator.EnumeratePaths(ctx, contract.EnumeratePathsRequest{
+				Target:    target,
+				Recursive: recursive,
+			})
+			return result, true, err
+		}
+		if mounted.mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
+			return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: path enumeration requires PathEnumerator for remote_high_latency mount", target)
+		}
+		if lister, ok := mounted.mount.(contract.EntryLister); ok {
+			result, err := enumerateEntriesViaListing(ctx, lister, target, recursive)
+			return result, true, err
+		}
+		return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: mount does not support path enumeration", target)
+	}
+	if isSynthetic, err := r.isSyntheticDir(ctx, target); err != nil {
+		return contract.EnumeratePathsResult{}, false, err
+	} else if isSynthetic {
+		if !recursive {
+			return contract.EnumeratePathsResult{}, false, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
+		}
+		files, err := r.collectFilesForSyntheticDir(ctx, target)
+		if err != nil {
+			return contract.EnumeratePathsResult{}, false, err
+		}
+		entries := make([]contract.MountEntry, 0, len(files))
+		for _, filePath := range files {
+			entry, entryOK, entryErr := r.statEntry(ctx, filePath)
+			if entryErr != nil {
+				return contract.EnumeratePathsResult{}, false, entryErr
+			}
+			if !entryOK {
+				return contract.EnumeratePathsResult{}, false, fmt.Errorf("%s: No such file or directory", filePath)
+			}
+			entries = append(entries, entry)
+		}
+		return contract.EnumeratePathsResult{Entries: entries}, true, nil
+	}
+	return contract.EnumeratePathsResult{}, false, nil
+}
+
+func enumerateEntriesViaListing(ctx context.Context, lister contract.EntryLister, target string, recursive bool) (contract.EnumeratePathsResult, error) {
+	result, err := lister.ListEntries(ctx, contract.ListEntriesRequest{
+		Dir:       target,
+		Recursive: recursive,
+	})
+	if err != nil {
+		return contract.EnumeratePathsResult{}, err
+	}
+	files := make([]contract.MountEntry, 0, len(result.Entries))
+	for _, entry := range result.Entries {
+		if entry.Meta.IsDir {
+			continue
+		}
+		files = append(files, entry)
+	}
+	return contract.EnumeratePathsResult{Entries: files}, nil
 }
 
 func normalizePathList(paths []string) []string {
@@ -190,20 +325,62 @@ func normalizePathList(paths []string) []string {
 	return out
 }
 
+func containsPathCapability(caps []string, target string) bool {
+	for _, capability := range caps {
+		if capability == target {
+			return true
+		}
+	}
+	return false
+}
+
+func applyFilesystemFallbackMutation(
+	ctx context.Context,
+	op contract.MutationSpec,
+	writeFile func(context.Context, string, string) error,
+	appendFile func(context.Context, string, string) error,
+	editFile func(context.Context, string, string, string, bool) error,
+	makeDir func(context.Context, string) error,
+	removeFile func(context.Context, string) error,
+	removeDir func(context.Context, string) error,
+) error {
+	switch op.Kind {
+	case contract.MutationWriteFile:
+		return writeFile(ctx, op.Path, op.Content)
+	case contract.MutationAppend:
+		return appendFile(ctx, op.Path, op.Content)
+	case contract.MutationEdit:
+		return editFile(ctx, op.Path, op.OldString, op.NewString, op.ReplaceAll)
+	case contract.MutationMakeDir:
+		return makeDir(ctx, op.Path)
+	case contract.MutationRemoveFile:
+		return removeFile(ctx, op.Path)
+	case contract.MutationRemoveDir:
+		return removeDir(ctx, op.Path)
+	default:
+		return fmt.Errorf("unsupported mutation kind %q", op.Kind)
+	}
+}
+
 func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 	origRequireAbsolutePath := ops.RequireAbsolutePath
 	origListChildren := ops.ListChildren
 	origIsDirPath := ops.IsDirPath
+	origListEntries := ops.ListEntries
+	origEnumeratePaths := ops.EnumeratePaths
 	origCollectFilesUnder := ops.CollectFilesUnder
 	origResolveSearchPaths := ops.ResolveSearchPaths
 	origDescribePath := ops.DescribePath
 	origReadRawContent := ops.ReadRawContent
+	origReadMany := ops.ReadMany
+	origSearchContent := ops.SearchContent
 	origWriteFile := ops.WriteFile
 	origAppendFile := ops.AppendFile
 	origEditFile := ops.EditFile
 	origMakeDir := ops.MakeDir
 	origRemoveFile := ops.RemoveFile
 	origRemoveDir := ops.RemoveDir
+	origApplyMutations := ops.ApplyMutations
 	origCheckPathOp := ops.CheckPathOp
 
 	ops.RequireAbsolutePath = func(raw string) (string, error) {
@@ -217,14 +394,40 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		return origRequireAbsolutePath(raw)
 	}
 
+	ops.ListEntries = func(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
+		req.Dir = normalizeAbsolutePath(req.Dir)
+		if result, ok, err := r.listEntries(ctx, req.Dir, req.Recursive); err != nil {
+			return contract.ListEntriesResult{}, err
+		} else if ok {
+			return result, nil
+		}
+		if origListEntries != nil {
+			return origListEntries(ctx, req)
+		}
+		return contract.ListEntriesResult{}, contract.ErrUnsupported
+	}
+
+	ops.EnumeratePaths = func(ctx context.Context, req contract.EnumeratePathsRequest) (contract.EnumeratePathsResult, error) {
+		req.Target = normalizeAbsolutePath(req.Target)
+		if result, ok, err := r.enumeratePaths(ctx, req.Target, req.Recursive); err != nil {
+			return contract.EnumeratePathsResult{}, err
+		} else if ok {
+			return result, nil
+		}
+		if origEnumeratePaths != nil {
+			return origEnumeratePaths(ctx, req)
+		}
+		return contract.EnumeratePathsResult{}, contract.ErrUnsupported
+	}
+
 	ops.ListChildren = func(ctx context.Context, dir string) ([]string, error) {
 		dir = normalizeAbsolutePath(dir)
-		if mounted, ok, err := r.activeForPath(ctx, dir); err != nil {
+		if result, ok, err := r.listEntries(ctx, dir, false); err != nil {
 			return nil, err
 		} else if ok {
-			children, err := mounted.mount.ListChildren(ctx, dir)
-			if err != nil {
-				return nil, err
+			children := make([]string, 0, len(result.Entries))
+			for _, entry := range result.Entries {
+				children = append(children, entry.Path)
 			}
 			return normalizePathList(children), nil
 		}
@@ -248,10 +451,10 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.IsDirPath = func(ctx context.Context, pathValue string) (bool, error) {
 		pathValue = normalizeAbsolutePath(pathValue)
-		if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
+		if entry, ok, err := r.statEntry(ctx, pathValue); err != nil {
 			return false, err
 		} else if ok {
-			return mounted.mount.IsDirPath(ctx, pathValue)
+			return entry.Meta.IsDir, nil
 		}
 		isDir, err := origIsDirPath(ctx, pathValue)
 		if err != nil {
@@ -265,66 +468,38 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.CollectFilesUnder = func(ctx context.Context, target string) ([]string, error) {
 		target = normalizeAbsolutePath(target)
-		if mounted, ok, err := r.activeForPath(ctx, target); err != nil {
+		if result, ok, err := r.enumeratePaths(ctx, target, true); err != nil {
 			return nil, err
 		} else if ok {
-			files, err := mounted.mount.CollectFilesUnder(ctx, target)
-			if err != nil {
-				return nil, err
+			paths := make([]string, 0, len(result.Entries))
+			for _, entry := range result.Entries {
+				paths = append(paths, entry.Path)
 			}
-			return normalizePathList(files), nil
-		}
-		if isSynthetic, err := r.isSyntheticDir(ctx, target); err != nil {
-			return nil, err
-		} else if isSynthetic {
-			return r.collectFilesForSyntheticDir(ctx, target)
+			return normalizePathList(paths), nil
 		}
 		return origCollectFilesUnder(ctx, target)
 	}
 
 	ops.ResolveSearchPaths = func(ctx context.Context, target string, recursive bool) ([]string, error) {
 		target = normalizeAbsolutePath(target)
-		if mounted, ok, err := r.activeForPath(ctx, target); err != nil {
+		if result, ok, err := r.enumeratePaths(ctx, target, recursive); err != nil {
 			return nil, err
 		} else if ok {
-			paths, err := mounted.mount.ResolveSearchPaths(ctx, target, recursive)
-			if err != nil {
-				return nil, err
+			paths := make([]string, 0, len(result.Entries))
+			for _, entry := range result.Entries {
+				paths = append(paths, entry.Path)
 			}
 			return normalizePathList(paths), nil
-		}
-		if isSynthetic, err := r.isSyntheticDir(ctx, target); err != nil {
-			return nil, err
-		} else if isSynthetic {
-			if !recursive {
-				return nil, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
-			}
-			return r.collectFilesForSyntheticDir(ctx, target)
 		}
 		return origResolveSearchPaths(ctx, target, recursive)
 	}
 
 	ops.DescribePath = func(ctx context.Context, pathValue string) (contract.PathMeta, error) {
 		pathValue = normalizeAbsolutePath(pathValue)
-		if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
+		if entry, ok, err := r.statEntry(ctx, pathValue); err != nil {
 			return contract.PathMeta{}, err
 		} else if ok {
-			return mounted.mount.DescribePath(ctx, pathValue)
-		}
-		if isSynthetic, err := r.isSyntheticDir(ctx, pathValue); err != nil {
-			return contract.PathMeta{}, err
-		} else if isSynthetic {
-			return contract.PathMeta{
-				Exists:           true,
-				IsDir:            true,
-				Kind:             "virtual_dir",
-				Access:           contract.PathAccessReadOnly,
-				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
-				LineCount:        -1,
-				FrontMatterLines: -1,
-				SpeakerRows:      -1,
-				UserRelevance:    "n/a",
-			}, nil
+			return entry.Meta, nil
 		}
 		if origDescribePath != nil {
 			return origDescribePath(ctx, pathValue)
@@ -337,28 +512,144 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
 			return "", err
 		} else if ok {
-			return mounted.mount.ReadRawContent(ctx, pathValue)
+			return contract.ReadMountContent(ctx, mounted.mount, pathValue)
 		}
 		return origReadRawContent(ctx, pathValue)
 	}
 
+	ops.ReadMany = func(ctx context.Context, req contract.ReadManyRequest) (contract.ReadManyResult, error) {
+		if len(req.Paths) == 0 {
+			return contract.ReadManyResult{}, nil
+		}
+		results := make([]contract.MountContentEntry, 0, len(req.Paths))
+		groups := map[string][]string{}
+		groupMounts := map[string]contract.VirtualMount{}
+		for _, rawPath := range req.Paths {
+			pathValue := normalizeAbsolutePath(rawPath)
+			if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
+				return contract.ReadManyResult{}, err
+			} else if ok {
+				groupKey := mounted.point
+				groups[groupKey] = append(groups[groupKey], pathValue)
+				groupMounts[groupKey] = mounted.mount
+				continue
+			}
+			if origReadMany != nil {
+				partial, err := origReadMany(ctx, contract.ReadManyRequest{Paths: []string{pathValue}})
+				if err != nil {
+					return contract.ReadManyResult{}, err
+				}
+				results = append(results, partial.Entries...)
+				continue
+			}
+			raw, err := origReadRawContent(ctx, pathValue)
+			if err != nil {
+				return contract.ReadManyResult{}, err
+			}
+			results = append(results, contract.MountContentEntry{Path: pathValue, Content: raw})
+		}
+		for groupKey, groupedPaths := range groups {
+			mount := groupMounts[groupKey]
+			if reader, ok := mount.(contract.BulkReader); ok {
+				bulk, err := reader.ReadMany(ctx, contract.ReadManyRequest{Paths: groupedPaths})
+				if err != nil {
+					return contract.ReadManyResult{}, err
+				}
+				results = append(results, bulk.Entries...)
+				continue
+			}
+			if mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
+				return contract.ReadManyResult{}, fmt.Errorf("%s: bulk read requires BulkReader for remote_high_latency mount", groupKey)
+			}
+			for _, pathValue := range groupedPaths {
+				raw, err := contract.ReadMountContent(ctx, mount, pathValue)
+				if err != nil {
+					return contract.ReadManyResult{}, err
+				}
+				results = append(results, contract.MountContentEntry{Path: pathValue, Content: raw})
+			}
+		}
+		return contract.ReadManyResult{Entries: results}, nil
+	}
+
+	ops.SearchContent = func(ctx context.Context, req contract.SearchRequest) (contract.SearchResult, error) {
+		if len(req.Targets) == 0 {
+			if origSearchContent != nil {
+				return origSearchContent(ctx, req)
+			}
+			return contract.SearchResult{}, contract.ErrUnsupported
+		}
+		targets := make([]string, 0, len(req.Targets))
+		for _, target := range req.Targets {
+			targets = append(targets, normalizeAbsolutePath(target))
+		}
+		req.Targets = targets
+		firstMounted, ok, err := r.activeForPath(ctx, targets[0])
+		if err != nil {
+			return contract.SearchResult{}, err
+		}
+		if !ok {
+			if origSearchContent != nil {
+				return origSearchContent(ctx, req)
+			}
+			return contract.SearchResult{}, contract.ErrUnsupported
+		}
+		for _, target := range targets[1:] {
+			nextMounted, nextOK, nextErr := r.activeForPath(ctx, target)
+			if nextErr != nil {
+				return contract.SearchResult{}, nextErr
+			}
+			if !nextOK || nextMounted.point != firstMounted.point {
+				return contract.SearchResult{}, fmt.Errorf("cross-mount search targets are not supported")
+			}
+		}
+		return contract.SearchMountContent(ctx, firstMounted.mount, req)
+	}
+
 	ops.WriteFile = func(ctx context.Context, filePath string, content string) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationWriteFile, Path: pathValue, Content: content}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origWriteFile(ctx, filePath, content)
 	}
 	ops.AppendFile = func(ctx context.Context, filePath string, content string) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationAppend, Path: pathValue, Content: content}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origAppendFile(ctx, filePath, content)
 	}
 	ops.EditFile = func(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationEdit, Path: pathValue, OldString: oldString, NewString: newString, ReplaceAll: replaceAll}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origEditFile(ctx, filePath, oldString, newString, replaceAll)
@@ -366,7 +657,16 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.MakeDir = func(ctx context.Context, dirPath string) error {
 		pathValue := normalizeAbsolutePath(dirPath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationMakeDir, Path: pathValue}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origMakeDir(ctx, dirPath)
@@ -374,29 +674,116 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.RemoveFile = func(ctx context.Context, filePath string) error {
 		pathValue := normalizeAbsolutePath(filePath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationRemoveFile, Path: pathValue}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origRemoveFile(ctx, filePath)
 	}
 	ops.RemoveDir = func(ctx context.Context, dirPath string) error {
 		pathValue := normalizeAbsolutePath(dirPath)
-		if _, ok := r.match(pathValue); ok || r.isSyntheticPrefix(pathValue) {
+		if r.isSyntheticPrefix(pathValue) {
+			return contract.ErrUnsupported
+		}
+		if _, ok := r.match(pathValue); ok {
+			if ops.ApplyMutations != nil {
+				_, err := ops.ApplyMutations(ctx, contract.MutationBatch{
+					Ops: []contract.MutationSpec{{Kind: contract.MutationRemoveDir, Path: pathValue}},
+				})
+				return err
+			}
 			return contract.ErrUnsupported
 		}
 		return origRemoveDir(ctx, dirPath)
 	}
 
+	ops.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+		mountedOps := make([]contract.MutationSpec, 0, len(req.Ops))
+		results := make([]contract.MutationRecord, 0)
+		for _, op := range req.Ops {
+			pathValue := normalizeAbsolutePath(op.Path)
+			if r.isSyntheticPrefix(pathValue) {
+				return contract.MutationResult{}, contract.ErrUnsupported
+			}
+			if _, ok := r.match(pathValue); ok {
+				op.Path = pathValue
+				mountedOps = append(mountedOps, op)
+				continue
+			}
+			if origApplyMutations != nil {
+				result, err := origApplyMutations(ctx, contract.MutationBatch{Ops: []contract.MutationSpec{op}})
+				if err != nil {
+					return contract.MutationResult{}, err
+				}
+				results = append(results, result.Records...)
+				continue
+			}
+			if err := applyFilesystemFallbackMutation(ctx, op, origWriteFile, origAppendFile, origEditFile, origMakeDir, origRemoveFile, origRemoveDir); err != nil {
+				return contract.MutationResult{}, err
+			}
+			results = append(results, contract.MutationRecord{Kind: op.Kind, Path: pathValue, Status: "ok"})
+		}
+		if len(mountedOps) > 0 {
+			mounted, ok := r.match(mountedOps[0].Path)
+			if !ok {
+				return contract.MutationResult{}, contract.ErrUnsupported
+			}
+			for _, op := range mountedOps[1:] {
+				nextMounted, nextOK := r.match(op.Path)
+				if !nextOK || nextMounted.point != mounted.point {
+					return contract.MutationResult{}, fmt.Errorf("cross-mount mutation batches are not supported")
+				}
+			}
+			if mounted.mount.Profile().WriteSemantics == contract.MountWriteReadOnly {
+				return contract.MutationResult{}, contract.ErrUnsupported
+			}
+			mutator, ok := mounted.mount.(contract.Mutator)
+			if !ok {
+				return contract.MutationResult{}, contract.ErrUnsupported
+			}
+			result, err := mutator.ApplyMutations(ctx, contract.MutationBatch{Ops: mountedOps})
+			if err != nil {
+				return contract.MutationResult{}, err
+			}
+			results = append(results, result.Records...)
+		}
+		return contract.MutationResult{Records: results}, nil
+	}
+
 	ops.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {
+		abs := normalizeAbsolutePath(pathValue)
 		switch op {
-		case contract.PathOpRead, contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
-			abs := normalizeAbsolutePath(pathValue)
-			if _, ok := r.match(abs); ok || r.isSyntheticPrefix(abs) {
+		case contract.PathOpRead:
+			if mounted, ok, err := r.activeForPath(ctx, abs); err != nil {
+				return err
+			} else if ok {
+				entry, err := mounted.mount.StatPath(ctx, abs)
+				if err != nil {
+					return err
+				}
+				if !entry.Meta.IsDir && containsPathCapability(entry.Meta.Capabilities, contract.PathCapabilityRead) {
+					return contract.CheckMountPathOp(mounted.mount, op)
+				}
 				return contract.ErrUnsupported
+			}
+		case contract.PathOpWrite, contract.PathOpMkdir, contract.PathOpRemove:
+			if r.isSyntheticPrefix(abs) {
+				return contract.ErrUnsupported
+			}
+			if mounted, ok := r.match(abs); ok {
+				return contract.CheckMountPathOp(mounted.mount, op)
 			}
 		}
 		if origCheckPathOp != nil {
-			return origCheckPathOp(ctx, op, pathValue)
+			return origCheckPathOp(ctx, op, abs)
 		}
 		return nil
 	}

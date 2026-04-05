@@ -238,8 +238,8 @@ func TestCommandReferenceHelpers(t *testing.T) {
 			},
 		},
 		{
-			name: "unsupported path-like without resolver",
-			raw:  "/sys/bin/ls",
+			name:    "unsupported path-like without resolver",
+			raw:     "/sys/bin/ls",
 			wantErr: true,
 		},
 		{
@@ -468,8 +468,12 @@ func (f *fakeFilesystem) CollectFilesUnder(ctx context.Context, target string) (
 	return []string{target + "/file.txt"}, nil
 }
 
-func (f *fakeFilesystem) WriteFile(ctx context.Context, filePath string, content string) error { return nil }
-func (f *fakeFilesystem) AppendFile(ctx context.Context, filePath string, content string) error { return nil }
+func (f *fakeFilesystem) WriteFile(ctx context.Context, filePath string, content string) error {
+	return nil
+}
+func (f *fakeFilesystem) AppendFile(ctx context.Context, filePath string, content string) error {
+	return nil
+}
 func (f *fakeFilesystem) EditFile(ctx context.Context, filePath string, oldString string, newString string, replaceAll bool) error {
 	return nil
 }
@@ -488,8 +492,8 @@ func (f *fakeFilesystem) RunExternalCommand(ctx context.Context, req ExternalCom
 func (f *fakeFilesystem) ReadExternalManual(ctx context.Context, command string) (string, error) {
 	return "manual", nil
 }
-func (f *fakeFilesystem) PathEnv() []string                      { return f.pathEnv }
-func (f *fakeFilesystem) VirtualMounts() []VirtualMount         { return f.mounts }
+func (f *fakeFilesystem) PathEnv() []string             { return f.pathEnv }
+func (f *fakeFilesystem) VirtualMounts() []VirtualMount { return f.mounts }
 func (f *fakeFilesystem) CheckPathOp(ctx context.Context, op PathOp, path string) error {
 	return nil
 }
@@ -499,24 +503,15 @@ type fakeMount struct {
 }
 
 func (m fakeMount) MountPoint() string { return m.point }
+func (m fakeMount) Profile() MountProfile {
+	return NormalizeMountProfile(MountProfile{})
+}
 func (m fakeMount) Exists(context.Context) (bool, error) {
 	return true, nil
 }
-func (m fakeMount) ListChildren(context.Context, string) ([]string, error) {
-	return nil, nil
+func (m fakeMount) StatPath(context.Context, string) (MountEntry, error) {
+	return MountEntry{Path: m.point, Name: "mount", Meta: PathMeta{Exists: true, IsDir: true, Kind: "mount_dir"}}, nil
 }
-func (m fakeMount) IsDirPath(context.Context, string) (bool, error) {
-	return true, nil
-}
-func (m fakeMount) ReadRawContent(context.Context, string) (string, error) {
+func (m fakeMount) ReadContent(context.Context, string) (string, error) {
 	return "", nil
-}
-func (m fakeMount) CollectFilesUnder(context.Context, string) ([]string, error) {
-	return nil, nil
-}
-func (m fakeMount) ResolveSearchPaths(context.Context, string, bool) ([]string, error) {
-	return nil, nil
-}
-func (m fakeMount) DescribePath(context.Context, string) (PathMeta, error) {
-	return PathMeta{}, nil
 }

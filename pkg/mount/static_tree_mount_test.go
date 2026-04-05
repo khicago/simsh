@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	"github.com/khicago/simsh/pkg/contract"
 )
 
 func TestStaticMountKeepsNestedChildren(t *testing.T) {
@@ -19,7 +21,7 @@ func TestStaticMountKeepsNestedChildren(t *testing.T) {
 		if err != nil {
 			t.Fatalf("iteration %d: NewStaticMount failed: %v", i, err)
 		}
-		children, err := m.ListChildren(context.Background(), "/test")
+		children, err := contract.ListMountChildren(context.Background(), m, "/test")
 		if err != nil {
 			t.Fatalf("iteration %d: ListChildren(/test) failed: %v", i, err)
 		}

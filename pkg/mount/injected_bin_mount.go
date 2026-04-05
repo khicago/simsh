@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -26,6 +27,21 @@ func (m *externalBinMount) MountPoint() string {
 	return contract.VirtualExternalBinDir
 }
 
+func (m *externalBinMount) Profile() contract.MountProfile {
+	return contract.NormalizeMountProfile(contract.MountProfile{
+		TruthModel:          contract.MountTruthProjection,
+		MaterializationMode: contract.MountMaterializationLive,
+		WriteSemantics:      contract.MountWriteReadOnly,
+		LatencyClass:        contract.MountLatencyLocalHeavy,
+		SupportedCLIClasses: []contract.MountCLIClass{
+			contract.MountCLIList,
+			contract.MountCLITree,
+			contract.MountCLIFind,
+			contract.MountCLIRead,
+		},
+	})
+}
+
 func (m *externalBinMount) Exists(ctx context.Context) (bool, error) {
 	paths, err := m.listPaths(ctx)
 	if err != nil {
@@ -34,35 +50,115 @@ func (m *externalBinMount) Exists(ctx context.Context) (bool, error) {
 	return len(paths) > 0, nil
 }
 
-func (m *externalBinMount) ListChildren(ctx context.Context, dir string) ([]string, error) {
-	dir = normalizeAbsPath(dir)
-	if dir != contract.VirtualExternalBinDir {
-		return nil, fmt.Errorf("%s: Not a directory", dir)
-	}
-	return m.listPaths(ctx)
-}
-
-func (m *externalBinMount) IsDirPath(ctx context.Context, pathValue string) (bool, error) {
+func (m *externalBinMount) StatPath(ctx context.Context, pathValue string) (contract.MountEntry, error) {
 	pathValue = normalizeAbsPath(pathValue)
 	if pathValue == contract.VirtualExternalBinDir {
-		return m.Exists(ctx)
-	}
-	if isExecutableUnder(pathValue, contract.VirtualExternalBinDir) {
-		exists, err := m.hasPath(ctx, pathValue)
+		exists, err := m.Exists(ctx)
 		if err != nil {
-			return false, err
+			return contract.MountEntry{}, err
 		}
-		if exists {
-			return false, nil
+		if !exists {
+			return contract.MountEntry{}, fmt.Errorf("%s: No such file or directory", pathValue)
 		}
+		return contract.MountEntry{
+			Path: contract.VirtualExternalBinDir,
+			Name: path.Base(contract.VirtualExternalBinDir),
+			Meta: contract.PathMeta{
+				Exists:           true,
+				IsDir:            true,
+				Kind:             "binary_dir",
+				Access:           contract.PathAccessReadOnly,
+				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
+				LineCount:        -1,
+				FrontMatterLines: -1,
+				SpeakerRows:      -1,
+				UserRelevance:    "n/a",
+			},
+		}, nil
 	}
-	if strings.HasPrefix(pathValue, contract.VirtualExternalBinDir+"/") {
-		return false, nil
+	if !isExecutableUnder(pathValue, contract.VirtualExternalBinDir) {
+		if strings.HasPrefix(pathValue, contract.VirtualExternalBinDir+"/") {
+			return contract.MountEntry{}, fmt.Errorf("%s: No such file or directory", pathValue)
+		}
+		return contract.MountEntry{}, contract.ErrUnsupported
 	}
-	return false, contract.ErrUnsupported
+	exists, err := m.hasPath(ctx, pathValue)
+	if err != nil {
+		return contract.MountEntry{}, err
+	}
+	if !exists {
+		return contract.MountEntry{}, fmt.Errorf("%s: No such file or directory", pathValue)
+	}
+	name := strings.TrimPrefix(pathValue, contract.VirtualExternalBinDir+"/")
+	return contract.MountEntry{
+		Path: pathValue,
+		Name: name,
+		Meta: contract.PathMeta{
+			Exists:           true,
+			IsDir:            false,
+			Kind:             "binary",
+			Access:           contract.PathAccessReadOnly,
+			Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
+			LineCount:        -1,
+			FrontMatterLines: -1,
+			SpeakerRows:      -1,
+			UserRelevance:    "n/a",
+		},
+	}, nil
 }
 
-func (m *externalBinMount) ReadRawContent(ctx context.Context, pathValue string) (string, error) {
+func (m *externalBinMount) ListEntries(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
+	dir := normalizeAbsPath(req.Dir)
+	if dir != contract.VirtualExternalBinDir {
+		return contract.ListEntriesResult{}, fmt.Errorf("%s: Not a directory", dir)
+	}
+	paths, err := m.listPaths(ctx)
+	if err != nil {
+		return contract.ListEntriesResult{}, err
+	}
+	entries := make([]contract.MountEntry, 0, len(paths))
+	for _, pathValue := range paths {
+		entry, err := m.StatPath(ctx, pathValue)
+		if err != nil {
+			return contract.ListEntriesResult{}, err
+		}
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Path < entries[j].Path })
+	return contract.ListEntriesResult{Entries: entries}, nil
+}
+
+func (m *externalBinMount) EnumeratePaths(ctx context.Context, req contract.EnumeratePathsRequest) (contract.EnumeratePathsResult, error) {
+	target := normalizeAbsPath(req.Target)
+	if target == contract.VirtualExternalBinDir {
+		if !req.Recursive {
+			return contract.EnumeratePathsResult{}, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
+		}
+		paths, err := m.listPaths(ctx)
+		if err != nil {
+			return contract.EnumeratePathsResult{}, err
+		}
+		entries := make([]contract.MountEntry, 0, len(paths))
+		for _, pathValue := range paths {
+			entry, err := m.StatPath(ctx, pathValue)
+			if err != nil {
+				return contract.EnumeratePathsResult{}, err
+			}
+			entries = append(entries, entry)
+		}
+		return contract.EnumeratePathsResult{Entries: entries}, nil
+	}
+	entry, err := m.StatPath(ctx, target)
+	if err != nil {
+		return contract.EnumeratePathsResult{}, err
+	}
+	if entry.Meta.IsDir {
+		return contract.EnumeratePathsResult{}, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
+	}
+	return contract.EnumeratePathsResult{Entries: []contract.MountEntry{entry}}, nil
+}
+
+func (m *externalBinMount) ReadContent(ctx context.Context, pathValue string) (string, error) {
 	pathValue = normalizeAbsPath(pathValue)
 	if !isExecutableUnder(pathValue, contract.VirtualExternalBinDir) {
 		return "", fmt.Errorf("%s: No such file or directory", pathValue)
@@ -85,99 +181,11 @@ func (m *externalBinMount) ReadRawContent(ctx context.Context, pathValue string)
 	if !found {
 		return "", fmt.Errorf("%s: No such file or directory", pathValue)
 	}
-	if strings.TrimSpace(desc.Summary) != "" {
-		return desc.Summary, nil
+	content := strings.TrimSpace(desc.Summary)
+	if content == "" {
+		content = fmt.Sprintf("binary: %s", desc.Name)
 	}
-	return fmt.Sprintf("binary: %s", desc.Name), nil
-}
-
-func (m *externalBinMount) CollectFilesUnder(ctx context.Context, target string) ([]string, error) {
-	target = normalizeAbsPath(target)
-	if target == contract.VirtualExternalBinDir {
-		return m.listPaths(ctx)
-	}
-	if isExecutableUnder(target, contract.VirtualExternalBinDir) {
-		exists, err := m.hasPath(ctx, target)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return []string{target}, nil
-		}
-	}
-	if strings.HasPrefix(target, contract.VirtualExternalBinDir+"/") {
-		return nil, fmt.Errorf("%s: No such file or directory", target)
-	}
-	return nil, contract.ErrUnsupported
-}
-
-func (m *externalBinMount) ResolveSearchPaths(ctx context.Context, target string, recursive bool) ([]string, error) {
-	target = normalizeAbsPath(target)
-	if target == contract.VirtualExternalBinDir {
-		if !recursive {
-			return nil, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
-		}
-		return m.listPaths(ctx)
-	}
-	if isExecutableUnder(target, contract.VirtualExternalBinDir) {
-		exists, err := m.hasPath(ctx, target)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			return []string{target}, nil
-		}
-	}
-	if strings.HasPrefix(target, contract.VirtualExternalBinDir+"/") {
-		return nil, fmt.Errorf("%s: No such file or directory", target)
-	}
-	return nil, contract.ErrUnsupported
-}
-
-func (m *externalBinMount) DescribePath(ctx context.Context, pathValue string) (contract.PathMeta, error) {
-	pathValue = normalizeAbsPath(pathValue)
-	if pathValue == contract.VirtualExternalBinDir {
-		exists, err := m.Exists(ctx)
-		if err != nil {
-			return contract.PathMeta{}, err
-		}
-		if exists {
-			return contract.PathMeta{
-				Exists:           true,
-				IsDir:            true,
-				Kind:             "binary_dir",
-				Access:           contract.PathAccessReadOnly,
-				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch},
-				LineCount:        -1,
-				FrontMatterLines: -1,
-				SpeakerRows:      -1,
-				UserRelevance:    "n/a",
-			}, nil
-		}
-	}
-	if isExecutableUnder(pathValue, contract.VirtualExternalBinDir) {
-		exists, err := m.hasPath(ctx, pathValue)
-		if err != nil {
-			return contract.PathMeta{}, err
-		}
-		if exists {
-			return contract.PathMeta{
-				Exists:           true,
-				IsDir:            false,
-				Kind:             "binary",
-				Access:           contract.PathAccessReadOnly,
-				Capabilities:     []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead},
-				LineCount:        -1,
-				FrontMatterLines: -1,
-				SpeakerRows:      -1,
-				UserRelevance:    "n/a",
-			}, nil
-		}
-	}
-	if strings.HasPrefix(pathValue, contract.VirtualExternalBinDir+"/") {
-		return contract.PathMeta{}, fmt.Errorf("%s: No such file or directory", pathValue)
-	}
-	return contract.PathMeta{}, contract.ErrUnsupported
+	return content, nil
 }
 
 func (m *externalBinMount) listPaths(ctx context.Context) ([]string, error) {
