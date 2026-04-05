@@ -88,6 +88,21 @@ func runRG(runtime engine.CommandRuntime, args []string) (string, int) {
 		return renderSearchJSONL(records), grepExitCode(len(records) > 0)
 	}
 
+	targets := opts.targets
+	if len(targets) == 0 {
+		targets = []string{currentWorkingDir(runtime.Ops)}
+	}
+	if !opts.filesOnly {
+		req := buildContractSearchRequest(opts.pattern, searchMatcherOptions{
+			Regex:    !opts.fixed,
+			CaseMode: opts.caseMode,
+		}, opts.globs, targets, opts.listFiles, opts.before, opts.after)
+		if used, result, err := tryRuntimeSearch(runtime, req); err != nil {
+			return fmt.Sprintf("rg: %v", err), contract.ExitCodeGeneral
+		} else if used {
+			return renderSearchRecords(result.Records, opts.listFiles, opts.jsonl, opts.listFiles)
+		}
+	}
 	paths, err := resolveRGSearchPaths(runtime, opts.targets, opts.globs)
 	if err != nil {
 		return fmt.Sprintf("rg: %v", err), contract.ExitCodeGeneral

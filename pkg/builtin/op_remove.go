@@ -56,6 +56,29 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "rm", checks); !ok {
 		return out, code
 	}
+	batch := contract.MutationBatch{Ops: make([]contract.MutationSpec, 0, len(paths))}
+	for _, p := range paths {
+		batch.Ops = append(batch.Ops, contract.MutationSpec{Kind: contract.MutationRemoveFile, Path: p})
+	}
+	appendResults := func(status string) []mutationPathStatus {
+		out := make([]mutationPathStatus, 0, len(paths))
+		for _, p := range paths {
+			out = append(out, mutationPathStatus{Path: p, Status: status})
+		}
+		return out
+	}
+	if runtime.Ops.ApplyMutations != nil {
+		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			results := appendResults("removed")
+			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
+			if err != nil {
+				return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
+			}
+			return rendered, 0
+		} else if !errors.Is(err, contract.ErrUnsupported) {
+			return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
+		}
+	}
 	results := make([]mutationPathStatus, 0, len(paths))
 	for _, p := range paths {
 		if err := runtime.Ops.RemoveFile(runtime.Ctx, p); err != nil {

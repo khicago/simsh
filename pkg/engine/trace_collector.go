@@ -214,6 +214,31 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 			return err
 		}
 	}
+	if ops.ApplyMutations != nil {
+		orig := ops.ApplyMutations
+		wrapped.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+			for _, op := range req.Ops {
+				c.recordRequested(op.Path)
+			}
+			result, err := orig(ctx, req)
+			if err == nil {
+				if len(result.Records) > 0 {
+					for _, record := range result.Records {
+						recordTraceMutation(c, record.Kind, record.Path, record.BytesWritten)
+					}
+				} else {
+					for _, op := range req.Ops {
+						recordTraceMutation(c, op.Kind, op.Path, traceMutationBytes(op))
+					}
+				}
+			} else if isDeniedPathError(err) {
+				for _, op := range req.Ops {
+					c.recordDenied(op.Path)
+				}
+			}
+			return result, err
+		}
+	}
 	if ops.RunExternalCommand != nil {
 		orig := ops.RunExternalCommand
 		wrapped.RunExternalCommand = func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
@@ -355,6 +380,32 @@ func populateTraceShape(trace contract.ExecutionTrace, statements []parsedStatem
 		}
 	}
 	return trace
+}
+
+func recordTraceMutation(c *executionTraceCollector, kind contract.MutationKind, pathValue string, bytesWritten int) {
+	switch kind {
+	case contract.MutationWriteFile:
+		c.recordWrite(pathValue, bytesWritten)
+	case contract.MutationAppend:
+		c.recordAppend(pathValue, bytesWritten)
+	case contract.MutationEdit:
+		c.recordEdit(pathValue, bytesWritten)
+	case contract.MutationMakeDir:
+		c.recordCreatedDir(pathValue)
+	case contract.MutationRemoveFile, contract.MutationRemoveDir:
+		c.recordRemoved(pathValue)
+	}
+}
+
+func traceMutationBytes(op contract.MutationSpec) int {
+	switch op.Kind {
+	case contract.MutationWriteFile, contract.MutationAppend:
+		return len(op.Content)
+	case contract.MutationEdit:
+		return len(op.NewString)
+	default:
+		return 0
+	}
 }
 
 func traceCollectorFromContext(ctx context.Context) *executionTraceCollector {

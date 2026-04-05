@@ -2,11 +2,15 @@ package builtin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path"
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/khicago/simsh/pkg/contract"
+	"github.com/khicago/simsh/pkg/engine"
 )
 
 type searchCaseMode int
@@ -198,4 +202,134 @@ func renderSearchFileJSONL(paths []string) string {
 		})
 	}
 	return renderSearchJSONL(records)
+}
+
+func contractRecordsToSearchRecords(records []contract.SearchRecord, includeFileNames bool) []searchRecord {
+	out := make([]searchRecord, len(records))
+	for idx, rec := range records {
+		out[idx] = searchRecord{
+			Path: rec.Path,
+			Line: rec.Line,
+			Kind: rec.Kind,
+			Text: rec.Text,
+		}
+		if includeFileNames && rec.Kind == "file" && strings.TrimSpace(rec.Path) != "" {
+			out[idx].Name = path.Base(rec.Path)
+		}
+	}
+	return out
+}
+
+func searchCaseModeToContract(mode searchCaseMode) contract.SearchCaseMode {
+	switch mode {
+	case searchCaseSensitive:
+		return contract.SearchCaseSensitive
+	case searchCaseIgnore:
+		return contract.SearchCaseIgnore
+	default:
+		return contract.SearchCaseSmart
+	}
+}
+
+func buildContractSearchRequest(pattern string, opts searchMatcherOptions, globs, targets []string, listFiles bool, before, after int) contract.SearchRequest {
+	if len(targets) == 0 {
+		return contract.SearchRequest{}
+	}
+	return contract.SearchRequest{
+		Pattern:   pattern,
+		Regex:     opts.Regex,
+		CaseMode:  searchCaseModeToContract(opts.CaseMode),
+		Targets:   append([]string(nil), targets...),
+		Globs:     append([]string(nil), globs...),
+		Before:    before,
+		After:     after,
+		ListFiles: listFiles,
+	}
+}
+
+func tryRuntimeSearch(runtime engine.CommandRuntime, req contract.SearchRequest) (bool, contract.SearchResult, error) {
+	if len(req.Targets) == 0 {
+		return false, contract.SearchResult{}, nil
+	}
+	if runtime.Ops.SearchContent == nil {
+		return false, contract.SearchResult{}, nil
+	}
+	result, err := runtime.Ops.SearchContent(runtime.Ctx, req)
+	if err != nil {
+		if errors.Is(err, contract.ErrUnsupported) {
+			return false, contract.SearchResult{}, nil
+		}
+		return false, contract.SearchResult{}, err
+	}
+	return true, result, nil
+}
+
+func renderSearchRecords(records []contract.SearchRecord, listFiles bool, jsonl bool, includeFileNames bool) (string, int) {
+	scr := contractRecordsToSearchRecords(records, includeFileNames)
+	if listFiles {
+		filePaths := uniqueFilePaths(scr)
+		if jsonl {
+			return renderSearchJSONL(filterFileRecords(scr)), grepExitCode(len(filePaths) > 0)
+		}
+		if len(filePaths) == 0 {
+			return "", contract.ExitCodeGeneral
+		}
+		return strings.Join(filePaths, "\n"), 0
+	}
+	if jsonl {
+		return renderSearchJSONL(scr), grepExitCode(len(scr) > 0)
+	}
+	lines := recordLines(scr)
+	if len(lines) == 0 {
+		return "", contract.ExitCodeGeneral
+	}
+	return strings.Join(lines, "\n"), 0
+}
+
+func uniqueFilePaths(records []searchRecord) []string {
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(records))
+	for _, rec := range records {
+		if rec.Path == "" || rec.Kind != "file" {
+			continue
+		}
+		if _, exists := seen[rec.Path]; exists {
+			continue
+		}
+		seen[rec.Path] = struct{}{}
+		out = append(out, rec.Path)
+	}
+	return out
+}
+
+func filterFileRecords(records []searchRecord) []searchRecord {
+	out := make([]searchRecord, 0, len(records))
+	for _, rec := range records {
+		if rec.Kind == "file" {
+			out = append(out, rec)
+		}
+	}
+	return out
+}
+
+func recordLines(records []searchRecord) []string {
+	out := make([]string, 0, len(records))
+	for _, rec := range records {
+		lineText := rec.Text
+		sep := '-'
+		if rec.Kind == "match" {
+			sep = ':'
+		}
+		switch {
+		case rec.Path != "":
+			out = append(out, fmt.Sprintf("%s%c%d:%s", rec.Path, sep, rec.Line, lineText))
+		case rec.Stdin:
+			if rec.Kind == "match" {
+				out = append(out, fmt.Sprintf("%d:%s", rec.Line, lineText))
+			} else {
+				out = append(out, fmt.Sprintf("%d-%s", rec.Line, lineText))
+			}
+		}
+	}
+	return out
 }

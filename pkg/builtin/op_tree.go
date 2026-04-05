@@ -236,36 +236,32 @@ func appendTreeEntries(
 	if maxDepth >= 0 && depth >= maxDepth {
 		return nil
 	}
-	children, err := runtime.Ops.ListChildren(runtime.Ctx, dir)
+	children, err := listDirectoryEntries(runtime, dir, false)
 	if err != nil {
 		return err
 	}
-	filtered := make([]string, 0, len(children))
+	filtered := make([]contract.MountEntry, 0, len(children))
 	for _, child := range children {
-		name := path.Base(child)
+		name := path.Base(child.Path)
 		if !includeHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
 		filtered = append(filtered, child)
 	}
 	for _, child := range filtered {
-		isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, child)
-		if err != nil {
-			return err
+		entryKind := "file"
+		if child.Meta.IsDir {
+			entryKind = "dir"
 		}
-		kind := "file"
-		if isDir {
-			kind = "dir"
-		}
-		*entries = append(*entries, treeEntry{Path: child, Depth: depth + 1, Kind: kind})
-		if !isDir {
+		*entries = append(*entries, treeEntry{Path: child.Path, Depth: depth + 1, Kind: entryKind})
+		if !child.Meta.IsDir {
 			continue
 		}
-		if _, seen := visited[child]; seen {
+		if _, seen := visited[child.Path]; seen {
 			continue
 		}
-		visited[child] = struct{}{}
-		if err := appendTreeEntries(runtime, child, depth+1, maxDepth, includeHidden, visited, entries); err != nil {
+		visited[child.Path] = struct{}{}
+		if err := appendTreeEntries(runtime, child.Path, depth+1, maxDepth, includeHidden, visited, entries); err != nil {
 			return err
 		}
 	}
@@ -333,13 +329,13 @@ func appendTreeChildrenASCII(
 	if maxDepth >= 0 && depth >= maxDepth {
 		return nil
 	}
-	children, err := runtime.Ops.ListChildren(runtime.Ctx, dir)
+	children, err := listDirectoryEntries(runtime, dir, false)
 	if err != nil {
 		return err
 	}
-	filtered := make([]string, 0, len(children))
+	filtered := make([]contract.MountEntry, 0, len(children))
 	for _, child := range children {
-		name := path.Base(child)
+		name := path.Base(child.Path)
 		if !includeHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
@@ -347,7 +343,7 @@ func appendTreeChildrenASCII(
 	}
 
 	for idx, child := range filtered {
-		name := path.Base(child)
+		name := path.Base(child.Path)
 		last := idx == len(filtered)-1
 		branch := "|-- "
 		nextPrefix := prefix + "|   "
@@ -356,23 +352,19 @@ func appendTreeChildrenASCII(
 			nextPrefix = prefix + "    "
 		}
 
-		isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, child)
-		if err != nil {
-			return err
-		}
 		displayName := name
-		if isDir {
+		if child.Meta.IsDir {
 			displayName = appendTreeKindSuffix(displayName, "dir")
 		}
 		*lines = append(*lines, prefix+branch+displayName)
-		if !isDir {
+		if !child.Meta.IsDir {
 			continue
 		}
-		if _, seen := visited[child]; seen {
+		if _, seen := visited[child.Path]; seen {
 			continue
 		}
-		visited[child] = struct{}{}
-		if err := appendTreeChildrenASCII(runtime, child, nextPrefix, depth+1, maxDepth, includeHidden, visited, lines); err != nil {
+		visited[child.Path] = struct{}{}
+		if err := appendTreeChildrenASCII(runtime, child.Path, nextPrefix, depth+1, maxDepth, includeHidden, visited, lines); err != nil {
 			return err
 		}
 	}

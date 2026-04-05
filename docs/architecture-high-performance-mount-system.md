@@ -416,6 +416,12 @@ The runtime should prefer:
 - `SearchContent` over enumerate-then-read
 - `ApplyMutations` over ad hoc multi-operation sequences
 
+Current implementation status:
+
+- `ls` / `tree` now consume `ListEntries` + `MountEntry.Meta` when available, and only fall back to older path-by-path inspection when the capability is absent.
+- `grep` / `rg` now try `SearchContent` before resolve-then-read loops, and only fall back when the runtime explicitly returns `ErrUnsupported`.
+- `mv` / `rm` / `mkdir` now try one `ApplyMutations` batch before sequential fallback, so mount-backed factual writes can observe a single mutation batch.
+
 ### Rule 5
 
 Writable mounts must declare visibility guarantees explicitly.

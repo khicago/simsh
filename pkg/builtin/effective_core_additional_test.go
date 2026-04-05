@@ -280,6 +280,67 @@ func TestMatchRGGlobs(t *testing.T) {
 	}
 }
 
+func TestGrepUsesSearchContentFastPath(t *testing.T) {
+	var seen contract.SearchRequest
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			SearchContent: func(ctx context.Context, req contract.SearchRequest) (contract.SearchResult, error) {
+				seen = req
+				return contract.SearchResult{Records: []contract.SearchRecord{
+					{Path: "/workspace/file.md", Line: 1, Kind: "match", Text: "hello"},
+				}}, nil
+			},
+			RequireAbsolutePath: func(raw string) (string, error) {
+				return raw, nil
+			},
+		},
+	}
+
+	out, code := runGrep(runtime, []string{"hello", "/workspace"})
+	if code != 0 {
+		t.Fatalf("runGrep fast path returned code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, "/workspace/file.md:1:hello") {
+		t.Fatalf("runGrep fast path output = %q, want context line", out)
+	}
+	if !reflect.DeepEqual(seen.Targets, []string{"/workspace"}) {
+		t.Fatalf("runGrep fast path request targets = %#v, want [%q]", seen.Targets, "/workspace")
+	}
+}
+
+func TestRGUsesSearchContentFastPath(t *testing.T) {
+	var seen contract.SearchRequest
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			SearchContent: func(ctx context.Context, req contract.SearchRequest) (contract.SearchResult, error) {
+				seen = req
+				return contract.SearchResult{Records: []contract.SearchRecord{
+					{Path: "/docs/guide.md", Line: 2, Kind: "match", Text: "grep"},
+				}}, nil
+			},
+			RequireAbsolutePath: func(raw string) (string, error) {
+				if strings.HasPrefix(raw, "/") {
+					return raw, nil
+				}
+				return "/" + raw, nil
+			},
+		},
+	}
+
+	out, code := runRG(runtime, []string{"--json", "grep", "/docs"})
+	if code != 0 {
+		t.Fatalf("runRG fast path returned code=%d out=%q", code, out)
+	}
+	if !strings.Contains(out, `"/docs/guide.md"`) {
+		t.Fatalf("runRG fast path output = %q, want JSON record", out)
+	}
+	if !reflect.DeepEqual(seen.Targets, []string{"/docs"}) {
+		t.Fatalf("runRG fast path request targets = %#v, want [%q]", seen.Targets, "/docs")
+	}
+}
+
 func TestDiffHelpers(t *testing.T) {
 	table := lcsTable([]string{"a", "b", "c"}, []string{"a", "x", "c"})
 	if got := table[len(table)-1][len(table[0])-1]; got != 2 {

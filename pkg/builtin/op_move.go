@@ -56,6 +56,27 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err != nil {
 		return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 	}
+	if runtime.Ops.ApplyMutations != nil {
+		batch := contract.MutationBatch{
+			Ops: []contract.MutationSpec{
+				{Kind: contract.MutationWriteFile, Path: dest, Content: content},
+				{Kind: contract.MutationRemoveFile, Path: src},
+			},
+		}
+		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			rendered, _, err := renderTransferMutation(confirm, jsonOutput, mutationTransfer{
+				Src:   src,
+				Dest:  dest,
+				Bytes: len(content),
+			}, "moved")
+			if err != nil {
+				return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+			}
+			return rendered, 0
+		} else if !errors.Is(err, contract.ErrUnsupported) {
+			return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+		}
+	}
 	if err := runtime.Ops.WriteFile(runtime.Ctx, dest, content); err != nil {
 		if errors.Is(err, contract.ErrUnsupported) {
 			return "mv: write is not supported", contract.ExitCodeUnsupported

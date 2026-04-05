@@ -74,6 +74,17 @@ func runGrep(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "grep: expected stdin input or one file/directory path", contract.ExitCodeUsage
 	}
 	target := opts.path
+	if target != "" && shouldUseRuntimeSearch(runtime, target, opts.recursive) {
+		req := buildContractSearchRequest(opts.pattern, searchMatcherOptions{
+			Regex:    opts.regex,
+			CaseMode: searchCaseSensitive,
+		}, nil, []string{target}, opts.listFiles, opts.before, opts.after)
+		if used, result, err := tryRuntimeSearch(runtime, req); err != nil {
+			return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
+		} else if used {
+			return renderSearchRecords(result.Records, opts.listFiles, opts.jsonl, false)
+		}
+	}
 	paths, err := runtime.Ops.ResolveSearchPaths(runtime.Ctx, target, opts.recursive)
 	if err != nil {
 		return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
@@ -212,4 +223,18 @@ func grepExitCode(found bool) int {
 		return 0
 	}
 	return contract.ExitCodeGeneral
+}
+
+func shouldUseRuntimeSearch(runtime engine.CommandRuntime, target string, recursive bool) bool {
+	if recursive {
+		return true
+	}
+	if runtime.Ops.IsDirPath == nil {
+		return true
+	}
+	isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, target)
+	if err != nil {
+		return false
+	}
+	return !isDir
 }

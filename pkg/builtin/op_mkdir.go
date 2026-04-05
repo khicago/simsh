@@ -59,11 +59,47 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 	if out, code, ok := preflightPathChecks(runtime, "mkdir", checks); !ok {
 		return out, code
 	}
+	type pathStatus struct {
+		path   string
+		status string
+	}
+	statuses := make([]pathStatus, 0, len(paths))
+	batch := contract.MutationBatch{Ops: make([]contract.MutationSpec, 0, len(paths))}
+	for _, p := range paths {
+		status := "created"
+		if runtime.Ops.IsDirPath != nil {
+			if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, p); err == nil && isDir {
+				status = "exists"
+			}
+		}
+		statuses = append(statuses, pathStatus{path: p, status: status})
+		batch.Ops = append(batch.Ops, contract.MutationSpec{Kind: contract.MutationMakeDir, Path: p})
+	}
+	appendResults := func() []mutationPathStatus {
+		out := make([]mutationPathStatus, 0, len(statuses))
+		for _, s := range statuses {
+			out = append(out, mutationPathStatus{Path: s.path, Status: s.status})
+		}
+		return out
+	}
+	if runtime.Ops.ApplyMutations != nil {
+		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, appendResults())
+			if err != nil {
+				return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
+			}
+			return rendered, 0
+		} else if !errors.Is(err, contract.ErrUnsupported) {
+			return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
+		}
+	}
 	results := make([]mutationPathStatus, 0, len(paths))
 	for _, p := range paths {
 		exists := false
-		if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, p); err == nil && isDir {
-			exists = true
+		if runtime.Ops.IsDirPath != nil {
+			if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, p); err == nil && isDir {
+				exists = true
+			}
 		}
 		if err := runtime.Ops.MakeDir(runtime.Ctx, p); err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {

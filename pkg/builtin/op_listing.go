@@ -2,7 +2,9 @@ package builtin
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -140,6 +142,115 @@ func parseLSFormat(raw string) (lsLongFormat, bool) {
 	}
 }
 
+func listDirectoryEntries(runtime engine.CommandRuntime, target string, recursive bool) ([]contract.MountEntry, error) {
+	if runtime.Ops.ListEntries != nil {
+		req := contract.ListEntriesRequest{Dir: target, Recursive: recursive}
+		result, err := runtime.Ops.ListEntries(runtime.Ctx, req)
+		if err == nil {
+			return result.Entries, nil
+		}
+		if !errors.Is(err, contract.ErrUnsupported) {
+			return nil, err
+		}
+	}
+	children, err := runtime.Ops.ListChildren(runtime.Ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	entries := make([]contract.MountEntry, 0, len(children))
+	for _, child := range children {
+		entry := contract.MountEntry{
+			Path: child,
+			Name: path.Base(child),
+			Meta: contract.PathMeta{
+				Exists: true,
+				Access: contract.PathAccessReadOnly,
+			},
+		}
+		if runtime.Ops.DescribePath != nil {
+			meta, err := runtime.Ops.DescribePath(runtime.Ctx, child)
+			if err == nil {
+				entry.Meta = meta
+			} else if !errors.Is(err, contract.ErrUnsupported) {
+				return nil, err
+			}
+		}
+		if (runtime.Ops.DescribePath == nil || len(entry.Meta.Capabilities) == 0) && runtime.Ops.IsDirPath != nil {
+			if isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, child); err == nil {
+				entry.Meta.IsDir = isDir
+				if isDir {
+					entry.Meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch}
+				} else {
+					entry.Meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead}
+				}
+			}
+		}
+		if len(entry.Meta.Capabilities) == 0 {
+			entry.Meta.Capabilities = []string{contract.PathCapabilityDescribe}
+		}
+		entries = append(entries, entry)
+	}
+	return entries, nil
+}
+
+func renderLSOutput(runtime engine.CommandRuntime, target string, entries []contract.MountEntry, includeDots bool, longFormat bool, longFormatStyle lsLongFormat) (string, int) {
+	if !longFormat {
+		lines := make([]string, 0, len(entries)+2)
+		if includeDots {
+			lines = append(lines, ".", "..")
+		}
+		for _, entry := range entries {
+			lines = append(lines, entry.Path)
+		}
+		return strings.Join(lines, "\n"), 0
+	}
+	rows := make([]contract.LSLongRow, 0, len(entries)+2)
+	if includeDots {
+		rows = append(rows, buildLongRow(runtime, ".", target))
+		parent := runtime.Ops.RootDir
+		if target != runtime.Ops.RootDir {
+			parent = parentDir(target)
+		}
+		rows = append(rows, buildLongRow(runtime, "..", parent))
+	}
+	for _, entry := range entries {
+		row := entryToLongRow(runtime, entry)
+		rows = append(rows, row)
+	}
+	return formatLongRows(runtime, rows, longFormatStyle), 0
+}
+
+func entryToLongRow(runtime engine.CommandRuntime, entry contract.MountEntry) contract.LSLongRow {
+	meta := entry.Meta
+	if strings.TrimSpace(meta.Access) == "" {
+		meta.Access = contract.PathAccessReadOnly
+	}
+	meta.Access = contract.NormalizePathAccess(meta.Access)
+	if len(meta.Capabilities) == 0 {
+		if meta.IsDir {
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityList, contract.PathCapabilitySearch}
+		} else {
+			meta.Capabilities = []string{contract.PathCapabilityDescribe, contract.PathCapabilityRead}
+		}
+	}
+	if meta.Access == contract.PathAccessReadOnly {
+		meta.Capabilities = contract.StripWriteCapabilities(meta.Capabilities)
+	}
+	return contract.LSLongRow{
+		DisplayPath:      entry.Path,
+		Path:             entry.Path,
+		Exists:           meta.Exists,
+		IsDir:            meta.IsDir,
+		Kind:             meta.Kind,
+		Access:           meta.Access,
+		Capabilities:     meta.Capabilities,
+		LineCount:        meta.LineCount,
+		FrontMatterLines: meta.FrontMatterLines,
+		SpeakerRows:      meta.SpeakerRows,
+		UserRelevance:    meta.UserRelevance,
+	}
+}
+
 func runLSTarget(runtime engine.CommandRuntime, target string, includeDots bool, recursive bool, longFormat bool, longFormatStyle lsLongFormat) (string, int) {
 	isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, target)
 	if err != nil {
@@ -152,7 +263,7 @@ func runLSTarget(runtime engine.CommandRuntime, target string, includeDots bool,
 		return target, 0
 	}
 	if !recursive {
-		children, err := runtime.Ops.ListChildren(runtime.Ctx, target)
+		children, err := listDirectoryEntries(runtime, target, false)
 		if err != nil {
 			return fmt.Sprintf("ls: %v", err), contract.ExitCodeGeneral
 		}
@@ -172,7 +283,7 @@ func runLSRecursive(runtime engine.CommandRuntime, target string, includeDots bo
 			continue
 		}
 		visited[dir] = struct{}{}
-		children, err := runtime.Ops.ListChildren(runtime.Ctx, dir)
+		children, err := listDirectoryEntries(runtime, dir, false)
 		if err != nil {
 			return fmt.Sprintf("ls: %v", err), contract.ExitCodeGeneral
 		}
@@ -184,13 +295,9 @@ func runLSRecursive(runtime engine.CommandRuntime, target string, includeDots bo
 		if strings.TrimSpace(section) != "" {
 			out = append(out, strings.Split(section, "\n")...)
 		}
-		for _, child := range children {
-			isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, child)
-			if err != nil {
-				return fmt.Sprintf("ls: %v", err), contract.ExitCodeGeneral
-			}
-			if isDir {
-				queue = append(queue, child)
+		for _, entry := range children {
+			if entry.Meta.IsDir {
+				queue = append(queue, entry.Path)
 			}
 		}
 		if len(queue) > 0 {
@@ -198,30 +305,6 @@ func runLSRecursive(runtime engine.CommandRuntime, target string, includeDots bo
 		}
 	}
 	return strings.Join(out, "\n"), 0
-}
-
-func renderLSOutput(runtime engine.CommandRuntime, target string, children []string, includeDots bool, longFormat bool, longFormatStyle lsLongFormat) (string, int) {
-	if !longFormat {
-		lines := make([]string, 0, len(children)+2)
-		if includeDots {
-			lines = append(lines, ".", "..")
-		}
-		lines = append(lines, children...)
-		return strings.Join(lines, "\n"), 0
-	}
-	rows := make([]contract.LSLongRow, 0, len(children)+2)
-	if includeDots {
-		rows = append(rows, buildLongRow(runtime, ".", target))
-		parent := runtime.Ops.RootDir
-		if target != runtime.Ops.RootDir {
-			parent = parentDir(target)
-		}
-		rows = append(rows, buildLongRow(runtime, "..", parent))
-	}
-	for _, child := range children {
-		rows = append(rows, buildLongRow(runtime, child, child))
-	}
-	return formatLongRows(runtime, rows, longFormatStyle), 0
 }
 
 func formatLongRows(runtime engine.CommandRuntime, rows []contract.LSLongRow, style lsLongFormat) string {
