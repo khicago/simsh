@@ -200,6 +200,8 @@ If an integration backs mounts with DB, OS, RPC, search, or mixed persistence la
 - how data is materialized (`snapshot`, `cached`, `live`)
 - what write semantics apply
 - what consistency and latency guarantees actually hold under `ls`, `tree`, `find`, `grep`, `rg`, `cat`, and mutation-heavy loops
+- what capability contracts the mount actually implements for listing, path enumeration, bulk read, content search, mutation, refresh, and stats
+- what stability and performance contracts the backend can honestly sustain (batch limits, search scope limits, timeout semantics, retryability, and latency percentiles)
 
 The detailed contract lives in [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md).
 Use that doc before exposing any non-trivial mount to agent-facing CLI workloads.

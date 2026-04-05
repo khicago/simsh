@@ -119,4 +119,4 @@ Validation:
 
 - Before changing tool behavior, mount abstractions, adapter-backed filesystem projection behavior, or any CLI flow that can amplify mount access, read `docs/architecture-high-performance-mount-system.md`.
 - For tool and mount-system changes, explicitly evaluate CLI pressure, capability requirements, fallback behavior, latency class, and consistency guarantees rather than treating mounts as transparent local directories by default.
-- Do not add or preserve fallback paths that silently degrade into per-file RPC fanout for `ls`, `tree`, `find`, `grep`, `rg`, `cat`, or mutation-heavy workflows without documenting the tradeoff and adding validation coverage.
+- Do not add or preserve fallback paths that silently degrade into per-file RPC fanout for `ls`, `tree`, `find`, `grep`, `rg`, `cat`, or mutation-heavy workflows. For `remote_high_latency` mounts, documentation is not enough: the runtime must refuse or require explicit scope narrowing instead of falling back.

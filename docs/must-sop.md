@@ -15,6 +15,7 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 Source: `docs/architecture-high-performance-mount-system.md`
 - Read this doc before changing mount abstractions, adapter-backed filesystem projection behavior, or tool flows that can amplify mount access patterns.
 - Keep mount design explicit along semantic axes, capability contracts, and latency/consistency guarantees instead of relying on ad hoc fallback behavior.
+- When tool or mount changes would otherwise fall back to per-file RPC fanout, require explicit refusal or scope narrowing for `remote_high_latency` mounts instead of documenting the fallback and moving on.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Memory/Skills Extension Architecture
