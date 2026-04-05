@@ -230,7 +230,7 @@ func shouldUseRuntimeSearch(runtime engine.CommandRuntime, target string, recurs
 		return true
 	}
 	if runtime.Ops.IsDirPath == nil {
-		return true
+		return false
 	}
 	isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, target)
 	if err != nil {

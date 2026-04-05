@@ -291,21 +291,24 @@ func TestGrepUsesSearchContentFastPath(t *testing.T) {
 					{Path: "/workspace/file.md", Line: 1, Kind: "match", Text: "hello"},
 				}}, nil
 			},
+			IsDirPath: func(ctx context.Context, path string) (bool, error) {
+				return false, nil
+			},
 			RequireAbsolutePath: func(raw string) (string, error) {
 				return raw, nil
 			},
 		},
 	}
 
-	out, code := runGrep(runtime, []string{"hello", "/workspace"})
+	out, code := runGrep(runtime, []string{"hello", "/workspace/file.md"})
 	if code != 0 {
 		t.Fatalf("runGrep fast path returned code=%d out=%q", code, out)
 	}
 	if !strings.Contains(out, "/workspace/file.md:1:hello") {
 		t.Fatalf("runGrep fast path output = %q, want context line", out)
 	}
-	if !reflect.DeepEqual(seen.Targets, []string{"/workspace"}) {
-		t.Fatalf("runGrep fast path request targets = %#v, want [%q]", seen.Targets, "/workspace")
+	if !reflect.DeepEqual(seen.Targets, []string{"/workspace/file.md"}) {
+		t.Fatalf("runGrep fast path request targets = %#v, want [%q]", seen.Targets, "/workspace/file.md")
 	}
 }
 
