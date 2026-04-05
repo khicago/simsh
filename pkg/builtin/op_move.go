@@ -63,11 +63,14 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 				{Kind: contract.MutationRemoveFile, Path: src},
 			},
 		}
-		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+		if result, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			if err := ensureSuccessfulTransferRecords(result.Records); err != nil {
+				return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
+			}
 			rendered, _, err := renderTransferMutation(confirm, jsonOutput, mutationTransfer{
 				Src:   src,
 				Dest:  dest,
-				Bytes: len(content),
+				Bytes: mutationBytesFromRecords(contract.MutationWriteFile, dest, result.Records, len(content)),
 			}, "moved")
 			if err != nil {
 				return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral

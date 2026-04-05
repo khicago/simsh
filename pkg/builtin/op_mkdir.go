@@ -75,16 +75,13 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 		statuses = append(statuses, pathStatus{path: p, status: status})
 		batch.Ops = append(batch.Ops, contract.MutationSpec{Kind: contract.MutationMakeDir, Path: p})
 	}
-	appendResults := func() []mutationPathStatus {
-		out := make([]mutationPathStatus, 0, len(statuses))
-		for _, s := range statuses {
-			out = append(out, mutationPathStatus{Path: s.path, Status: s.status})
-		}
-		return out
-	}
 	if runtime.Ops.ApplyMutations != nil {
-		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
-			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, appendResults())
+		if result, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			fallback := make(map[string]string, len(statuses))
+			for _, status := range statuses {
+				fallback[status.path] = status.status
+			}
+			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, mutationStatusesFromRecords(paths, contract.MutationMakeDir, result.Records, fallback))
 			if err != nil {
 				return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
 			}

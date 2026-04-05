@@ -224,7 +224,7 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 			if err == nil {
 				if len(result.Records) > 0 {
 					for _, record := range result.Records {
-						recordTraceMutation(c, record.Kind, record.Path, record.BytesWritten)
+						recordTraceMutation(c, record.Kind, record.Path, traceMutationBytesForRecord(req.Ops, record))
 					}
 				} else {
 					for _, op := range req.Ops {
@@ -406,6 +406,18 @@ func traceMutationBytes(op contract.MutationSpec) int {
 	default:
 		return 0
 	}
+}
+
+func traceMutationBytesForRecord(ops []contract.MutationSpec, record contract.MutationRecord) int {
+	if record.BytesWritten > 0 {
+		return record.BytesWritten
+	}
+	for _, op := range ops {
+		if op.Kind == record.Kind && op.Path == record.Path {
+			return traceMutationBytes(op)
+		}
+	}
+	return 0
 }
 
 func traceCollectorFromContext(ctx context.Context) *executionTraceCollector {

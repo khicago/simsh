@@ -60,16 +60,13 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 	for _, p := range paths {
 		batch.Ops = append(batch.Ops, contract.MutationSpec{Kind: contract.MutationRemoveFile, Path: p})
 	}
-	appendResults := func(status string) []mutationPathStatus {
-		out := make([]mutationPathStatus, 0, len(paths))
-		for _, p := range paths {
-			out = append(out, mutationPathStatus{Path: p, Status: status})
-		}
-		return out
-	}
 	if runtime.Ops.ApplyMutations != nil {
-		if _, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
-			results := appendResults("removed")
+		if result, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
+			fallback := make(map[string]string, len(paths))
+			for _, pathValue := range paths {
+				fallback[pathValue] = "removed"
+			}
+			results := mutationStatusesFromRecords(paths, contract.MutationRemoveFile, result.Records, fallback)
 			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
 			if err != nil {
 				return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
