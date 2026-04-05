@@ -252,9 +252,32 @@ This is the capability that keeps:
 
 from degenerating into linear RPC bursts.
 
-### Search
+### Path Enumeration
 
-For any mount that claims to support recursive search workloads, content search must not be implemented as:
+The existing runtime already has one notion of `search` that really means
+**path discovery**:
+
+- enumerate files under a scope
+- support `CollectFilesUnder` / `ResolveSearchPaths`
+- power directory-oriented traversal and planning
+
+That meaning should stay separate from content search.
+
+For any mount that wants to support `find`, recursive path discovery, or
+directory-scoped planning efficiently, path enumeration must be an explicit
+capability rather than an accidental by-product of `ListChildren`.
+
+Required capability:
+
+```go
+type PathEnumerator interface {
+    EnumeratePaths(ctx context.Context, req EnumeratePathsRequest) (EnumeratePathsResult, error)
+}
+```
+
+### Content Search
+
+For any mount that claims to support recursive content-search workloads, content search must not be implemented as:
 
 - enumerate candidate files
 - call `ReadRawContent` for each file
@@ -263,8 +286,8 @@ For any mount that claims to support recursive search workloads, content search 
 Required capability:
 
 ```go
-type Searcher interface {
-    Search(ctx context.Context, req SearchRequest) (SearchResult, error)
+type ContentSearcher interface {
+    SearchContent(ctx context.Context, req SearchRequest) (SearchResult, error)
 }
 ```
 
@@ -272,7 +295,7 @@ This is the capability that should back:
 
 - `grep -r`
 - `rg`
-- search-oriented `find` follow-ups
+- content-query follow-ups after path narrowing
 
 Search should accept:
 
@@ -352,11 +375,11 @@ The runtime should map each CLI class to the mount capabilities it requires.
 | --- | --- | --- | --- |
 | `ls -l dir` | metadata fanout | `list + N*describe` | `EntryLister` |
 | `tree dir` | recursive metadata fanout | recursive child enumeration + per-node describe | `EntryLister` with recursive support or equivalent batched tree listing |
-| `find dir` | recursive path discovery | repeated list calls with deep path walks | `EntryLister` or efficient recursive path enumeration |
+| `find dir` | recursive path discovery | repeated list calls with deep path walks | `PathEnumerator` or equivalent batched recursive listing |
 | `cat a b c` | multi-file body read | one RPC per file | `BulkReader` |
 | `json/frontmatter stat dir` | batch inspect + parse | enumerate + repeated single reads | `BulkReader` |
-| `grep -r` | enumerate + content scan | enumerate + per-file read + local scan | `Searcher` |
-| `rg` | recursive scoped search | same as above, but on a hotter path | `Searcher` |
+| `grep -r` | enumerate + content scan | enumerate + per-file read + local scan | `ContentSearcher` |
+| `rg` | recursive scoped search | same as above, but on a hotter path | `ContentSearcher` |
 | `cp/mv/rm/touch/mkdir` | composite mutation | many independent writes/removes | `Mutator` |
 | `sed -i` | read-modify-write | split read/write with no consistency contract | `Mutator` plus read-after-write guarantee |
 | `ls | cat | grep` | chained amplification | each stage repeats remote traversal | typed dispatch plus no implicit fallback to per-file RPC |
@@ -388,7 +411,8 @@ The runtime should prefer:
 
 - `ListEntries` over `ListChildren + DescribePath`
 - `ReadMany` over repeated `ReadRawContent`
-- `Search` over enumerate-then-read
+- `EnumeratePaths` over repeated recursive list walks
+- `SearchContent` over enumerate-then-read
 - `ApplyMutations` over ad hoc multi-operation sequences
 
 ### Rule 5
@@ -468,6 +492,37 @@ What this document adds is the performance and dispatch side:
 - how capability shape must change under fanout pressure
 - how writable or factual mounts fit without collapsing back into opaque remote filesystems
 - how CLI combinations turn into concrete backend stress
+
+## Contract Boundary and Migration Rule
+
+The old `VirtualMount` shape bundled too many responsibilities:
+
+- path description
+- direct children listing
+- recursive path discovery
+- content reads
+- content-search preparation
+
+That bundled surface is exactly what makes high-fanout behavior ambiguous.
+
+So the end-state contract is:
+
+- `VirtualMount` owns only identity, profile, existence, and single-path metadata truth
+- capability interfaces own batched or pressure-sensitive behavior
+
+In other words:
+
+- `ListChildren`
+- `IsDirPath`
+- `ReadRawContent`
+- `CollectFilesUnder`
+- `ResolveSearchPaths`
+- `DescribePath`
+
+must stop being treated as the canonical mount contract once the capability family lands.
+
+If a temporary bridge is used during refactor, it is implementation-local only.
+It must not become a second public SSOT.
 
 ## Guidance for Integrators
 
