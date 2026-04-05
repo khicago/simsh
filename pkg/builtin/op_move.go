@@ -64,7 +64,7 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 			},
 		}
 		if result, err := runtime.Ops.ApplyMutations(runtime.Ctx, batch); err == nil {
-			if err := ensureSuccessfulTransferRecords(result.Records); err != nil {
+			if err := ensureSuccessfulTransferRecords(batch.Ops, result.Records); err != nil {
 				return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 			}
 			rendered, _, err := renderTransferMutation(confirm, jsonOutput, mutationTransfer{

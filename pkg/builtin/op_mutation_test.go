@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/khicago/simsh/pkg/contract"
@@ -83,6 +84,21 @@ func TestRunMvUsesApplyMutations(t *testing.T) {
 	}
 }
 
+func TestRunMvRejectsIncompleteMutationRecords(t *testing.T) {
+	rt := newRuntime()
+	rt.Ops.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+		return contract.MutationResult{
+			Records: []contract.MutationRecord{
+				{Kind: contract.MutationWriteFile, Path: "/workspace/copied", Status: "written"},
+			},
+		}, nil
+	}
+	out, code := runMv(rt, []string{"/sys/bin/ls", "/workspace/copied"})
+	if code == 0 || !strings.Contains(out, "incomplete result") {
+		t.Fatalf("runMv incomplete records = (%q, %d), want fail-closed", out, code)
+	}
+}
+
 func TestRunMvFallsBackWhenApplyMutationsUnsupported(t *testing.T) {
 	rt := newRuntime()
 	writeCalled := false
@@ -129,6 +145,21 @@ func TestRunRmUsesMutationBatch(t *testing.T) {
 	}
 }
 
+func TestRunRmRejectsIncompleteMutationRecords(t *testing.T) {
+	rt := newRuntime()
+	rt.Ops.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+		return contract.MutationResult{
+			Records: []contract.MutationRecord{
+				{Kind: contract.MutationRemoveFile, Path: "/workspace/a", Status: "removed"},
+			},
+		}, nil
+	}
+	out, code := runRm(rt, []string{"/workspace/a", "/workspace/tmp"})
+	if code == 0 || !strings.Contains(out, "incomplete result") {
+		t.Fatalf("runRm incomplete records = (%q, %d), want fail-closed", out, code)
+	}
+}
+
 func TestRunMkdirUsesMutationBatch(t *testing.T) {
 	rt := newRuntime()
 	called := false
@@ -148,5 +179,20 @@ func TestRunMkdirUsesMutationBatch(t *testing.T) {
 	}
 	if !called {
 		t.Fatalf("expected ApplyMutations to run")
+	}
+}
+
+func TestRunMkdirRejectsIncompleteMutationRecords(t *testing.T) {
+	rt := newRuntime()
+	rt.Ops.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+		return contract.MutationResult{
+			Records: []contract.MutationRecord{
+				{Kind: contract.MutationMakeDir, Path: "/workspace/new", Status: "created"},
+			},
+		}, nil
+	}
+	out, code := runMkdir(rt, []string{"/workspace/new", "/workspace/other"})
+	if code == 0 || !strings.Contains(out, "incomplete result") {
+		t.Fatalf("runMkdir incomplete records = (%q, %d), want fail-closed", out, code)
 	}
 }

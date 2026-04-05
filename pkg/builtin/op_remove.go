@@ -66,7 +66,10 @@ func runRm(runtime engine.CommandRuntime, args []string) (string, int) {
 			for _, pathValue := range paths {
 				fallback[pathValue] = "removed"
 			}
-			results := mutationStatusesFromRecords(paths, contract.MutationRemoveFile, result.Records, fallback)
+			results, err := mutationStatusesFromRecords(paths, contract.MutationRemoveFile, result.Records, fallback)
+			if err != nil {
+				return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral
+			}
 			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
 			if err != nil {
 				return fmt.Sprintf("rm: %v", err), contract.ExitCodeGeneral

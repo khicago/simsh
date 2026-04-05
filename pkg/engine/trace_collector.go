@@ -222,15 +222,7 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 			}
 			result, err := orig(ctx, req)
 			if err == nil {
-				if len(result.Records) > 0 {
-					for _, record := range result.Records {
-						recordTraceMutation(c, record.Kind, record.Path, traceMutationBytesForRecord(req.Ops, record))
-					}
-				} else {
-					for _, op := range req.Ops {
-						recordTraceMutation(c, op.Kind, op.Path, traceMutationBytes(op))
-					}
-				}
+				recordMutationBatchTrace(c, req.Ops, result.Records)
 			} else if isDeniedPathError(err) {
 				for _, op := range req.Ops {
 					c.recordDenied(op.Path)
@@ -418,6 +410,40 @@ func traceMutationBytesForRecord(ops []contract.MutationSpec, record contract.Mu
 		}
 	}
 	return 0
+}
+
+func recordMutationBatchTrace(c *executionTraceCollector, ops []contract.MutationSpec, records []contract.MutationRecord) {
+	if len(records) == 0 {
+		for _, op := range ops {
+			recordTraceMutation(c, op.Kind, op.Path, traceMutationBytes(op))
+		}
+		return
+	}
+	recordIndex := make(map[string]contract.MutationRecord, len(records))
+	for _, record := range records {
+		recordIndex[traceMutationRecordKey(record.Kind, record.Path)] = record
+	}
+	seen := map[string]struct{}{}
+	for _, op := range ops {
+		key := traceMutationRecordKey(op.Kind, op.Path)
+		if record, ok := recordIndex[key]; ok {
+			recordTraceMutation(c, record.Kind, record.Path, traceMutationBytesForRecord(ops, record))
+			seen[key] = struct{}{}
+			continue
+		}
+		recordTraceMutation(c, op.Kind, op.Path, traceMutationBytes(op))
+	}
+	for _, record := range records {
+		key := traceMutationRecordKey(record.Kind, record.Path)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		recordTraceMutation(c, record.Kind, record.Path, traceMutationBytesForRecord(ops, record))
+	}
+}
+
+func traceMutationRecordKey(kind contract.MutationKind, pathValue string) string {
+	return string(kind) + "\x00" + pathValue
 }
 
 func traceCollectorFromContext(ctx context.Context) *executionTraceCollector {

@@ -81,7 +81,11 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 			for _, status := range statuses {
 				fallback[status.path] = status.status
 			}
-			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, mutationStatusesFromRecords(paths, contract.MutationMakeDir, result.Records, fallback))
+			results, err := mutationStatusesFromRecords(paths, contract.MutationMakeDir, result.Records, fallback)
+			if err != nil {
+				return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
+			}
+			rendered, _, err := renderPathStatusMutation(confirm, jsonOutput, results)
 			if err != nil {
 				return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
 			}

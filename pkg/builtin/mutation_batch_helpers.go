@@ -12,10 +12,15 @@ func mutationStatusesFromRecords(
 	kind contract.MutationKind,
 	records []contract.MutationRecord,
 	fallback map[string]string,
-) []mutationPathStatus {
+) ([]mutationPathStatus, error) {
 	index := mutationRecordIndex(records)
 	out := make([]mutationPathStatus, 0, len(paths))
 	for _, pathValue := range paths {
+		if len(records) > 0 {
+			if _, ok := index[mutationRecordKey(kind, pathValue)]; !ok {
+				return nil, fmt.Errorf("mount batch returned incomplete result for %s %s", kind, pathValue)
+			}
+		}
 		status := fallback[pathValue]
 		if record, ok := index[mutationRecordKey(kind, pathValue)]; ok {
 			recordStatus := strings.TrimSpace(record.Status)
@@ -28,7 +33,7 @@ func mutationStatusesFromRecords(
 		}
 		out = append(out, mutationPathStatus{Path: pathValue, Status: status})
 	}
-	return out
+	return out, nil
 }
 
 func mutationBytesFromRecords(
@@ -44,7 +49,15 @@ func mutationBytesFromRecords(
 	return fallback
 }
 
-func ensureSuccessfulTransferRecords(records []contract.MutationRecord) error {
+func ensureSuccessfulTransferRecords(expected []contract.MutationSpec, records []contract.MutationRecord) error {
+	if len(records) > 0 {
+		index := mutationRecordIndex(records)
+		for _, op := range expected {
+			if _, ok := index[mutationRecordKey(op.Kind, op.Path)]; !ok {
+				return fmt.Errorf("mount batch returned incomplete result for %s %s", op.Kind, op.Path)
+			}
+		}
+	}
 	for _, record := range records {
 		status := strings.TrimSpace(strings.ToLower(record.Status))
 		switch status {
