@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-06T09:15:00Z
+- Updated At (UTC): 2026-04-07T00:20:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -19,12 +19,12 @@
 ## Acceptance Criteria
 
 - [ ] Refresh long-run rows before using `ralphloop` again.
-- [ ] Keep handoff aligned with `next-action.json` while the current release-closeout slice is fully closed.
+- [ ] Keep handoff aligned with `next-action.json` while the current patch-release truth-cleanup slice is fully closed.
 
 ## Execution Plan
 
 1. Keep long-run explicitly idle until the next row is deliberately created.
-2. When a future slice is selected, reopen handoff with that new row instead of pointing at the closed release-closeout feat.
+2. When a future slice is selected, reopen handoff with that new row instead of pointing at the closed patch-release truth-cleanup feat.
 3. Do not let handoff drift from `next-action.json` while work proceeds through feat-task harness.
 
 ## Files To Touch
