@@ -7,7 +7,7 @@ tags:
   - decision
 sources:
   - .bagakit/ft-harness/feats/f-20260406-remote-high-latency-mount-fail-closed-proof/summary.md
-created: 2026-04-06T08:59:00Z
+created: 2026-04-06T09:00:15Z
 ---
 
 ## Candidate

@@ -11,7 +11,7 @@
   "worktree_name": "",
   "worktree_path": "",
   "created_at": "2026-04-06T08:40:19Z",
-  "updated_at": "2026-04-06T08:59:00Z",
+  "updated_at": "2026-04-06T09:00:15Z",
   "current_task_id": null,
   "counters": {
     "gate_fail_streak": 0,
@@ -59,6 +59,11 @@
     },
     {
       "at": "2026-04-06T08:59:00Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    },
+    {
+      "at": "2026-04-06T09:00:15Z",
       "action": "feat_archived",
       "detail": "moved + cleaned"
     }

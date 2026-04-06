@@ -1,7 +1,7 @@
 {
   "version": 1,
   "feat_id": "f-20260406-remote-high-latency-mount-fail-closed-proof",
-  "updated_at": "2026-04-06T08:59:00Z",
+  "updated_at": "2026-04-06T09:00:15Z",
   "tasks": [
     {
       "id": "T-001",
