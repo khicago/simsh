@@ -127,7 +127,7 @@ There is a useful emerging pattern already:
 | `grep` | Familiar text output with context support. | Match records were not explicit objects; context line shape was awkward for machine parsing. | Keep current text mode. Add `--fmt jsonl` with flat `match|context|file` records. | High |
 | `rg` | Now implemented as a scoped ripgrep-style builtin with recursive-by-default search, cwd fallback, glob filters, and canonical `--fmt jsonl` output. | The risk is command-surface drift: caller familiarity can tempt the implementation toward host-binary passthrough or an ever-growing ripgrep clone. | Keep `rg` as the agent-oriented search front door, but keep the scope intentionally smaller than ripgrep: cover common inspect/search flows, reuse kernel path semantics, preserve project output taxonomy, and refuse host-binary passthrough or full CLI cloning. Keep `grep` as the simple text-first primitive and `find` as the path-discovery primitive rather than collapsing all three roles into one command. | High |
 | `frontmatter` | Best-in-class builtin today. | Could become the template for other commands. | Preserve as reference pattern; no major redesign needed. | Low |
-| `json` | New structure-aware inspector for JSON. | Risk of scope creep into a jq-like language. | Keep the first release small: `json stat` and `json get` with minimal path syntax, no filters, no mutation, no stdin. | High |
+| `json` | Structure-aware inspector for JSON with `stat` and `get`. | Still too narrow for common agent queries, but at high risk of scope creep if expanded carelessly. | Keep the surface narrow and task-first: add `keys`, `len`, and small multi-path extraction to `get`; support batch-friendly outputs where that reduces token cost; do not add filters, mutation, stdin, or jq-style expression semantics. | High |
 | `echo` | Deterministic plain text. | None worth optimizing in kernel. | Keep as-is. | Low |
 | `tee` | Useful bridge from stdin to file. | Needed explicit success feedback without breaking passthrough semantics. | Keep default passthrough. Add `--confirm` and `--json` as terminal-sink success summaries. | Medium |
 | `sed` | Good split between print and in-place edit. | In-place mode needed an optional summary without touching print-mode pipes. | Keep `sed -n` text-first. Add `-i --json` for explicit mutation summaries. | Medium |
@@ -226,7 +226,7 @@ The runtime should get better at "read just the part I need", not only at "seria
 
 That means favoring tools like:
 - `frontmatter` for Markdown frontmatter;
-- the new builtin `json` for JSON shape inspection and subtree extraction;
+- the new builtin `json` for JSON shape inspection, subtree extraction, key inspection, and narrow container-length queries;
 - future structure-aware inspectors for common agent file formats such as JSON, YAML, and tabular content;
 - stronger local search tools that can return narrow, fielded results instead of large text blobs;
 - one agent-friendly search front door (`rg`) that covers the most common multi-file text search flows without forcing callers to reconstruct them from `find` + `grep` every time;

@@ -152,6 +152,8 @@ Examples:
 - `find --fmt jsonl ...` for one JSON record per discovered path
 - `json stat --fmt json ...` for one structured JSON-shape report
 - `json get --path items[0].name ...` for one targeted JSON subtree extraction
+- `json keys --path meta ...` for one object-key inspection without dumping the whole file
+- `json len --path items ...` for one narrow length query instead of re-reading full JSON
 
 The design rule is simple:
 - if a command is naturally a pipeline primitive, keep the default text shape strong and add structured output explicitly
