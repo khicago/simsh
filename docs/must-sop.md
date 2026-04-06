@@ -24,6 +24,13 @@ Source: `docs/architecture-memory-skills-extension.md`
 - Keep core-runtime boundaries explicit: core exposes extension contracts, business layers own retrieval/index/evolution behavior.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Paired A/B Uplift Proof Harness
+Source: `docs/architecture-paired-ab-uplift-proof-harness.md`
+- Read this doc before changing the paired uplift benchmark, baseline substrate, or per-run report schema.
+- Keep the experiment controlled: hold the agent, paired task set, and budgets fixed while changing only the runtime substrate.
+- Keep the paired uplift layer downstream from the native benchmark suite and external comparison artifacts; do not mutate those layers to make uplift look better.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Path Access Metadata and Listing/API Formats
 Source: `docs/architecture-path-access-metadata.md`
 - Read this doc before changing PathMeta access/capabilities, ls -l output formats, or /v1/execute metadata.

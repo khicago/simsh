@@ -34,6 +34,7 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/architecture-path-access-metadata.md`
   - `docs/architecture-memory-skills-extension.md`
   - `docs/architecture-high-performance-mount-system.md`
+  - `docs/architecture-paired-ab-uplift-proof-harness.md`
 - Historical implementation retrospective:
   - `docs/first_version_plan.md`
 

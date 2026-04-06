@@ -896,17 +896,38 @@ Optional but recommended:
   - If refresh automation starts embedding broader benchmark orchestration semantics, cut it back to regenerating the current checked-in artifacts only.
 
 ### K-030: Build a paired A/B uplift proof harness
-- Status: proposed
+- Feat: `f-20260406-paired-ab-uplift-proof-harness`
+- Status: in_progress
 - Why now: `K-029` gives the repository a repeatable artifact-refresh path. The next highest-value evidence question is no longer freshness, but whether `simsh` measurably improves agent outcomes relative to a thinner baseline runtime under controlled paired tasks.
 - Kernel invariant: uplift proof should hold the agent, task set, and budgets fixed while changing only the runtime substrate; it must not collapse into leaderboard chasing or uncontrolled benchmark comparisons.
 - Proposed scope:
   - Define one paired task set that runs both with and without `simsh`.
+  - Keep one checked-in task-manifest SSOT with explicit seed/order/budget semantics.
   - Record success, retries, wasted steps/tokens, and environment-misunderstanding failures in a machine-readable per-run format.
   - Produce one aggregate report and one failure taxonomy report.
+- Files to touch:
+  - `benchmarks/paired_uplift/*`
+  - `benchmarks/simsh_native_reference/README.md`
+  - `docs/architecture-paired-ab-uplift-proof-harness.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `docs/notes-reusable-items-coding.md`
+  - `README.md`
+  - `Makefile`
+- Validation command:
+  - `go test ./benchmarks/paired_uplift -count=1`
+  - `go test ./...`
+- Done gate:
+  - A checked-in paired task-set harness compares full `simsh` against one repo-controlled thin baseline substrate under fixed agent/task/budget conditions.
+  - The task-manifest SSOT and the per-run report schema make pair seed/order/budget invariants explicit rather than implicit in code.
+  - The harness emits one machine-readable aggregate artifact and one separate failure-taxonomy artifact.
+  - The first cut keeps the baseline repo-controlled and deterministic instead of relying on ambient host-shell command availability.
+  - Docs explain the paired harness as a proof layer downstream from the native benchmark suite and the external-comparison layers, not as a replacement for them.
 - Non-goals:
   - Do not claim cross-project leaderboard parity yet.
   - Do not change native benchmark semantics just to improve the A/B result.
   - Do not widen the experiment into full Terminal-Bench or SWE-bench adoption.
+- Rollback note:
+  - If the slice starts depending on host-shell drift, benchmark-only product nouns, or uncontrolled task expansion, cut it back to one controlled baseline substrate, one small paired task set, and explicit per-run evidence only.
 
 ## Backlog Rules
 
