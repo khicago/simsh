@@ -3,6 +3,7 @@ package builtin
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -30,10 +31,11 @@ type jsonStatRow struct {
 func specJSON() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:   CommandJSON,
-		Manual: "json <stat|get> ...",
+		Manual: "json <stat|get|keys|len> ...",
 		Tips: []string{
 			"Use json stat to inspect JSON shape across files and directories.",
-			"Use json get --path QUERY to extract a JSON subtree without dumping the whole file.",
+			"Use json get --path QUERY to extract one or a small set of JSON subtrees without dumping the whole file.",
+			"Use json keys and json len for narrow structure-aware queries instead of re-reading full JSON into the model.",
 		},
 		Examples:       ExamplesFor("json"),
 		DetailedManual: LoadEmbeddedManual("json"),
@@ -50,6 +52,10 @@ func runJSON(runtime engine.CommandRuntime, args []string) (string, int) {
 		return runJSONStat(runtime, args[1:])
 	case "get":
 		return runJSONGet(runtime, args[1:])
+	case "keys":
+		return runJSONKeys(runtime, args[1:])
+	case "len":
+		return runJSONLen(runtime, args[1:])
 	default:
 		return fmt.Sprintf("json: unsupported subcommand %s", strings.TrimSpace(args[0])), contract.ExitCodeUsage
 	}
@@ -97,12 +103,14 @@ func runJSONStat(runtime engine.CommandRuntime, args []string) (string, int) {
 	if code != 0 {
 		return out, code
 	}
-	rows := make([]jsonStatRow, 0, len(files))
-	for _, filePath := range files {
-		raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
-		if err != nil {
-			return fmt.Sprintf("json stat: %v", err), contract.ExitCodeGeneral
-		}
+	inputs, err := readJSONInputs(runtime, "json stat", files)
+	if err != nil {
+		return fmt.Sprintf("json stat: %v", err), contract.ExitCodeGeneral
+	}
+	rows := make([]jsonStatRow, 0, len(inputs))
+	for _, input := range inputs {
+		filePath := input.Path
+		raw := input.Raw
 		row := jsonStatRow{Path: filePath}
 		var value any
 		if err := json.Unmarshal([]byte(raw), &value); err == nil {
@@ -119,28 +127,47 @@ func runJSONStat(runtime engine.CommandRuntime, args []string) (string, int) {
 }
 
 func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
-	pathQuery := ""
+	pathQueries := make([]string, 0, 1)
 	rawOutput := false
+	format := jsonQueryFormatText
 	pathValue := ""
 	for idx := 0; idx < len(args); idx++ {
 		arg := args[idx]
 		switch {
 		case arg == "--raw":
 			rawOutput = true
+		case arg == "--fmt":
+			if idx+1 >= len(args) {
+				return "json get: --fmt requires one value: json|jsonl", contract.ExitCodeUsage
+			}
+			idx++
+			parsed, ok := parseJSONQueryFormat(args[idx])
+			if !ok || parsed == jsonQueryFormatText {
+				return fmt.Sprintf("json get: unsupported --fmt value %q", args[idx]), contract.ExitCodeUsage
+			}
+			format = parsed
+		case strings.HasPrefix(arg, "--fmt="):
+			parsed, ok := parseJSONQueryFormat(strings.TrimPrefix(arg, "--fmt="))
+			if !ok || parsed == jsonQueryFormatText {
+				return fmt.Sprintf("json get: unsupported --fmt value %q", strings.TrimPrefix(arg, "--fmt=")), contract.ExitCodeUsage
+			}
+			format = parsed
 		case arg == "--path":
 			if idx+1 >= len(args) {
 				return "json get: --path requires a value", contract.ExitCodeUsage
 			}
 			idx++
-			pathQuery = strings.TrimSpace(args[idx])
+			pathQuery := strings.TrimSpace(args[idx])
 			if pathQuery == "" {
 				return "json get: path must not be empty", contract.ExitCodeUsage
 			}
+			pathQueries = append(pathQueries, pathQuery)
 		case strings.HasPrefix(arg, "--path="):
-			pathQuery = strings.TrimSpace(strings.TrimPrefix(arg, "--path="))
+			pathQuery := strings.TrimSpace(strings.TrimPrefix(arg, "--path="))
 			if pathQuery == "" {
 				return "json get: path must not be empty", contract.ExitCodeUsage
 			}
+			pathQueries = append(pathQueries, pathQuery)
 		case strings.HasPrefix(arg, "-"):
 			return fmt.Sprintf("json get: unsupported flag %s", arg), contract.ExitCodeUsage
 		default:
@@ -157,6 +184,19 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 	if pathValue == "" {
 		return "json get: expected one file path", contract.ExitCodeUsage
 	}
+	seenQueries := map[string]struct{}{}
+	for _, query := range pathQueries {
+		if _, ok := seenQueries[query]; ok {
+			return fmt.Sprintf("json get: duplicate --path value %q", query), contract.ExitCodeUsage
+		}
+		seenQueries[query] = struct{}{}
+	}
+	if rawOutput && format == jsonQueryFormatJSONL {
+		return "json get: --raw is not supported with --fmt jsonl", contract.ExitCodeUsage
+	}
+	if format == jsonQueryFormatJSONL && len(pathQueries) == 0 {
+		return "json get: --fmt jsonl requires at least one --path", contract.ExitCodeUsage
+	}
 	isDir, err := runtime.Ops.IsDirPath(runtime.Ctx, pathValue)
 	if err != nil {
 		return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
@@ -172,29 +212,147 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 	if err := json.Unmarshal([]byte(raw), &value); err != nil {
 		return fmt.Sprintf("json get: invalid json: %v", err), contract.ExitCodeGeneral
 	}
-	steps, err := parseJSONPath(pathQuery)
-	if err != nil {
-		return fmt.Sprintf("json get: %v", err), contract.ExitCodeUsage
-	}
-	selected, err := applyJSONPath(value, steps)
-	if err != nil {
-		return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
-	}
-	switch v := selected.(type) {
-	case string:
-		return v, 0
-	case float64, bool, nil:
-		raw, err := json.Marshal(v)
+	if len(pathQueries) <= 1 {
+		query := ""
+		if len(pathQueries) == 1 {
+			query = pathQueries[0]
+		}
+		selected, err := selectJSONQuery(value, query)
 		if err != nil {
 			return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
 		}
-		return string(raw), 0
-	default:
-		if rawOutput {
-			return compactJSONString(v), 0
+		if format == jsonQueryFormatJSON {
+			return compactJSONString(selected), 0
 		}
-		return prettyJSONString(v), 0
+		switch v := selected.(type) {
+		case string:
+			return v, 0
+		case float64, bool, nil:
+			raw, err := json.Marshal(v)
+			if err != nil {
+				return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
+			}
+			return string(raw), 0
+		default:
+			if rawOutput {
+				return compactJSONString(v), 0
+			}
+			return prettyJSONString(v), 0
+		}
 	}
+
+	values := make(map[string]any, len(pathQueries))
+	for _, query := range pathQueries {
+		selected, err := selectJSONQuery(value, query)
+		if err != nil {
+			return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
+		}
+		values[query] = selected
+	}
+	return renderJSONGetMulti(pathValue, pathQueries, values, format, rawOutput), 0
+}
+
+type jsonBatchQueryOptions struct {
+	recursive bool
+	query     string
+	format    jsonQueryFormat
+	targets   []string
+}
+
+func runJSONKeys(runtime engine.CommandRuntime, args []string) (string, int) {
+	opts, out, code, ok := parseJSONBatchQueryArgs(runtime, "json keys", args)
+	if !ok {
+		return out, code
+	}
+	files, out, code := expandJSONTargets(runtime, "json keys", opts.targets, opts.recursive)
+	if code != 0 {
+		return out, code
+	}
+	inputs, err := readJSONInputs(runtime, "json keys", files)
+	if err != nil {
+		return fmt.Sprintf("json keys: %v", err), contract.ExitCodeGeneral
+	}
+	rows := make([]jsonKeysRow, 0, len(inputs))
+	for _, input := range inputs {
+		rows = append(rows, buildJSONKeysRow(input.Path, opts.query, input.Raw))
+	}
+	return renderJSONKeys(rows, opts.format), 0
+}
+
+func runJSONLen(runtime engine.CommandRuntime, args []string) (string, int) {
+	opts, out, code, ok := parseJSONBatchQueryArgs(runtime, "json len", args)
+	if !ok {
+		return out, code
+	}
+	files, out, code := expandJSONTargets(runtime, "json len", opts.targets, opts.recursive)
+	if code != 0 {
+		return out, code
+	}
+	inputs, err := readJSONInputs(runtime, "json len", files)
+	if err != nil {
+		return fmt.Sprintf("json len: %v", err), contract.ExitCodeGeneral
+	}
+	rows := make([]jsonLenRow, 0, len(inputs))
+	for _, input := range inputs {
+		rows = append(rows, buildJSONLenRow(input.Path, opts.query, input.Raw))
+	}
+	return renderJSONLens(rows, opts.format), 0
+}
+
+func parseJSONBatchQueryArgs(runtime engine.CommandRuntime, label string, args []string) (jsonBatchQueryOptions, string, int, bool) {
+	opts := jsonBatchQueryOptions{
+		format:  jsonQueryFormatText,
+		targets: make([]string, 0, len(args)),
+	}
+	for idx := 0; idx < len(args); idx++ {
+		arg := args[idx]
+		switch {
+		case arg == "-r":
+			opts.recursive = true
+		case arg == "--path":
+			if idx+1 >= len(args) {
+				return opts, fmt.Sprintf("%s: --path requires a value", label), contract.ExitCodeUsage, false
+			}
+			idx++
+			opts.query = strings.TrimSpace(args[idx])
+			if opts.query == "" {
+				return opts, fmt.Sprintf("%s: path must not be empty", label), contract.ExitCodeUsage, false
+			}
+		case strings.HasPrefix(arg, "--path="):
+			opts.query = strings.TrimSpace(strings.TrimPrefix(arg, "--path="))
+			if opts.query == "" {
+				return opts, fmt.Sprintf("%s: path must not be empty", label), contract.ExitCodeUsage, false
+			}
+		case arg == "--fmt":
+			if idx+1 >= len(args) {
+				return opts, fmt.Sprintf("%s: --fmt requires one value: text|json|jsonl", label), contract.ExitCodeUsage, false
+			}
+			idx++
+			parsed, ok := parseJSONQueryFormat(args[idx])
+			if !ok {
+				return opts, fmt.Sprintf("%s: unsupported --fmt value %q", label, args[idx]), contract.ExitCodeUsage, false
+			}
+			opts.format = parsed
+		case strings.HasPrefix(arg, "--fmt="):
+			parsed, ok := parseJSONQueryFormat(strings.TrimPrefix(arg, "--fmt="))
+			if !ok {
+				return opts, fmt.Sprintf("%s: unsupported --fmt value %q", label, strings.TrimPrefix(arg, "--fmt=")), contract.ExitCodeUsage, false
+			}
+			opts.format = parsed
+		case strings.HasPrefix(arg, "-"):
+			return opts, fmt.Sprintf("%s: unsupported flag %s", label, arg), contract.ExitCodeUsage, false
+		default:
+			pathValue, err := runtime.Ops.RequireAbsolutePath(arg)
+			if err != nil {
+				return opts, fmt.Sprintf("%s: %v", label, err), contract.ExitCodeUsage, false
+			}
+			opts.targets = append(opts.targets, pathValue)
+		}
+	}
+	if len(opts.targets) == 0 {
+		return opts, fmt.Sprintf("%s: expected at least one path", label), contract.ExitCodeUsage, false
+	}
+	return opts, "", 0, true
 }
 
 func parseJSONStatFormat(raw string) (jsonStatFormat, bool) {
@@ -334,6 +492,44 @@ func expandJSONTargets(runtime engine.CommandRuntime, label string, targets []st
 		return nil, fmt.Sprintf("%s: no files found", label), contract.ExitCodeGeneral
 	}
 	return files, "", 0
+}
+
+type jsonInput struct {
+	Path string
+	Raw  string
+}
+
+func readJSONInputs(runtime engine.CommandRuntime, label string, files []string) ([]jsonInput, error) {
+	if runtime.Ops.ReadMany != nil && len(files) > 1 {
+		result, err := runtime.Ops.ReadMany(runtime.Ctx, contract.ReadManyRequest{Paths: files})
+		if err == nil {
+			index := make(map[string]string, len(result.Entries))
+			for _, entry := range result.Entries {
+				index[entry.Path] = entry.Content
+			}
+			inputs := make([]jsonInput, 0, len(files))
+			for _, filePath := range files {
+				raw, ok := index[filePath]
+				if !ok {
+					return nil, fmt.Errorf("%s: missing content for %s", label, filePath)
+				}
+				inputs = append(inputs, jsonInput{Path: filePath, Raw: raw})
+			}
+			return inputs, nil
+		}
+		if !errors.Is(err, contract.ErrUnsupported) {
+			return nil, err
+		}
+	}
+	inputs := make([]jsonInput, 0, len(files))
+	for _, filePath := range files {
+		raw, err := runtime.Ops.ReadRawContent(runtime.Ctx, filePath)
+		if err != nil {
+			return nil, err
+		}
+		inputs = append(inputs, jsonInput{Path: filePath, Raw: raw})
+	}
+	return inputs, nil
 }
 
 func compactJSONString(value any) string {

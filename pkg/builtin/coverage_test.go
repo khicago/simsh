@@ -360,6 +360,42 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "json-get-multi-json",
+			cmd:  "json get --path meta.author --path items[1].name --fmt json " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, `"meta.author":"simsh"`) || !strings.Contains(out, `"items[1].name":"second"`) {
+					t.Fatalf("json get multi --fmt json failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-multi-jsonl",
+			cmd:  "json get --path meta.author --path items[1].name --fmt jsonl " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, `"query":"meta.author"`) || !strings.Contains(out, `"query":"items[1].name"`) || !strings.Contains(out, `"value":"second"`) {
+					t.Fatalf("json get multi --fmt jsonl failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-keys",
+			cmd:  "json keys --path meta " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "y meta object 1 author") {
+					t.Fatalf("json keys failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-len",
+			cmd:  "json len --path items " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, "y items array 2") {
+					t.Fatalf("json len failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "json-stat-invalid-format",
 			cmd:  "json stat --fmt yaml " + jsonDoc,
 			want: func(t *testing.T, out string, code int) {

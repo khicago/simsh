@@ -75,9 +75,9 @@ var builtinDocContracts = map[string]builtinDocContract{
 	CommandJSON: {
 		StdinMode:        contract.BuiltinStdinNone,
 		Operands:         "subcommand plus PATH operands",
-		DefaultOutput:    "json stat rows or extracted JSON subtree",
-		StructuredOutput: "JSON shape or subtree result",
-		StructuredFlags:  []string{"stat --fmt json", "stat --fmt md", "get --raw"},
+		DefaultOutput:    "json stat rows, query rows, or extracted JSON subtree",
+		StructuredOutput: "JSON shape, query rows, or subtree result",
+		StructuredFlags:  []string{"stat --fmt json", "stat --fmt md", "get --fmt json", "get --fmt jsonl", "keys --fmt json", "keys --fmt jsonl", "len --fmt json", "len --fmt jsonl"},
 		MutationKind:     contract.BuiltinMutationReadOnly,
 		SuccessOutput:    contract.BuiltinSuccessContent,
 		PipeBehavior:     contract.BuiltinPipeGood,
