@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "feat_id": "f-20260406-v0-3-1-patch-release-truth-cleanup-3",
+  "title": "v0.3.1 patch release truth cleanup",
+  "slug": "v0-3-1-patch-release-truth-cleanup",
+  "goal": "Align release-facing docs and handoff with the fact that v0.3.0 is already tagged and current main is the candidate for a bounded v0.3.1 patch release.",
+  "status": "discarded",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-04-06T17:13:03Z",
+  "updated_at": "2026-04-06T17:19:08Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_checked_at": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "at": "2026-04-06T17:13:03Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-04-06T17:19:08Z",
+      "action": "feat_discarded",
+      "detail": "reason=invalid; replacement=none"
+    }
+  ],
+  "closed_from_status": "proposal",
+  "discard_reason": "invalid",
+  "replacement_feat_id": null,
+  "discarded_at": "2026-04-06T17:19:08Z",
+  "discarded_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "worktree_patch": "",
+    "worktree_staged_patch": "",
+    "branch_patch": "",
+    "untracked_archive": "",
+    "note": "discard closes stale/superseded work while preserving feat artifacts; worktree mode force-removes worktree and deletes branch after exporting patches when available"
+  }
+}
