@@ -2,73 +2,91 @@
 
 > Agentic sandbox kernel for harnesses, memory-aware runtimes, and AgentOS-style systems.
 
-`simsh` is a lightweight runtime kernel for agent work. It gives an agent a constrained shell, a purpose-oriented virtual filesystem, explicit policy boundaries, and structured execution feedback without forcing you to boot a VM or hand an unconstrained host shell to the model.
+`simsh` is a lightweight sandbox kernel for agent execution. It gives an agent a constrained shell, a purpose-oriented virtual filesystem, explicit policy boundaries, and structured execution feedback without forcing you to boot a VM or hand an unconstrained host shell to the model, and it is meant to sit under a harness, a memory-aware runtime, or an AgentOS-style stack rather than replace those layers. In that stack, it should be read as one of the most important infrastructure layers: the execution substrate that higher-level planning, memory, review, and workflow systems can safely build on.
 
-The project is designed for higher-level systems such as:
-- agent harnesses that need a predictable execution substrate
-- agentic sandboxes that need explicit write boundaries and low-noise feedback
-- memory-aware runtimes that project knowledge and skills through filesystem paths
-- AgentOS-style stacks that need a reusable execution kernel beneath orchestration, planning, and product UI
+`simsh` is kernel-first. CLI, TUI, and HTTP are useful entry surfaces, but they are downstream wrappers over the same runtime model rather than the product center; the center is the execution contract: path truth, policy truth, session truth, and trace truth.
 
-It is not trying to be a full POSIX shell, a container runtime, or a product-specific workflow engine.
+## Why simsh
 
-## Why This Project Exists
+General-purpose shells are powerful, but they are a poor default execution environment for many agent loops. They carry too much ambient state, make path intent and mutation boundaries hard to read, and force planners or reviewers to recover machine meaning from stdout-heavy behavior; that is tolerable for a human operator, but wasteful for an agent loop that has to inspect, search, edit, verify, and hand results back to a harness.
 
-General-purpose shells are powerful, but they are bad default environments for many agent loops:
-- too much ambient state
-- weak path intent signaling
-- unclear mutation boundaries
-- results that are easy for humans to read but awkward for planners, reviewers, and harnesses to consume
+`simsh` narrows that surface on purpose. It keeps determinism ahead of shell completeness, keeps filesystem zones explicit, makes policy and profile choices visible, and treats structured result and trace contracts as first-class runtime truth instead of post-hoc audit glue, which makes it a better substrate for harnesses that need predictable execution, memory-aware runtimes that need explicit projection seams, and AgentOS-style stacks that want a reusable kernel under planning, review, and UI layers. The practical claim is stronger than “nice to have”: if the execution substrate is unstable, the rest of the harness stack tends to inherit that instability.
 
-`simsh` narrows the runtime on purpose:
-- deterministic shell subset instead of shell completeness
-- explicit workspace zones instead of ad hoc directories
-- policy/profile contracts instead of implicit host behavior
-- structured result and trace contracts instead of stdout-only heuristics
-- generic kernel plus adapter boundary instead of hard-coded product semantics
+It is not a fit when you need broad POSIX compatibility, VM-grade isolation, or a workflow engine with built-in product semantics.
 
-## Where simsh Fits
+## Release Status
 
-`simsh` is easiest to understand by role:
+The latest released line in this repository is `v0.2.x`, with `v0.2.4` as the most recent tag. Current `main` should be read as the opening stretch toward `v0.3.x`, not as another small `0.2.x` maintenance branch, so the docs on `main` now bias toward stronger harness positioning, sharper memory and mount guidance, and more direct benchmark evidence. The forward-looking upgrade guide for that line is [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md).
 
-| Role | What simsh provides |
-| --- | --- |
-| Agent harness | a predictable execution substrate with explicit policy, session, and trace semantics |
-| Agentic sandbox | a lightweight working environment with constrained commands, bounded filesystem writes, and visible capabilities |
-| Memory-aware runtime | adapter and mount boundaries for `/knowledge_base`, `/memory`, `/skills`, or other projected trees |
-| AgentOS component | a reusable kernel beneath orchestration, planning, review, and UI layers |
-| CLI / TUI / HTTP surface | operator and integration entrypoints over the same runtime model |
+The released `v0.2` contract line already covers session lifecycle, structured execution results, execution traces, and adapter-backed seam validation. Current `main` adds post-`v0.2.4` hardening and evidence work, especially around builtin ACI, mount capability dispatch, benchmark refresh, and paired uplift proof. The project is still experimental in product positioning, but that is an expectation-setting statement rather than a claim that the current tree lacks tests, benchmarks, or runtime discipline.
 
-This framing matters because `simsh` is a kernel-first project. CLI and HTTP are useful entry surfaces, but they are not the product soul.
+## Quick Start
 
-## Status and Use Cases
+### Build And Check
 
-`simsh` is still experimental, but the current baseline already includes:
-- local CLI and interactive TUI execution
-- an HTTP `/v1/execute` runtime service
-- policy/profile-gated builtin commands
-- AI-friendly virtual filesystem zones
-- path metadata via `ls -l` and opt-in API metadata
-- structured execution result contracts
-- execution tracing with side-effect tracking
-- first-class session lifecycle management
-- an adapter boundary for memory, skills, and other projected trees
-- a default builtin ACI optimized for dual readability plus explicit structured modes
+You need Go `1.22+`. The default release gate is small and explicit:
 
-Use `simsh` when you need:
-- a smaller and more inspectable execution model than a general-purpose shell
-- an agentic sandbox with explicit filesystem zones for references, scratch work, and durable outputs
-- policy/profile enforcement that can be surfaced to agents, harnesses, adapters, and APIs
-- a reusable kernel that stays separate from orchestration, memory curation, and product-facing workflows
+```bash
+make check
+go test -race ./...
+```
 
-Choose something else if you need:
-- broad POSIX compatibility
-- container- or VM-style isolation guarantees
-- a workflow engine with built-in domain semantics
+If you only want the core binaries:
 
-Project boundaries and non-goals live in [`docs/notes-project-charter.md`](docs/notes-project-charter.md).
+```bash
+go build ./cmd/simsh-cli
+go build ./cmd/simshd
+go build ./cmd/simsh-doc
+```
 
-## Architecture
+### Run The Sandbox
+
+One-shot execution:
+
+```bash
+go run ./cmd/simsh-cli -profile core-strict -c 'ls -l "/"'
+```
+
+Interactive local runner:
+
+```bash
+go run ./cmd/simsh-cli
+```
+
+Example virtual-root output:
+
+```text
+d ro knowledge_dir - /knowledge_base
+d ro virtual_dir - /sys
+d ro task_output_dir - /task_outputs
+d ro temp_work_dir - /temp_work
+# columns: mode access kind lines path
+```
+
+### Optional Service Surface
+
+If you need an integration service rather than a local sandbox session, expose the HTTP layer explicitly. It is a supported wrapper over the same kernel, but it is not the primary story of the project.
+
+Start the service:
+
+```bash
+go run ./cmd/simsh-cli serve -P 18080 -root "$PWD" -profile core-strict
+```
+
+Call `/v1/execute` with path metadata enabled:
+
+```bash
+curl -sS http://127.0.0.1:18080/v1/execute \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "command": "ls -l /knowledge_base",
+    "profile": "core-strict",
+    "policy": "read-only",
+    "include_meta": true
+  }'
+```
+
+## Kernel And Sandbox Model
 
 ```mermaid
 flowchart TB
@@ -85,267 +103,93 @@ flowchart TB
   entry["CLI / TUI / HTTP"] --> runtime
 ```
 
-### Kernel Model
+### Kernel Contracts
 
-`simsh` should be read first as a runtime kernel, not as a CLI or HTTP product.
+The kernel owns shell execution semantics, virtual filesystem projection boundaries, policy and profile enforcement, path metadata, structured execution results, execution traces, and session primitives. The main core packages are `pkg/contract`, `pkg/sh`, `pkg/fs`, and `pkg/engine/runtime`, and that boundary matters because `simsh` is supposed to be a reusable execution kernel: product workflows, memory curation logic, retrieval systems, and orchestration policy belong above it, not inside it. In practical terms, `simsh` should make a harness or AgentOS layer reliable enough to build on, not compete with it for ownership.
 
-The kernel owns:
-- shell execution semantics
-- filesystem projection boundaries
-- policy and profile enforcement
-- path metadata and capability signaling
-- structured execution result and trace contracts
-- session primitives
+### Default Workspace
 
-Core packages:
-- `pkg/contract`: stable interfaces and shared types
-- `pkg/sh`: shell parsing and execution semantics
-- `pkg/fs`: virtual filesystem composition and adapter glue
-- `pkg/engine/runtime`: runtime assembly (`sh + fs + policy/profile`)
-
-The target property is not shell completeness. The target property is a lightweight execution kernel that agents can trust.
-
-### Default Agent Workspace
-
-What matters to an agent is not the repository package order. It is the default working environment it sees when execution begins.
-
-### Filesystem zones
-
-The virtual root exposes only a small set of high-signal directories:
+The agent sees a small, semantic virtual root instead of an ambient host filesystem:
 
 | Path | Purpose |
 | --- | --- |
 | `/knowledge_base` | source-oriented reference material and mirrored external artifacts |
 | `/task_outputs` | durable deliverables and final agent-authored artifacts |
 | `/temp_work` | temporary intermediates, scratch output, and disposable state |
-| `/sys` | virtual runtime metadata and builtin command namespace |
+| `/sys` | runtime metadata and builtin command namespace |
 
-These names are intentionally explicit so an agent can reason about where output belongs before it writes. Writeability is still controlled by the active policy.
+The workspace also carries an explicit virtual path model. `cwd` is session-local, relative paths are resolved inside that virtual tree, and mount-backed or synthetic paths keep their capability limits instead of pretending to be ordinary local directories.
 
-### Path model and `cwd`
+The default builtin surface is intentionally narrow. It focuses on inspection, search, structure-aware querying, text manipulation, and safe file mutation rather than shell completeness. The concrete runtime profile is generated into [`simsh.md`](simsh.md), and the ACI rationale lives in [`docs/notes-builtin-aci-review.md`](docs/notes-builtin-aci-review.md).
 
-`simsh` exposes an explicit virtual path model instead of inheriting host-shell ambiguity:
-- session-local virtual `cwd`
-- relative-path resolution against that virtual `cwd`
-- path metadata and capabilities instead of trial-and-error probing
-- mount-backed and synthetic paths that remain capability-limited even when reachable through the same tree
+### Adapter And Mount Boundary
 
-### Default builtin surface
+Adapters are the seam where external systems, memory views, skills, and other projected trees enter the runtime. `simsh` expects those seams to stay explicit: projection truth, lifecycle hooks, trace consumption, freshness, capability contracts, and mount latency or consistency guarantees all need to be documented rather than inferred, which is where the project leans toward memory-aware runtimes and AgentOS-style systems most directly.
 
-The default workspace includes a focused builtin command set for inspection, search, text manipulation, and safe file mutation:
-- inspection and workspace awareness: `ls`, `tree`, `pwd`, `env`, `which`, `type`, `man`, `frontmatter`, `json`, `date`
-- text and search: `cat`, `head`, `tail`, `grep`, `rg`, `find`, `diff`, `sort`, `uniq`, `wc`, `sed`
-- file mutation: `mkdir`, `cp`, `mv`, `rm`, `rmdir`, `touch`, `tee`
-
-The command surface is intentionally constrained. The goal is a high-signal agent workspace, not a full shell clone.
-
-Structured output conventions in the default workspace:
-- defaults stay dual-readable and pipe-aware where that interaction model matters
-- `--json` is used when a command naturally returns one summary object
-- `--fmt jsonl` is used when a command naturally returns a stream of flat records
-- `--fmt json` stays available for commands that already expose a broader output family such as `text|json|md`
-
-Examples:
-- `wc --json ...` for one structured count summary
-- `grep --fmt jsonl ...` for one JSON record per match/context row
-- `rg --fmt jsonl ...` for one JSON record per recursive match/file row
-- `find --fmt jsonl ...` for one JSON record per discovered path
-- `json stat --fmt json ...` for one structured JSON-shape report
-- `json get --path items[0].name ...` for one targeted JSON subtree extraction
-- repeated `json get --path ... --path ...` returns one small object keyed by the exact query strings, or one `jsonl` record per query with `--fmt jsonl`
-- `json keys --path meta ...` for one object-key inspection without dumping the whole file
-- `json len --path items ...` for one narrow length query instead of re-reading full JSON
-
-The design rule is simple:
-- if a command is naturally a pipeline primitive, keep the default text shape strong and add structured output explicitly
-- if a command is mostly an inspection surface, spend the default output budget on higher signal-to-noise
-- if the data is structured, add query tools so the agent can read only the part it needs instead of dumping whole files
-
-### Result and trace contract
-
-The default workspace is not just files and commands. It also includes a machine-consumable execution contract:
-- structured `ExecutionResult`
-- structured `ExecutionTrace`
-- path access metadata via `ls -l` and opt-in API metadata
-
-That is part of the default ACI, because it shapes how an agent verifies what happened after each step.
-
-### Harness and Memory Boundary
-
-The next layer above the default workspace is the harness and adapter boundary.
-
-`simsh` keeps domain logic out of core packages. Memory systems, resource projections, skill trees, and RPC-backed views are expected to live behind adapter-driven `VirtualMount` integrations rather than being hard-coded into the kernel.
-
-That means:
-- generic kernel
-- opinionated adapters
-- explicit memory and projection boundaries
-- higher-level harnesses decide how sessions, memory, and planning loops compose around the runtime
-
-Typical shape:
-- the kernel provides execution, path semantics, trace, and session primitives
-- the harness coordinates planning, retries, review, and long-running workflows
-- memory systems project curated context into virtual paths rather than leaking product semantics into core packages
-- an AgentOS-like platform can treat `simsh` as its execution substrate instead of its control plane
-
-See:
-- [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md)
-- [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md)
-- [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md)
-
-### Mount Selection
-
-Mounts are not interchangeable.
-If an integration backs mounts with DB, OS, RPC, search, or mixed persistence layers, it should not treat the result as a transparent local directory by default.
-
-`simsh` expects integrators to choose mount models deliberately:
-- what truth the mount exposes (`projection` vs `factual`)
-- how data is materialized (`snapshot`, `cached`, `live`)
-- what write semantics apply
-- what consistency and latency guarantees actually hold under `ls`, `tree`, `find`, `grep`, `rg`, `cat`, and mutation-heavy loops
-- what capability contracts the mount actually implements for listing, path enumeration, bulk read, content search, mutation, refresh, and stats
-- what stability and performance contracts the backend can honestly sustain (batch limits, search scope limits, timeout semantics, retryability, and latency percentiles)
-
-The detailed contract lives in [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md).
-Use that doc before exposing any non-trivial mount to agent-facing CLI workloads.
+This matters most once mounts stop being cheap local views. If a mount sits on top of DB, OS, RPC, search, or mixed persistence layers, the runtime should dispatch by capability and latency contract instead of silently degrading into `ls | cat | grep | rg | find` fanout loops; the kernel should preserve good agent behavior even when the filesystem is partly synthetic and partly remote.
 
 ### Entry Surfaces
 
-CLI, TUI, and HTTP are important integration surfaces, but they are intentionally downstream from the kernel model.
+CLI, TUI, and HTTP are intentionally thin wrappers over the same runtime stack. They exist because a sandbox kernel still needs local and service entrypoints, but they stay secondary to the execution contract itself. In practice that means:
 
-Entry surfaces:
-- `pkg/cmd`: CLI/TUI-facing runtime helpers
-- `pkg/service/httpapi`: HTTP execute endpoint
-- `cmd/simsh-cli`: local runtime (`CLI + TUI + serve`)
-- `cmd/simshd`: dedicated HTTP service
-- `cmd/simsh-doc`: generator for `simsh.md`
+| Surface | Role |
+| --- | --- |
+| `cmd/simsh-cli` | local CLI, TUI, and `serve` entrypoint |
+| `cmd/simshd` | dedicated HTTP service |
+| `pkg/service/httpapi` | `/v1/execute` integration surface |
+| `pkg/cmd` | CLI/TUI-facing helpers |
 
-They should stay thin wrappers over the same runtime kernel rather than becoming a second architecture center.
+If a semantic change only exists in one entry surface, it is usually in the wrong layer.
 
-In practice:
-- CLI/TUI are operator surfaces for local iteration and debugging
-- HTTP is the integration surface for harnesses and higher-level platforms
-- none of these should become the place where kernel semantics are redefined first
+## Evidence And Metrics
 
-## Quick Start
+The repository keeps three benchmark layers because they answer different questions, and the current evidence is strong enough that it should be surfaced rather than hidden in subdirectories.
 
-### Requirements
+The checked-in native reference suite currently passes all configured gates: `trace_completeness=1.0`, `session_success=1.0`, `reviewable_patch_latency_ms=216`, and `async_completion_success=1.0`. The checked-in paired uplift proof is also directionally strong: on the current three-task manifest, full `simsh` succeeds `3/3` while the thinner baseline succeeds `2/3`, with `0` retries vs `3`, `0` misunderstandings vs `3`, and `149` observation tokens vs `3826`. Those numbers are not a cross-project leaderboard claim, but they are repo-local proof that the kernel is reducing wasted model work and making the sandbox easier for a large model to use correctly.
 
-- Go `1.22+`
+[`benchmarks/simsh_native_reference/README.md`](benchmarks/simsh_native_reference/README.md) is the native proof layer. It answers whether the kernel supports realistic agent file workflows well enough to justify the abstraction, not only the unit tests.
 
-### Build and test
+[`benchmarks/terminal_bench_compare/README.md`](benchmarks/terminal_bench_compare/README.md) is the external comparison layer. It stays downstream from the native suite and asks what the smallest checked-in Terminal-Bench comparison artifact worth maintaining is right now.
 
-```bash
-go test ./...
-go build ./cmd/simsh-cli
-go build ./cmd/simshd
-```
+[`benchmarks/paired_uplift/README.md`](benchmarks/paired_uplift/README.md) is the A/B proof layer. It holds the task set, agent, and budgets fixed while comparing full `simsh` against one thinner repo-controlled baseline substrate, so it can measure not just runtime behavior but also large-model execution efficiency.
 
-### Run locally
+Useful entrypoints:
 
 ```bash
-# one-shot command
-go run ./cmd/simsh-cli -profile core-strict -c 'ls -l "/"'
-
-# interactive TUI
-go run ./cmd/simsh-cli
-
-# line-based REPL
-go run ./cmd/simsh-cli --no-tui
-
-# HTTP runtime service
-go run ./cmd/simsh-cli serve -P 18080 -root "$PWD" -profile core-strict
-
-# dedicated HTTP binary
-go run ./cmd/simshd -listen ':18080' -root "$PWD" -profile core-strict
-```
-
-You can also use the included `Makefile`:
-
-```bash
-make test
-make check
-make cli
-make cli-c CMD='ls -l /'
-make cli-serve PORT=18080
-make simshd
-```
-
-### Inspect the virtual root
-
-```bash
-go run ./cmd/simsh-cli -profile core-strict -c 'ls -l "/"'
-```
-
-Example output:
-
-```text
-d ro knowledge_dir - /knowledge_base
-d ro virtual_dir - /sys
-d ro task_output_dir - /task_outputs
-d ro temp_work_dir - /temp_work
-# columns: mode access kind lines path
-```
-
-### Call the HTTP API with metadata
-
-```bash
-curl -sS http://127.0.0.1:18080/v1/execute \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "command": "ls -l /knowledge_base",
-    "profile": "core-strict",
-    "policy": "read-only",
-    "include_meta": true
-  }'
-```
-
-Example response:
-
-```json
-{
-  "output": "# columns: mode access kind lines path",
-  "exit_code": 0,
-  "meta": {
-    "paths": [
-      {
-        "mode": "d",
-        "access": "ro",
-        "kind": "knowledge_dir",
-        "lines": -1,
-        "path": "/knowledge_base",
-        "capabilities": ["describe", "list", "search"]
-      }
-    ]
-  }
-}
+go run ./benchmarks/simsh_native_reference
+make benchmark-refresh
+make benchmark-uplift
 ```
 
 ## Documentation
 
-Start here:
+### Start Here
 
 - [`simsh.md`](simsh.md): generated runtime profile
-- [`docs/notes-project-charter.md`](docs/notes-project-charter.md): project goals, scope, and non-goals
-- [`docs/architecture.md`](docs/architecture.md): current architecture overview
-- [`docs/notes-requirements.md`](docs/notes-requirements.md): current cross-cutting product/ACI requirements
-- [`docs/notes-builtin-aci-review.md`](docs/notes-builtin-aci-review.md): builtin ACI review and per-tool optimization directions
+- [`docs/notes-project-charter.md`](docs/notes-project-charter.md): goals, scope, and non-goals
+- [`docs/architecture-overview.md`](docs/architecture-overview.md): architecture narrative in kernel-first order
+- [`docs/notes-requirements.md`](docs/notes-requirements.md): current cross-cutting requirements
+- [`docs/notes-builtin-aci-review.md`](docs/notes-builtin-aci-review.md): builtin UX and output-contract rationale
+
+### Integration And Runtime Contracts
+
+- [`docs/architecture-session-trace-model.md`](docs/architecture-session-trace-model.md): current session/result/trace contract layer
+- [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md): adapter lifecycle and projection seam
+- [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md): extension boundary for memory and skills
 - [`docs/architecture-path-access-metadata.md`](docs/architecture-path-access-metadata.md): path metadata and listing/API formats
-- [`docs/architecture-memory-skills-extension.md`](docs/architecture-memory-skills-extension.md): extension boundary for mounts and business-layer systems
+- [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md): high-performance mount design and capability dispatch
+- [`docs/notes-v0-1-0-to-v0-2-migration.md`](docs/notes-v0-1-0-to-v0-2-migration.md): migration guide from `v0.1.0` to the released `v0.2` contract line
+- [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md): migration guide from the `v0.2.x` release line to the planned `v0.3.0` line
 
-Next-stage design docs:
+### Historical Context
 
-- [`docs/architecture-session-trace-model.md`](docs/architecture-session-trace-model.md): planned session and execution trace contracts
-- [`docs/architecture-platform-adapter-contract.md`](docs/architecture-platform-adapter-contract.md): platform adapter, memory lifecycle, and projection seams
-- [`docs/notes-v0-1-0-to-v0-2-migration.md`](docs/notes-v0-1-0-to-v0-2-migration.md): migration plan from the `v0.1.0` baseline to the planned `v0.2` contract set
-
-Historical context:
-
-- [`docs/first_version_plan.md`](docs/first_version_plan.md): v1 implementation history and completed scope
+- [`docs/notes-first-version-plan.md`](docs/notes-first-version-plan.md): first implementation wave and completed historical hardening scope
 
 ## Development
 
-### Common commands
+The current engineering bar is simple: keep core contracts generic, keep adapter and mount seams explicit, and do not trade away low-noise runtime truth for short-term convenience. The README is not the place to document every seam in full, but it should make the project center obvious: `simsh` is an agent sandbox kernel first, and example entry surfaces only matter insofar as they expose that kernel cleanly.
+
+Common commands:
 
 ```bash
 make test
@@ -355,30 +199,6 @@ make check
 make doc
 ```
 
-`make doc` regenerates [`simsh.md`](simsh.md) from the current runtime description.
+If you change docs with SOP/frontmatter implications, regenerate [`docs/must-sop.md`](docs/must-sop.md). If you change mounts, tool behavior, or any flow that can amplify remote-backed filesystem pressure, re-read [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md) first.
 
-### Contributing
-
-The runtime is still experimental, so boundary discipline matters more than feature count.
-
-Before changing core behavior:
-
-- read [`docs/notes-project-charter.md`](docs/notes-project-charter.md) and the relevant architecture docs
-- keep core contracts generic; push workload semantics into adapters unless a contract has proven reusable
-- run `make check` and `go test ./...`
-
-If a change updates SOP/frontmatter-driven docs under `docs/`, regenerate [`docs/must-sop.md`](docs/must-sop.md).
-
-### Roadmap
-
-The current baseline focuses on deterministic execution, virtual filesystem semantics, policy/profile controls, and a higher-signal builtin ACI.
-
-Planned next-stage work is documented and split into implementation feats around:
-
-- first-class session lifecycle
-- structured execution results
-- execution traces with side-effect tracking
-- adapter lifecycle and optional memory protocol hooks
-- adapter-backed end-to-end validation
-
-Those contracts are described in the architecture docs above and tracked in the feat harness under `.bagakit/ft-harness/`.
+The current pre-`v0.3.x` work queue lives in [`docs/notes-kernel-execution-backlog.md`](docs/notes-kernel-execution-backlog.md). That document is the SSOT for what the kernel should do next and how each item is supposed to be validated.
