@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-06T05:47:13.626809Z",
+  "generated_at": "2026-04-06T05:50:24.796893Z",
   "comparison_rule": "same_agent_same_budget_only_substrate_changes",
   "task_manifest_path": "benchmarks/paired_uplift/task_set.json",
   "agent_id": "paired_probe_agent_v1",
@@ -35,7 +35,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 2,
+        "duration_ms": 5,
         "steps": 3,
         "retries": 0,
         "wasted_steps": 0,
@@ -82,7 +82,7 @@
       "baseline": {
         "substrate": "thin_core_stateless",
         "success": true,
-        "duration_ms": 2,
+        "duration_ms": 6,
         "steps": 3,
         "retries": 1,
         "wasted_steps": 1,
@@ -160,7 +160,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 4,
+        "duration_ms": 11,
         "steps": 3,
         "retries": 0,
         "wasted_steps": 0,
@@ -207,7 +207,7 @@
       "baseline": {
         "substrate": "thin_core_stateless",
         "success": true,
-        "duration_ms": 3,
+        "duration_ms": 8,
         "steps": 4,
         "retries": 1,
         "wasted_steps": 1,
@@ -294,7 +294,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 3,
+        "duration_ms": 5,
         "steps": 4,
         "retries": 0,
         "wasted_steps": 0,
@@ -359,7 +359,7 @@
         "environment_misunderstandings": 1,
         "observation_bytes": 15127,
         "approx_observation_tokens": 3782,
-        "wasted_observation_tokens": 5,
+        "wasted_observation_tokens": 3782,
         "last_misunderstanding_kind": "missing_json_query_surface",
         "steps_detail": [
           {
@@ -384,7 +384,7 @@
             "observation_bytes": 15108,
             "approx_observation_tokens": 3777,
             "classification": "progress",
-            "note": "full-file fallback yielded planning facts"
+            "note": "full-file fallback yielded planning facts; step exhausted the observation budget"
           }
         ],
         "notes": [

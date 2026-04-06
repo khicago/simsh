@@ -16,7 +16,7 @@
 - simsh retries: 0
 - baseline retries: 3
 - simsh wasted observation tokens: 0
-- baseline wasted observation tokens: 11
+- baseline wasted observation tokens: 3788
 
 ## Task Results
 
@@ -30,7 +30,7 @@ Truth surfaces for `relative_navigation_session`: `virtual_cwd`, `relative_path_
 
 Why `inspect_edit_write_loop` is included: Strongest current inspect/edit/write slice for measuring whether the rg-style search front door removes fallback retries.
 Truth surfaces for `inspect_edit_write_loop`: `file_mutation`, `execution_trace`, `session_continuity`
-| `trace_consumable_planning` | `simsh` | `true` | `false` | `1` | `5` | `1` |
+| `trace_consumable_planning` | `simsh` | `true` | `false` | `1` | `3782` | `1` |
 
 Why `trace_consumable_planning` is included: Pressures narrow JSON query tooling under a fixed observation budget so the harness can measure fallback cost rather than only final correctness.
 Truth surfaces for `trace_consumable_planning`: `execution_trace`, `structured_result_feedback`

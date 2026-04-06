@@ -42,6 +42,7 @@ func (s *taskExecutionState) canContinue() bool {
 func (s *taskExecutionState) recordStep(label, command string, result contract.ExecutionResult, class stepClassification) {
 	observationBytes := len(result.Stdout) + len(result.Stderr)
 	observationTokens := estimateObservationTokens(observationBytes)
+	countedAsWasted := false
 	step := StepRecord{
 		Index:                   s.run.Steps + 1,
 		Label:                   label,
@@ -63,10 +64,12 @@ func (s *taskExecutionState) recordStep(label, command string, result contract.E
 		s.run.Retries++
 		s.run.WastedSteps++
 		s.run.WastedObservationTokens += observationTokens
+		countedAsWasted = true
 	case stepClassWasted:
 		step.Wasted = true
 		s.run.WastedSteps++
 		s.run.WastedObservationTokens += observationTokens
+		countedAsWasted = true
 	case stepClassEnvMisunderstanding:
 		step.Retry = true
 		step.Wasted = true
@@ -76,17 +79,26 @@ func (s *taskExecutionState) recordStep(label, command string, result contract.E
 		s.run.WastedSteps++
 		s.run.EnvironmentMisunderstandings++
 		s.run.WastedObservationTokens += observationTokens
+		countedAsWasted = true
 		s.run.LastMisunderstandingKind = class.misunderstandingKind
 	}
-	s.run.StepsDetail = append(s.run.StepsDetail, step)
 	if s.run.FailureKind == "" && s.run.ApproxObservationTokens > s.budget.MaxObservationTokens {
 		if s.run.LastMisunderstandingKind != "" {
 			s.run.FailureKind = failureKindBudgetAfterFallback
 		} else {
 			s.run.FailureKind = failureKindBudgetExhausted
 		}
+		if !countedAsWasted {
+			s.run.WastedObservationTokens += observationTokens
+		}
+		if strings.TrimSpace(step.Note) == "" {
+			step.Note = "step exhausted the observation budget"
+		} else {
+			step.Note += "; step exhausted the observation budget"
+		}
 		s.run.Notes = append(s.run.Notes, fmt.Sprintf("observation budget exceeded: got %d tokens, limit %d", s.run.ApproxObservationTokens, s.budget.MaxObservationTokens))
 	}
+	s.run.StepsDetail = append(s.run.StepsDetail, step)
 }
 
 func (s *taskExecutionState) fail(kind, note string) SubstrateRunRecord {
