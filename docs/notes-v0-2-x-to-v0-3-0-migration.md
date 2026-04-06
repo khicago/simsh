@@ -138,6 +138,14 @@ Migration actions:
 - add capability support where workload pressure requires it
 - remove silent fanout fallbacks where they are no longer acceptable
 
+Important migration warning:
+
+- if your current integration assumes “missing capability still falls back and mostly works,” treat that as a breaking assumption for the `v0.3.0` line
+- the migration path is:
+  - add the missing mount capability explicitly
+  - or narrow the workload/scope explicitly
+- do not rely on hidden locality or optimistic fallback for `remote_high_latency` mounts
+
 ### Phase 3: Audit Agent-Facing Tooling
 
 Review your harness or agent prompts and wrappers for outdated assumptions.

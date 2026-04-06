@@ -402,6 +402,24 @@ If a mount is `remote_high_latency`, missing a critical capability should cause:
 
 It should not silently fall back to fanout-heavy loops.
 
+#### What Explicit Refusal Looks Like
+
+For `remote_high_latency` mounts, the runtime should make the command-level consequence visible instead of quietly degrading:
+
+- missing `EntryLister`
+  - `ls`, `tree`, and non-recursive directory expansion should fail explicitly instead of falling back to `ListChildren + DescribePath`
+- missing `PathEnumerator`
+  - `find`, `rg --files`, and recursive path discovery should fail explicitly instead of recursively listing and reconstructing paths client-side
+- missing `BulkReader`
+  - multi-file reads and batch inspectors such as `json stat` or `frontmatter stat` should fail explicitly instead of issuing repeated single-file reads
+- missing `ContentSearcher`
+  - recursive `grep` and `rg` should fail explicitly instead of enumerate-then-read fallback loops
+- missing `Mutator`
+  - batch mutation flows should fail explicitly instead of quietly decomposing into one path-at-a-time writes or deletes
+
+`local_fast` and `local_heavy` may still allow narrower fallback paths where they remain visible and testable.
+That tolerance must not be read as permission for `remote_high_latency` mounts to do the same thing.
+
 ### Rule 3
 
 If a mount is `local_fast`, narrower fallbacks may be acceptable, but they should still be visible and testable.
@@ -426,6 +444,18 @@ Current implementation status:
 
 Writable mounts must declare visibility guarantees explicitly.
 The runtime should not assume `search_after_write` just because `path_read_after_write` holds.
+
+## Adapter Author Checklist
+
+Before exposing a mount as `remote_high_latency`, verify these pairings explicitly:
+
+- if the mount declares `MountCLIList`, it should implement `EntryLister`
+- if the mount declares `MountCLIFind`, it should implement `PathEnumerator`
+- if the mount declares `MountCLIBulkRead`, it should implement `BulkReader`
+- if the mount declares `MountCLIContentSearch`, it should implement `ContentSearcher`
+- if the mount declares `MountCLIMutate`, it should implement `Mutator`
+
+If one of those pairings is missing, the runtime should refuse the corresponding workload rather than guessing a scalable fallback path.
 
 ## Consistency Guarantees
 

@@ -128,6 +128,8 @@ Adapters are the seam where external systems, memory views, skills, and other pr
 
 This matters most once mounts stop being cheap local views. If a mount sits on top of DB, OS, RPC, search, or mixed persistence layers, the runtime should dispatch by capability and latency contract instead of silently degrading into `ls | cat | grep | rg | find` fanout loops; the kernel should preserve good agent behavior even when the filesystem is partly synthetic and partly remote.
 
+In particular, `remote_high_latency` mounts are not treated as transparent local directories. When a critical capability is missing, `simsh` should explicitly refuse the workload or require a narrower scope rather than quietly fanning out into repeated list, read, search, or mutation calls.
+
 ### Entry Surfaces
 
 CLI, TUI, and HTTP are intentionally thin wrappers over the same runtime stack. They exist because a sandbox kernel still needs local and service entrypoints, but they stay secondary to the execution contract itself. In practice that means:
