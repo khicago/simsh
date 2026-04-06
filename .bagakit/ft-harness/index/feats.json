@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-06T17:13:17Z",
+  "updated_at": "2026-04-06T17:13:28Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -343,11 +343,11 @@
     {
       "feat_id": "f-20260406-v0-3-1-patch-release-truth-cleanup-2",
       "title": "v0.3.1 patch release truth cleanup",
-      "status": "proposal",
+      "status": "discarded",
       "workspace_mode": "current_tree",
       "branch": "",
       "worktree_name": "",
-      "updated_at": "2026-04-06T17:12:40Z"
+      "updated_at": "2026-04-06T17:13:28Z"
     },
     {
       "feat_id": "f-20260406-v0-3-1-patch-release-truth-cleanup-3",
