@@ -1021,6 +1021,34 @@ Optional but recommended:
 - Rollback note:
   - If release closeout starts uncovering missing runtime proof rather than stale docs/evidence, stop and push that gap back into a bounded engineering feat first.
 
+### K-033: Align v0.3.1 patch release truth and release-facing docs
+- Feat: `f-20260406-v0-3-1-patch-release-truth-cleanup`
+- Status: in_progress
+- Why now: `v0.3.0` is already tagged, but several release-facing docs and handoff surfaces still describe that line as upcoming. Before cutting `v0.3.1`, the repository should stop mixing historical `v0.3.0` closeout language with the current patch-candidate line.
+- Kernel invariant: patch-release truth cleanup must not rewrite technical history or smuggle in a new engineering wave; it should only align docs and process state with the actual tagged version line.
+- Files to touch:
+  - `README.md`
+  - `docs/notes-v0-3-0-release-readiness.md`
+  - `docs/notes-v0-2-x-to-v0-3-0-migration.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `docs/must-guidebook.md`
+  - `docs/must-sop.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./...`
+  - `make check`
+- Done gate:
+  - Release-facing docs no longer describe `v0.3.0` as unreleased.
+  - Current `main` is framed consistently as the post-`v0.3.0` patch line for `v0.3.1`.
+  - A checked-in `v0.3.1` patch release note or readiness artifact exists.
+  - Backlog and handoff point at deliberate `v0.3.1` packaging instead of a stale `v0.3.0` cut narrative.
+- Non-goals:
+  - Do not move or retag `v0.3.0`.
+  - Do not open a new engineering feature wave under the `0.3.1` patch label.
+  - Do not refresh benchmark evidence again unless a real inconsistency is discovered.
+- Rollback note:
+  - If the slice starts changing technical scope instead of wording and release-facing state, stop and keep it limited to historical/truth cleanup only.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.
