@@ -22,7 +22,7 @@ updated: 2026-03-23T00:00:00Z
 The repo needed a stable way to describe how the v0.2 runtime contract actually matured, without forcing later work to rediscover the dependency order from scattered feat history.
 
 ## Decision
-The planned v0.2 contract chain was implemented as five linked feat units on `main`:
+The v0.2 contract chain was implemented as five linked feat units on `main`:
 
 - `f-20260301-session-lifecycle-policy-ceiling`
 - `f-20260301-structured-execution-result-contract`

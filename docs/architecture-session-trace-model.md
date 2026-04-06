@@ -10,19 +10,19 @@ sop:
 # Session and Execution Trace Model
 
 ## Context
-`simsh` currently executes commands as mostly one-shot invocations. That keeps the runtime simple, but it leaves three gaps for agent harnesses:
+`simsh` started as a mostly one-shot, text-first runtime. The current baseline now includes the first core contract layer that earlier iterations were aiming toward:
 
-- no first-class session primitive for cross-call state and resume;
-- no structured execution result contract for machine consumption;
-- no execution trace contract that records read/write/deny side effects in a form planners can use directly.
+- a first-class session primitive for cross-call state and resume;
+- a structured execution result contract for machine consumption;
+- an execution trace contract that records read/write/deny side effects in a form planners can use directly.
 
-This document defines the next core contract layer without coupling the runtime to any single business domain.
+This document records that current core contract layer without coupling the runtime to any single business domain.
 
 ## Goals
-- Introduce a generic `Session` primitive for cross-call execution state.
-- Replace text-only command results with a structured `ExecutionResult` contract.
-- Add a machine-consumable `ExecutionTrace` contract for side effects and policy outcomes.
-- Support session-scoped policy with predictable per-execution narrowing and explicit elevation rules.
+- Describe the generic `Session` primitive for cross-call execution state.
+- Keep `ExecutionResult` as the structured runtime SSOT instead of a text-only command result.
+- Keep `ExecutionTrace` machine-consumable for side effects and policy outcomes.
+- Preserve session-scoped policy with predictable per-execution narrowing and explicit elevation rules.
 
 ## Non-Goals
 - Encoding business meaning into session boundaries.
@@ -138,14 +138,14 @@ Example shape:
 - Adapter-managed state belongs behind explicit adapter hooks, not inside generic core structs.
 - Closing a session SHOULD provide a hook point for adapter-side flushes such as memory snapshots or reindex triggers.
 
-## First Implementation Boundary
-The first implementation SHOULD land:
+## Current Boundary
+The current baseline includes:
 - core session identifiers and lifecycle hooks;
 - structured `ExecutionResult`;
 - trace categories for builtin file operations and external command execution;
 - session-scoped policy narrowing rules.
 
-It SHOULD defer:
+It still defers:
 - workspace/multi-agent tenancy;
 - domain-specific trace consumers;
 - business-specific session taxonomy.

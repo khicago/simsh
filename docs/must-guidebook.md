@@ -28,7 +28,7 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/notes-requirements.md`
 - If this repo already has many docs and you're adopting Bagakit: consider adding/reading `docs/notes-adopting-living-docs.md` (adoption playbook).
 - Project architecture:
-  - `docs/architecture.md`
+  - `docs/architecture-overview.md`
   - `docs/architecture-session-trace-model.md`
   - `docs/architecture-platform-adapter-contract.md`
   - `docs/architecture-path-access-metadata.md`
@@ -36,12 +36,13 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/architecture-high-performance-mount-system.md`
   - `docs/architecture-paired-ab-uplift-proof-harness.md`
 - Historical implementation retrospective:
-  - `docs/first_version_plan.md`
+  - `docs/notes-first-version-plan.md`
 
 3) Current changes or proposals
 - Link to active proposals or change logs.
 - Version migration plan:
   - `docs/notes-v0-1-0-to-v0-2-migration.md`
+  - `docs/notes-v0-2-x-to-v0-3-0-migration.md`
 - Kernel optimization plan:
   - `docs/notes-kernel-optimization-plan.md`
 - Kernel execution backlog:

@@ -24,6 +24,12 @@ Source: `docs/architecture-memory-skills-extension.md`
 - Keep core-runtime boundaries explicit: core exposes extension contracts, business layers own retrieval/index/evolution behavior.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### Architecture Overview
+Source: `docs/architecture-overview.md`
+- Read this doc before changing the high-level narrative order of simsh architecture.
+- Update this doc when the relationship between kernel, default workspace, adapters, and entry surfaces changes.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Paired A/B Uplift Proof Harness
 Source: `docs/architecture-paired-ab-uplift-proof-harness.md`
 - Read this doc before changing the paired uplift benchmark, baseline substrate, or per-run report schema.
@@ -47,18 +53,6 @@ Source: `docs/architecture-platform-adapter-contract.md`
 Source: `docs/architecture-session-trace-model.md`
 - Read this doc before adding session state, structured execution results, or policy override semantics.
 - Keep session and trace contracts generic; product semantics belong in adapters.
-- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
-
-### Architecture Overview
-Source: `docs/architecture.md`
-- Read this doc before changing the high-level narrative order of simsh architecture.
-- Update this doc when the relationship between kernel, default workspace, adapters, and entry surfaces changes.
-- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
-
-### First Version Plan (Historical Retrospective)
-Source: `docs/first_version_plan.md`
-- Read this doc only when you need historical context about the first implementation wave and completed hardening/tooling work.
-- Do not use this doc as the current kernel roadmap; use `docs/notes-kernel-optimization-plan.md` and `docs/notes-kernel-execution-backlog.md` instead.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Doc Co-Authoring Workflow (Guidelines)
@@ -97,6 +91,12 @@ Source: `docs/notes-directives-examples.md`
 - Keep directive usage practical: only add directives that reduce mistakes or improve debuggability.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
+### First Version Plan (Historical Retrospective)
+Source: `docs/notes-first-version-plan.md`
+- Read this doc only when you need historical context about the first implementation wave and completed hardening/tooling work.
+- Do not use this doc as the current kernel roadmap; use `docs/notes-kernel-optimization-plan.md` and `docs/notes-kernel-execution-backlog.md` instead.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
 ### Kernel Execution Backlog
 Source: `docs/notes-kernel-execution-backlog.md`
 - Read this doc when choosing the next kernel execution item or converting review findings into implementation work.
@@ -129,8 +129,14 @@ Source: `docs/notes-reusable-items-coding.md`
 
 ### Migration Plan: v0.1.0 to v0.2
 Source: `docs/notes-v0-1-0-to-v0-2-migration.md`
-- Read this doc before upgrading integrations from the v0.1.0 release baseline to the planned v0.2 contract set.
+- Read this doc before upgrading integrations from the v0.1.0 release baseline to the released v0.2 contract set.
 - Update this doc when the v0.2 feat order, scope, or compatibility strategy changes.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Migration Guide: v0.2.x to v0.3.0
+Source: `docs/notes-v0-2-x-to-v0-3-0-migration.md`
+- Read this doc before upgrading integrations from the v0.2.x release line to the planned v0.3.0 line.
+- Update this doc when the v0.3.0 scope, compatibility strategy, or release gates change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Execute Preflight Performance References

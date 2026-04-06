@@ -2,7 +2,7 @@
 title: Migration Plan: v0.1.0 to v0.2
 required: false
 sop:
-  - Read this doc before upgrading integrations from the v0.1.0 release baseline to the planned v0.2 contract set.
+  - Read this doc before upgrading integrations from the v0.1.0 release baseline to the released v0.2 contract set.
   - Update this doc when the v0.2 feat order, scope, or compatibility strategy changes.
   - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 ---
@@ -15,7 +15,9 @@ sop:
 
 The repo's earlier planning docs sometimes call this baseline "v1" in the sense of "first completed implementation scope". For release and migration work, treat the Git tag `v0.1.0` as the source of truth.
 
-`v0.2` is planned as a contract upgrade release. It is not mainly about adding more shell syntax. The main change is that `simsh` will move from a one-shot runtime with text-first results to a session-aware runtime with structured results, execution traces, and explicit adapter lifecycle seams.
+`0.2.0` is the released contract-upgrade baseline. It is not mainly about adding more shell syntax. The main change is that `simsh` moved from a one-shot runtime with text-first results toward a session-aware runtime with structured results, execution traces, and explicit adapter lifecycle seams.
+
+Current `main` is post-`0.2.0` hardening and evidence work. Use tag `0.2.0` when you need the exact released contract baseline; use `main` when you want later builtin, mount, and benchmark improvements on top of that baseline.
 
 ## Who Should Read This
 
@@ -31,9 +33,9 @@ The repo's earlier planning docs sometimes call this baseline "v1" in the sense 
 - Path metadata stays a first-class contract; v0.2 builds on it rather than replacing it.
 - One-shot execution remains supported as an ephemeral execution path even after session support lands.
 
-## What Changes in v0.2
+## Released v0.2 Contract Set
 
-The target v0.2 contract set is driven by the March 1 feat batch:
+The released v0.2 contract set is driven by the March 1 feat batch:
 
 1. first-class session lifecycle and policy ceiling
 2. structured `ExecutionResult` as the core result SSOT
@@ -177,14 +179,14 @@ Migration actions:
 
 Do not invert this order by teaching adapters to depend on trace or session behavior that the runtime core has not stabilized yet.
 
-## Release Checklist for v0.2
+## Released v0.2 Gate
 
 - session lifecycle and policy ceiling contract is implemented and tested
 - structured result is the runtime SSOT
 - trace fields cover read/write/deny/timing/resource cases
 - adapter lifecycle hooks are explicit and documented
 - one reference adapter-backed workload validates the seam end to end
-- migration notes are updated from "planned" to "released behavior"
+- migration notes reflect released behavior rather than planned behavior
 
 ## Decision Rule
 
