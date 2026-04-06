@@ -16,9 +16,11 @@ It is not a fit when you need broad POSIX compatibility, VM-grade isolation, or 
 
 ## Release Status
 
-The latest released line in this repository is `v0.2.x`, with `v0.2.4` as the most recent tag. Current `main` should be read as the opening stretch toward `v0.3.x`, not as another small `0.2.x` maintenance branch, so the docs on `main` now bias toward stronger harness positioning, sharper memory and mount guidance, and more direct benchmark evidence. The forward-looking upgrade guide for that line is [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md).
+The latest released line in this repository is `v0.2.x`, with `v0.2.4` as the most recent tag. Current `main` should be read as the closing stretch toward `v0.3.0`, not as another small `0.2.x` maintenance branch, so the docs on `main` now bias toward stronger harness positioning, sharper memory and mount guidance, and more direct benchmark evidence. The forward-looking upgrade guide for that line is [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md).
 
 The released `v0.2` contract line already covers session lifecycle, structured execution results, execution traces, and adapter-backed seam validation. Current `main` adds post-`v0.2.4` hardening and evidence work, especially around builtin ACI, mount capability dispatch, benchmark refresh, and paired uplift proof. The project is still experimental in product positioning, but that is an expectation-setting statement rather than a claim that the current tree lacks tests, benchmarks, or runtime discipline.
+
+The explicit repository closeout checklist for the upcoming line lives in [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md).
 
 ## Quick Start
 
@@ -147,7 +149,7 @@ If a semantic change only exists in one entry surface, it is usually in the wron
 
 The repository keeps three benchmark layers because they answer different questions, and the current evidence is strong enough that it should be surfaced rather than hidden in subdirectories.
 
-The checked-in native reference suite currently passes all configured gates: `trace_completeness=1.0`, `session_success=1.0`, `reviewable_patch_latency_ms=216`, and `async_completion_success=1.0`. The checked-in paired uplift proof is also directionally strong: on the current three-task manifest, full `simsh` succeeds `3/3` while the thinner baseline succeeds `2/3`, with `0` retries vs `3`, `0` misunderstandings vs `3`, and `149` observation tokens vs `3826`. Those numbers are not a cross-project leaderboard claim, but they are repo-local proof that the kernel is reducing wasted model work and making the sandbox easier for a large model to use correctly.
+The checked-in native reference suite currently passes all configured gates: `trace_completeness=1.0`, `session_success=1.0`, `reviewable_patch_latency_ms=25`, and `async_completion_success=1.0`. The checked-in paired uplift proof is also directionally strong: on the current three-task manifest, full `simsh` succeeds `3/3` while the thinner baseline succeeds `2/3`, with `0` retries vs `3`, `0` misunderstandings vs `3`, and `149` observation tokens vs `3826`. Those numbers are not a cross-project leaderboard claim, but they are repo-local proof that the kernel is reducing wasted model work and making the sandbox easier for a large model to use correctly.
 
 [`benchmarks/simsh_native_reference/README.md`](benchmarks/simsh_native_reference/README.md) is the native proof layer. It answers whether the kernel supports realistic agent file workflows well enough to justify the abstraction, not only the unit tests.
 
@@ -172,6 +174,7 @@ make benchmark-uplift
 - [`docs/architecture-overview.md`](docs/architecture-overview.md): architecture narrative in kernel-first order
 - [`docs/notes-requirements.md`](docs/notes-requirements.md): current cross-cutting requirements
 - [`docs/notes-builtin-aci-review.md`](docs/notes-builtin-aci-review.md): builtin UX and output-contract rationale
+- [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md): current release-closeout checklist and evidence snapshot
 
 ### Integration And Runtime Contracts
 
@@ -182,6 +185,7 @@ make benchmark-uplift
 - [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md): high-performance mount design and capability dispatch
 - [`docs/notes-v0-1-0-to-v0-2-migration.md`](docs/notes-v0-1-0-to-v0-2-migration.md): migration guide from `v0.1.0` to the released `v0.2` contract line
 - [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md): migration guide from the `v0.2.x` release line to the planned `v0.3.0` line
+- [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md): current closeout checklist and cut criteria for the `v0.3.0` line
 
 ### Historical Context
 

@@ -4,7 +4,7 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## Update Requirements
 - When a document with SOP frontmatter changes, regenerate this file and commit the result:
-  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="<path-to-bagakit-living-docs-skill>"`
+  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="${BAGAKIT_LIVING_DOCS_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-living-docs}"`
   - `sh "$BAGAKIT_LIVING_DOCS_SKILL_DIR/scripts/living-docs-generate-sop.sh" .`
 - Add new SOP items by updating the `sop` list in the source document frontmatter.
 - Keep SOP items small and actionable; use the source document for details.
@@ -137,6 +137,12 @@ Source: `docs/notes-v0-1-0-to-v0-2-migration.md`
 Source: `docs/notes-v0-2-x-to-v0-3-0-migration.md`
 - Read this doc before upgrading integrations from the v0.2.x release line to the planned v0.3.0 line.
 - Update this doc when the v0.3.0 scope, compatibility strategy, or release gates change.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### v0.3.0 Release Readiness
+Source: `docs/notes-v0-3-0-release-readiness.md`
+- Read this doc before cutting the v0.3.0 line or claiming the repository is release-ready.
+- Update this doc when the v0.3.0 closeout checklist, evidence set, or cut criteria change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Execute Preflight Performance References

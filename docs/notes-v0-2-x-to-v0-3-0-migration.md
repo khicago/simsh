@@ -197,16 +197,20 @@ Before cutting `v0.3.0`, the repo should satisfy all of these:
 - release docs and migration docs are aligned with the actual version line
 - benchmark evidence is current enough to support the release story
 
-## Current Closeout Order
+The checked-in closeout status for current `main` now lives in:
 
-Given the current `main` state, the remaining closeout order should be:
+- `docs/notes-v0-3-0-release-readiness.md`
+
+## Current Closeout Status
+
+Given the current `main` state, the release-closeout sequence is:
 
 1. keep execution SSOT aligned with the actual completed benchmark/evidence waves;
 2. keep the newly proven `remote_high_latency` fail-closed contract in sync across docs, adapters, and tests;
-3. then do the final `v0.3.0` release-readiness closeout around docs, migration guidance, and current benchmark evidence.
+3. keep the release-closeout note current enough that cutting `v0.3.0` is a deliberate release action rather than another planning pass.
 
-This order matters.
-If step 2 drifts, the release gate would fall back to documented mount intent instead of maintained proof.
+That sequence is now closed in the repository.
+If step 2 drifts later, the release gate would fall back to documented mount intent instead of maintained proof.
 
 ## Decision Rule
 

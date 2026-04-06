@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-06T09:05:00Z
+- Updated At (UTC): 2026-04-06T09:15:00Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,17 +14,17 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-031: remote_high_latency fail-closed proof` is now complete, and the recommended next wave is `K-032: v0.3.0 release-readiness closeout`. Long-run should remain explicitly idle until that next manual row is deliberately created.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-032: v0.3.0 release-readiness closeout` is now complete. The repository is explicitly idle again; the next action is a deliberate `v0.3.0` release cut or a separately chosen post-release wave rather than another implicit kernel item.
 
 ## Acceptance Criteria
 
 - [ ] Refresh long-run rows before using `ralphloop` again.
-- [ ] Keep handoff aligned with `next-action.json` while the current fail-closed proof slice is fully closed.
+- [ ] Keep handoff aligned with `next-action.json` while the current release-closeout slice is fully closed.
 
 ## Execution Plan
 
 1. Keep long-run explicitly idle until the next row is deliberately created.
-2. When the next slice is selected, reopen handoff with that new row instead of pointing at the closed fail-closed proof feat.
+2. When a future slice is selected, reopen handoff with that new row instead of pointing at the closed release-closeout feat.
 3. Do not let handoff drift from `next-action.json` while work proceeds through feat-task harness.
 
 ## Files To Touch
@@ -47,16 +47,16 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: `K-031: remote_high_latency fail-closed proof` is complete. The repository now has direct contract, engine, and builtin proof that high-latency mounts refuse missing critical capabilities instead of silently degrading into fanout-heavy fallback behavior. The recommended next wave is `K-032: v0.3.0 release-readiness closeout`, but no new row is active yet.
-- Tests: `go test ./pkg/contract ./pkg/engine ./pkg/builtin ./pkg/mount -count=1`, `go test ./...`, and `make check`.
+- Summary: `K-032: v0.3.0 release-readiness closeout` is complete. The repository now has an explicit release-readiness note, refreshed benchmark evidence, aligned migration/docs state, and no additional in-repo kernel wave is required before a deliberate `v0.3.0` cut.
+- Tests: `make benchmark-refresh`, `make benchmark-uplift`, `go test ./...`, and `make check`.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-031` is closed and the repo is explicitly idle with `K-032` recommended as the next wave.
-- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-031 fail-closed proof landed | K-032 recommended but not started; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-032` is closed and the repo is explicitly idle with release cut as the next deliberate action instead of another implicit kernel wave.
+- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-032 release closeout landed | repo ready for deliberate v0.3.0 cut; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

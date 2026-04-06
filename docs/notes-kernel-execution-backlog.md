@@ -979,7 +979,7 @@ Optional but recommended:
 
 ### K-032: Close out v0.3.0 release readiness
 - Feat: `f-20260406-v0-3-0-release-readiness-closeout`
-- Status: in_progress
+- Status: done
 - Why now: once `K-031` removes the largest remaining release-gate ambiguity, the repo should explicitly close the `v0.3.0` line instead of letting docs, evidence freshness, and migration guidance drift independently.
 - Kernel invariant: release closeout should align existing contracts, docs, evidence, and versioning; it should not introduce a new feature wave under the label of “release work.”
 - Proposed scope:
@@ -1005,6 +1005,15 @@ Optional but recommended:
   - README, migration docs, backlog, and handoff all describe the same current release line and evidence stack.
   - Checked-in benchmark evidence has been refreshed through the canonical refresh commands.
   - The slice leaves the repo in a state where cutting `v0.3.0` is a deliberate release action rather than another planning exercise.
+- Notes:
+  - The checked-in closeout artifact is `docs/notes-v0-3-0-release-readiness.md`.
+  - Current refreshed evidence is anchored by:
+    - `benchmarks/simsh_native_reference/reports/baseline-20260404.json`
+    - `benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.json`
+    - `benchmarks/paired_uplift/reports/raw-baseline-20260406.json`
+    - `benchmarks/paired_uplift/reports/paired-baseline-20260406.json`
+    - `benchmarks/paired_uplift/reports/paired-baseline-20260406.failures.json`
+  - After this slice, the next action is a deliberate `v0.3.0` release cut or a separately chosen post-release engineering wave, not another implicit closeout item.
 - Non-goals:
   - Do not open a new runtime noun or benchmark family while doing release closeout.
   - Do not change benchmark semantics just to improve release optics.
