@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Add fail-closed proof and docs for remote_high_latency mounts
+- [x] T-001 Add fail-closed proof and docs for remote_high_latency mounts
 
 ## Status Legend
 - todo

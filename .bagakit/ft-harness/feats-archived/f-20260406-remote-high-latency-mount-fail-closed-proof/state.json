@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "feat_id": "f-20260406-remote-high-latency-mount-fail-closed-proof",
+  "title": "Remote high-latency mount fail-closed proof",
+  "slug": "remote-high-latency-mount-fail-closed-proof",
+  "goal": "Prove that remote_high_latency mounts explicitly refuse missing critical capabilities instead of silently degrading into fanout-heavy fallback behavior, and document the operator-facing contract.",
+  "status": "archived",
+  "workspace_mode": "current_tree",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "created_at": "2026-04-06T08:40:19Z",
+  "updated_at": "2026-04-06T08:59:00Z",
+  "current_task_id": null,
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 2
+  },
+  "gate": {
+    "last_result": "pass",
+    "last_task_id": "T-001",
+    "last_checked_at": "2026-04-06T08:58:46Z",
+    "last_check_commands": [
+      {
+        "command": "go test ./...",
+        "exit_code": 0,
+        "status": "pass"
+      }
+    ],
+    "last_log_path": ".bagakit/ft-harness/feats/f-20260406-remote-high-latency-mount-fail-closed-proof/artifacts/gate-20260406T085846Z.log"
+  },
+  "history": [
+    {
+      "at": "2026-04-06T08:40:19Z",
+      "action": "feat_created",
+      "detail": "workspace_mode=current_tree; base_ref=main; root_branch=main"
+    },
+    {
+      "at": "2026-04-06T08:43:22Z",
+      "action": "task_started",
+      "detail": "T-001"
+    },
+    {
+      "at": "2026-04-06T08:58:38Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-04-06T08:58:46Z",
+      "action": "task_gate",
+      "detail": "T-001 => pass"
+    },
+    {
+      "at": "2026-04-06T08:59:00Z",
+      "action": "task_finished",
+      "detail": "T-001 => done"
+    },
+    {
+      "at": "2026-04-06T08:59:00Z",
+      "action": "feat_archived",
+      "detail": "moved + cleaned"
+    }
+  ],
+  "closed_from_status": "done",
+  "archived_at": "2026-04-06T08:59:00Z",
+  "archived_cleanup": {
+    "workspace_mode": "current_tree",
+    "base_ref": "main",
+    "branch_merged": false,
+    "worktree_removed": false,
+    "worktree_pruned": false,
+    "branch_deleted": false,
+    "note": "worktree mode removes/prunes worktree and deletes merged branch; current_tree/proposal_only only archive feat metadata"
+  }
+}
