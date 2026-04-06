@@ -440,15 +440,6 @@ func mountPatternHasUpper(pattern string) bool {
 	return false
 }
 
-func mountSearchHasMatch(raw string, match func(string) bool) bool {
-	for _, line := range splitContractRawLines(raw) {
-		if match(line) {
-			return true
-		}
-	}
-	return false
-}
-
 func mountSearchRecords(raw string, match func(string) bool, before int, after int, filePath string) []SearchRecord {
 	lines := splitContractRawLines(raw)
 	if len(lines) == 0 {

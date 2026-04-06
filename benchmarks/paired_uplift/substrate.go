@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	benchmarkscenarios "github.com/khicago/simsh/benchmarks/internal/scenarios"
 	"github.com/khicago/simsh/pkg/builtin"
 	"github.com/khicago/simsh/pkg/contract"
 	"github.com/khicago/simsh/pkg/engine"
@@ -145,8 +144,4 @@ func scenarioIsSupported(id string) bool {
 		}
 	}
 	return false
-}
-
-func lookupScenarioIdentity(id string) (benchmarkscenarios.Identity, bool) {
-	return benchmarkscenarios.LookupNativeReferenceIdentity(id)
 }
