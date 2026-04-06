@@ -96,6 +96,7 @@ Examples of acceptable baseline narrowing:
 
 - no `json` inspector
 - no `rg` search front door
+- no session-scoped cwd continuity if that is one of the runtime surfaces under test
 - no other specialized query conveniences that the paired task explicitly pressures
 
 Examples of unacceptable baseline drift:
@@ -244,6 +245,9 @@ The purpose is:
 - where did it save retries
 - where did it save observation budget
 - where did it avoid environment confusion
+
+These uplift metrics are downstream proof metrics.
+They do not replace the native benchmark gate set; they complement it.
 
 ## Failure Taxonomy Contract
 

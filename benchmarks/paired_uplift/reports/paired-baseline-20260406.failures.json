@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-06T05:47:13.626809Z",
+  "source_snapshot_path": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json",
+  "entries": [
+    {
+      "bucket": "environment_misunderstanding",
+      "runtime": "thin_core_stateless",
+      "kind": "missing_json_query_surface",
+      "count": 1,
+      "scenario_ids": [
+        "trace_consumable_planning"
+      ]
+    },
+    {
+      "bucket": "environment_misunderstanding",
+      "runtime": "thin_core_stateless",
+      "kind": "missing_rg_front_door",
+      "count": 1,
+      "scenario_ids": [
+        "inspect_edit_write_loop"
+      ]
+    },
+    {
+      "bucket": "environment_misunderstanding",
+      "runtime": "thin_core_stateless",
+      "kind": "session_cwd_not_persistent",
+      "count": 1,
+      "scenario_ids": [
+        "relative_navigation_session"
+      ]
+    },
+    {
+      "bucket": "failure",
+      "runtime": "thin_core_stateless",
+      "kind": "budget_exhausted_after_fallback",
+      "count": 1,
+      "scenario_ids": [
+        "trace_consumable_planning"
+      ]
+    }
+  ]
+}

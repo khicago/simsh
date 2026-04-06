@@ -1,39 +1,94 @@
 package builtin
 
-import "github.com/khicago/simsh/pkg/engine"
+import (
+	"fmt"
+	"strings"
+
+	"github.com/khicago/simsh/pkg/engine"
+)
 
 func RegisterDefaults(reg *engine.Registry) {
 	if reg == nil {
 		return
 	}
-	reg.MustRegister(applyCommandDocContract(specLS()))
-	reg.MustRegister(applyCommandDocContract(specTree()))
-	reg.MustRegister(applyCommandDocContract(specCd()))
-	reg.MustRegister(applyCommandDocContract(specPwd()))
-	reg.MustRegister(applyCommandDocContract(specEnv()))
-	reg.MustRegister(applyCommandDocContract(specFrontmatter()))
-	reg.MustRegister(applyCommandDocContract(specJSON()))
-	reg.MustRegister(applyCommandDocContract(specCat()))
-	reg.MustRegister(applyCommandDocContract(specHead()))
-	reg.MustRegister(applyCommandDocContract(specTail()))
-	reg.MustRegister(applyCommandDocContract(specGrep()))
-	reg.MustRegister(applyCommandDocContract(specRG()))
-	reg.MustRegister(applyCommandDocContract(specFind()))
-	reg.MustRegister(applyCommandDocContract(specWhich()))
-	reg.MustRegister(applyCommandDocContract(specType()))
-	reg.MustRegister(applyCommandDocContract(specEcho()))
-	reg.MustRegister(applyCommandDocContract(specTee()))
-	reg.MustRegister(applyCommandDocContract(specSed()))
-	reg.MustRegister(applyCommandDocContract(specMan()))
-	reg.MustRegister(applyCommandDocContract(specDate()))
-	reg.MustRegister(applyCommandDocContract(specMkdir()))
-	reg.MustRegister(applyCommandDocContract(specCp()))
-	reg.MustRegister(applyCommandDocContract(specMv()))
-	reg.MustRegister(applyCommandDocContract(specRm()))
-	reg.MustRegister(applyCommandDocContract(specRmdir()))
-	reg.MustRegister(applyCommandDocContract(specTouch()))
-	reg.MustRegister(applyCommandDocContract(specWc()))
-	reg.MustRegister(applyCommandDocContract(specSort()))
-	reg.MustRegister(applyCommandDocContract(specUniq()))
-	reg.MustRegister(applyCommandDocContract(specDiff()))
+	for _, spec := range defaultCommandSpecs() {
+		reg.MustRegister(spec)
+	}
+}
+
+func RegisterDefaultSubset(reg *engine.Registry, names []string) error {
+	if reg == nil {
+		return nil
+	}
+	allowed := make(map[string]struct{}, len(names))
+	for _, name := range names {
+		trimmed := normalizeDefaultCommandName(name)
+		if trimmed == "" {
+			continue
+		}
+		allowed[trimmed] = struct{}{}
+	}
+	if len(allowed) == 0 {
+		return nil
+	}
+	registered := make(map[string]struct{}, len(allowed))
+	for _, spec := range defaultCommandSpecs() {
+		if _, ok := allowed[spec.Name]; !ok {
+			continue
+		}
+		if err := reg.Register(spec); err != nil {
+			return err
+		}
+		registered[spec.Name] = struct{}{}
+	}
+	for name := range allowed {
+		if _, ok := registered[name]; ok {
+			continue
+		}
+		return engineErrf("unknown builtin command %q", name)
+	}
+	return nil
+}
+
+func defaultCommandSpecs() []engine.CommandSpec {
+	return []engine.CommandSpec{
+		applyCommandDocContract(specLS()),
+		applyCommandDocContract(specTree()),
+		applyCommandDocContract(specCd()),
+		applyCommandDocContract(specPwd()),
+		applyCommandDocContract(specEnv()),
+		applyCommandDocContract(specFrontmatter()),
+		applyCommandDocContract(specJSON()),
+		applyCommandDocContract(specCat()),
+		applyCommandDocContract(specHead()),
+		applyCommandDocContract(specTail()),
+		applyCommandDocContract(specGrep()),
+		applyCommandDocContract(specRG()),
+		applyCommandDocContract(specFind()),
+		applyCommandDocContract(specWhich()),
+		applyCommandDocContract(specType()),
+		applyCommandDocContract(specEcho()),
+		applyCommandDocContract(specTee()),
+		applyCommandDocContract(specSed()),
+		applyCommandDocContract(specMan()),
+		applyCommandDocContract(specDate()),
+		applyCommandDocContract(specMkdir()),
+		applyCommandDocContract(specCp()),
+		applyCommandDocContract(specMv()),
+		applyCommandDocContract(specRm()),
+		applyCommandDocContract(specRmdir()),
+		applyCommandDocContract(specTouch()),
+		applyCommandDocContract(specWc()),
+		applyCommandDocContract(specSort()),
+		applyCommandDocContract(specUniq()),
+		applyCommandDocContract(specDiff()),
+	}
+}
+
+func normalizeDefaultCommandName(name string) string {
+	return strings.TrimSpace(name)
+}
+
+func engineErrf(format string, args ...any) error {
+	return fmt.Errorf(format, args...)
 }

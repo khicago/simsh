@@ -897,7 +897,7 @@ Optional but recommended:
 
 ### K-030: Build a paired A/B uplift proof harness
 - Feat: `f-20260406-paired-ab-uplift-proof-harness`
-- Status: in_progress
+- Status: done
 - Why now: `K-029` gives the repository a repeatable artifact-refresh path. The next highest-value evidence question is no longer freshness, but whether `simsh` measurably improves agent outcomes relative to a thinner baseline runtime under controlled paired tasks.
 - Kernel invariant: uplift proof should hold the agent, task set, and budgets fixed while changing only the runtime substrate; it must not collapse into leaderboard chasing or uncontrolled benchmark comparisons.
 - Proposed scope:
@@ -922,6 +922,17 @@ Optional but recommended:
   - The harness emits one machine-readable aggregate artifact and one separate failure-taxonomy artifact.
   - The first cut keeps the baseline repo-controlled and deterministic instead of relying on ambient host-shell command availability.
   - Docs explain the paired harness as a proof layer downstream from the native benchmark suite and the external-comparison layers, not as a replacement for them.
+- Notes:
+  - The first checked-in task manifest stays narrow and reuses canonical native scenario ids: `relative_navigation_session`, `inspect_edit_write_loop`, and `trace_consumable_planning`.
+  - The first baseline substrate is `thin_core_stateless`: a repo-controlled thin runtime that intentionally omits `json`, `rg`, and session-scoped cwd continuity instead of depending on ambient host-shell command availability.
+  - The paired harness keeps the same freshness split as the existing benchmark layers:
+    - raw paired runs live in `benchmarks/paired_uplift/reports/raw-baseline-20260406.json`
+    - aggregate artifact, markdown summary, and failure taxonomy are deterministic downstream renderings of that snapshot
+  - The first checked-in downstream outputs are:
+    - `benchmarks/paired_uplift/reports/paired-baseline-20260406.json`
+    - `benchmarks/paired_uplift/reports/paired-baseline-20260406.md`
+    - `benchmarks/paired_uplift/reports/paired-baseline-20260406.failures.json`
+  - Validated with `go test ./benchmarks/paired_uplift -count=1` and `go run ./benchmarks/paired_uplift`.
 - Non-goals:
   - Do not claim cross-project leaderboard parity yet.
   - Do not change native benchmark semantics just to improve the A/B result.

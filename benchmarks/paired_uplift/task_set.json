@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "comparison_rule": "same_agent_same_budget_only_substrate_changes",
+  "agent_id": "paired_probe_agent_v1",
+  "baseline_substrate": "thin_core_stateless",
+  "simsh_substrate": "simsh_full_sessioned",
+  "tasks": [
+    {
+      "scenario_id": "relative_navigation_session",
+      "pair_seed": 20260406,
+      "run_order": "BA",
+      "max_steps": 4,
+      "max_observation_tokens": 96,
+      "expected_outputs": [
+        "stdout:hello"
+      ],
+      "why_selected": "Smallest paired task that directly pressures session-local cwd continuity and relative-path feedback."
+    },
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "pair_seed": 20260407,
+      "run_order": "AB",
+      "max_steps": 4,
+      "max_observation_tokens": 128,
+      "expected_outputs": [
+        "stdout:DONE: tightened contract"
+      ],
+      "why_selected": "Strongest current inspect/edit/write slice for measuring whether the rg-style search front door removes fallback retries."
+    },
+    {
+      "scenario_id": "trace_consumable_planning",
+      "pair_seed": 20260408,
+      "run_order": "BA",
+      "max_steps": 4,
+      "max_observation_tokens": 320,
+      "expected_outputs": [
+        "/task_outputs/planning-summary.txt"
+      ],
+      "why_selected": "Pressures narrow JSON query tooling under a fixed observation budget so the harness can measure fallback cost rather than only final correctness."
+    }
+  ],
+  "non_goals": [
+    "Do not adopt Terminal-Bench wholesale.",
+    "Do not introduce host-shell drift into the paired baseline.",
+    "Do not widen the first paired task set beyond the narrow runtime-proof slice."
+  ]
+}

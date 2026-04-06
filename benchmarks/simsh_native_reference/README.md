@@ -38,6 +38,7 @@ External benchmark mapping:
 - Stable native scenario ids and categories remain the primary SSOT.
 - External mapping artifacts classify each native scenario as `as_is`, `translated`, or `excluded` for families such as Terminal-Bench and SWE-bench-Live without mutating the native suite to look more benchmark-compatible.
 - `benchmarks/terminal_bench_compare/` is the next downstream layer: a lightweight comparison/export prototype that consumes the native report plus Terminal-Bench mapping artifacts without becoming a second benchmark suite.
+- `benchmarks/paired_uplift/` is the next proof layer after that: it holds the paired task manifest, budgets, and deterministic probe agent fixed while comparing full `simsh` against one repo-controlled thin baseline substrate.
 
 Run it with:
 
@@ -61,6 +62,12 @@ Refresh the native baseline and downstream Terminal-Bench comparison artifacts w
 
 ```bash
 make benchmark-refresh
+```
+
+Run the paired uplift proof harness with:
+
+```bash
+make benchmark-uplift
 ```
 
 This checked-in baseline is a freshness snapshot, not a byte-stable golden file; `generated_at` and duration-derived fields are expected to change when refreshed.

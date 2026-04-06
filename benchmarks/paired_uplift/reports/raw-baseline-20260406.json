@@ -1,0 +1,396 @@
+{
+  "version": 1,
+  "generated_at": "2026-04-06T05:47:13.626809Z",
+  "comparison_rule": "same_agent_same_budget_only_substrate_changes",
+  "task_manifest_path": "benchmarks/paired_uplift/task_set.json",
+  "agent_id": "paired_probe_agent_v1",
+  "baseline_substrate": "thin_core_stateless",
+  "simsh_substrate": "simsh_full_sessioned",
+  "tasks": [
+    {
+      "scenario_id": "relative_navigation_session",
+      "category": "relative_path_navigation",
+      "task_shape": "session_local_navigation",
+      "summary": "Exercises session-scoped cwd changes, relative path traversal, and low-noise path feedback inside the default workspace.",
+      "truth_surfaces": [
+        "virtual_cwd",
+        "relative_path_resolution",
+        "execution_trace"
+      ],
+      "pair_seed": 20260406,
+      "run_order": "BA",
+      "agent_id": "paired_probe_agent_v1",
+      "budget": {
+        "max_steps": 4,
+        "max_observation_tokens": 96
+      },
+      "expected_outputs": [
+        "stdout:hello"
+      ],
+      "why_selected": "Smallest paired task that directly pressures session-local cwd continuity and relative-path feedback.",
+      "evidence_refs": [
+        "benchmarks/paired_uplift/task_set.json#relative_navigation_session",
+        "benchmarks/external_mapping/scenario_inventory.json#relative_navigation_session"
+      ],
+      "simsh": {
+        "substrate": "simsh_full_sessioned",
+        "success": true,
+        "duration_ms": 2,
+        "steps": 3,
+        "retries": 0,
+        "wasted_steps": 0,
+        "environment_misunderstandings": 0,
+        "observation_bytes": 26,
+        "approx_observation_tokens": 8,
+        "wasted_observation_tokens": 0,
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "setup_and_cd",
+            "command": "mkdir -p /task_outputs/project/docs \u0026\u0026 echo hello \u003e /task_outputs/project/docs/readme.md \u0026\u0026 cd /task_outputs/project",
+            "exit_code": 0,
+            "observation_bytes": 0,
+            "approx_observation_tokens": 0,
+            "classification": "progress",
+            "note": "seed task output and enter project directory"
+          },
+          {
+            "index": 2,
+            "label": "check_pwd",
+            "command": "pwd",
+            "exit_code": 0,
+            "observation_bytes": 21,
+            "approx_observation_tokens": 6,
+            "classification": "progress",
+            "note": "cwd persisted across steps"
+          },
+          {
+            "index": 3,
+            "label": "read_document",
+            "command": "cat docs/readme.md",
+            "exit_code": 0,
+            "observation_bytes": 5,
+            "approx_observation_tokens": 2,
+            "classification": "progress",
+            "note": "final document read succeeded"
+          }
+        ],
+        "notes": [
+          "relative navigation task completed"
+        ]
+      },
+      "baseline": {
+        "substrate": "thin_core_stateless",
+        "success": true,
+        "duration_ms": 2,
+        "steps": 3,
+        "retries": 1,
+        "wasted_steps": 1,
+        "environment_misunderstandings": 1,
+        "observation_bytes": 6,
+        "approx_observation_tokens": 3,
+        "wasted_observation_tokens": 1,
+        "last_misunderstanding_kind": "session_cwd_not_persistent",
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "setup_and_cd",
+            "command": "mkdir -p /task_outputs/project/docs \u0026\u0026 echo hello \u003e /task_outputs/project/docs/readme.md \u0026\u0026 cd /task_outputs/project",
+            "exit_code": 0,
+            "observation_bytes": 0,
+            "approx_observation_tokens": 0,
+            "classification": "progress",
+            "note": "seed task output and enter project directory"
+          },
+          {
+            "index": 2,
+            "label": "check_pwd",
+            "command": "pwd",
+            "exit_code": 0,
+            "observation_bytes": 1,
+            "approx_observation_tokens": 1,
+            "classification": "environment_misunderstanding",
+            "retry": true,
+            "wasted": true,
+            "environment_misunderstood": true,
+            "misunderstanding_kind": "session_cwd_not_persistent",
+            "note": "cwd did not persist; switching to absolute-path fallback"
+          },
+          {
+            "index": 3,
+            "label": "read_document",
+            "command": "cat /task_outputs/project/docs/readme.md",
+            "exit_code": 0,
+            "observation_bytes": 5,
+            "approx_observation_tokens": 2,
+            "classification": "progress",
+            "note": "final document read succeeded"
+          }
+        ],
+        "notes": [
+          "relative navigation task completed"
+        ]
+      }
+    },
+    {
+      "scenario_id": "inspect_edit_write_loop",
+      "category": "file_inspect_edit_write_loops",
+      "task_shape": "inspect_edit_write_patch_workflow",
+      "summary": "Exercises the common read-edit-write loop for file inspection, mutation, and patch-style iteration.",
+      "truth_surfaces": [
+        "file_mutation",
+        "execution_trace",
+        "session_continuity"
+      ],
+      "pair_seed": 20260407,
+      "run_order": "AB",
+      "agent_id": "paired_probe_agent_v1",
+      "budget": {
+        "max_steps": 4,
+        "max_observation_tokens": 128
+      },
+      "expected_outputs": [
+        "stdout:DONE: tightened contract"
+      ],
+      "why_selected": "Strongest current inspect/edit/write slice for measuring whether the rg-style search front door removes fallback retries.",
+      "evidence_refs": [
+        "benchmarks/paired_uplift/task_set.json#inspect_edit_write_loop",
+        "benchmarks/external_mapping/scenario_inventory.json#inspect_edit_write_loop"
+      ],
+      "simsh": {
+        "substrate": "simsh_full_sessioned",
+        "success": true,
+        "duration_ms": 4,
+        "steps": 3,
+        "retries": 0,
+        "wasted_steps": 0,
+        "environment_misunderstandings": 0,
+        "observation_bytes": 181,
+        "approx_observation_tokens": 46,
+        "wasted_observation_tokens": 0,
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "search_target",
+            "command": "rg --fmt jsonl \"TODO: tighten contract\" /task_outputs/project",
+            "exit_code": 0,
+            "observation_bytes": 103,
+            "approx_observation_tokens": 26,
+            "classification": "progress",
+            "note": "rg located the target file"
+          },
+          {
+            "index": 2,
+            "label": "edit_target",
+            "command": "sed -i 's/TODO: tighten contract/DONE: tightened contract/' /task_outputs/project/checklist.md",
+            "exit_code": 0,
+            "observation_bytes": 0,
+            "approx_observation_tokens": 0,
+            "classification": "progress",
+            "note": "edit command completed"
+          },
+          {
+            "index": 3,
+            "label": "read_target",
+            "command": "cat /task_outputs/project/checklist.md",
+            "exit_code": 0,
+            "observation_bytes": 78,
+            "approx_observation_tokens": 20,
+            "classification": "progress",
+            "note": "post-edit verification succeeded"
+          }
+        ],
+        "notes": [
+          "inspect/edit/write task completed"
+        ]
+      },
+      "baseline": {
+        "substrate": "thin_core_stateless",
+        "success": true,
+        "duration_ms": 3,
+        "steps": 4,
+        "retries": 1,
+        "wasted_steps": 1,
+        "environment_misunderstandings": 1,
+        "observation_bytes": 156,
+        "approx_observation_tokens": 41,
+        "wasted_observation_tokens": 5,
+        "last_misunderstanding_kind": "missing_rg_front_door",
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "search_target",
+            "command": "rg --fmt jsonl \"TODO: tighten contract\" /task_outputs/project",
+            "exit_code": 127,
+            "observation_bytes": 17,
+            "approx_observation_tokens": 5,
+            "classification": "environment_misunderstanding",
+            "retry": true,
+            "wasted": true,
+            "environment_misunderstood": true,
+            "misunderstanding_kind": "missing_rg_front_door",
+            "note": "rg is unavailable; falling back to grep -r"
+          },
+          {
+            "index": 2,
+            "label": "search_target_fallback",
+            "command": "grep -r \"TODO: tighten contract\" /task_outputs/project",
+            "exit_code": 0,
+            "observation_bytes": 61,
+            "approx_observation_tokens": 16,
+            "classification": "progress",
+            "note": "grep fallback located the target file"
+          },
+          {
+            "index": 3,
+            "label": "edit_target",
+            "command": "sed -i 's/TODO: tighten contract/DONE: tightened contract/' /task_outputs/project/checklist.md",
+            "exit_code": 0,
+            "observation_bytes": 0,
+            "approx_observation_tokens": 0,
+            "classification": "progress",
+            "note": "edit command completed"
+          },
+          {
+            "index": 4,
+            "label": "read_target",
+            "command": "cat /task_outputs/project/checklist.md",
+            "exit_code": 0,
+            "observation_bytes": 78,
+            "approx_observation_tokens": 20,
+            "classification": "progress",
+            "note": "post-edit verification succeeded"
+          }
+        ],
+        "notes": [
+          "inspect/edit/write task completed"
+        ]
+      }
+    },
+    {
+      "scenario_id": "trace_consumable_planning",
+      "category": "trace_consumable_planning",
+      "task_shape": "trace_to_planning_feedback",
+      "summary": "Exercises whether structured trace and result surfaces are legible enough to drive downstream planning behavior.",
+      "truth_surfaces": [
+        "execution_trace",
+        "structured_result_feedback"
+      ],
+      "pair_seed": 20260408,
+      "run_order": "BA",
+      "agent_id": "paired_probe_agent_v1",
+      "budget": {
+        "max_steps": 4,
+        "max_observation_tokens": 320
+      },
+      "expected_outputs": [
+        "/task_outputs/planning-summary.txt"
+      ],
+      "why_selected": "Pressures narrow JSON query tooling under a fixed observation budget so the harness can measure fallback cost rather than only final correctness.",
+      "evidence_refs": [
+        "benchmarks/paired_uplift/task_set.json#trace_consumable_planning",
+        "benchmarks/external_mapping/scenario_inventory.json#trace_consumable_planning"
+      ],
+      "simsh": {
+        "substrate": "simsh_full_sessioned",
+        "success": true,
+        "duration_ms": 3,
+        "steps": 4,
+        "retries": 0,
+        "wasted_steps": 0,
+        "environment_misunderstandings": 0,
+        "observation_bytes": 374,
+        "approx_observation_tokens": 95,
+        "wasted_observation_tokens": 0,
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "read_task_count",
+            "command": "json len --fmt json /knowledge_base/planning/tasks.json --path tasks",
+            "exit_code": 0,
+            "observation_bytes": 169,
+            "approx_observation_tokens": 43,
+            "classification": "progress",
+            "note": "json len yielded task count"
+          },
+          {
+            "index": 2,
+            "label": "read_first_task_fields",
+            "command": "json get --fmt jsonl /knowledge_base/planning/tasks.json --path tasks[0].owner --path tasks[0].status",
+            "exit_code": 0,
+            "observation_bytes": 174,
+            "approx_observation_tokens": 44,
+            "classification": "progress",
+            "note": "json get yielded first task fields"
+          },
+          {
+            "index": 3,
+            "label": "write_summary",
+            "command": "echo 'count=48 owner=ops status=ready' \u003e /task_outputs/planning-summary.txt",
+            "exit_code": 0,
+            "observation_bytes": 0,
+            "approx_observation_tokens": 0,
+            "classification": "progress",
+            "note": "summary write succeeded"
+          },
+          {
+            "index": 4,
+            "label": "read_summary",
+            "command": "cat /task_outputs/planning-summary.txt",
+            "exit_code": 0,
+            "observation_bytes": 31,
+            "approx_observation_tokens": 8,
+            "classification": "progress",
+            "note": "summary read succeeded"
+          }
+        ],
+        "notes": [
+          "trace-planning task completed"
+        ]
+      },
+      "baseline": {
+        "substrate": "thin_core_stateless",
+        "success": false,
+        "failure_kind": "budget_exhausted_after_fallback",
+        "duration_ms": 0,
+        "steps": 2,
+        "retries": 1,
+        "wasted_steps": 1,
+        "environment_misunderstandings": 1,
+        "observation_bytes": 15127,
+        "approx_observation_tokens": 3782,
+        "wasted_observation_tokens": 5,
+        "last_misunderstanding_kind": "missing_json_query_surface",
+        "steps_detail": [
+          {
+            "index": 1,
+            "label": "read_task_count",
+            "command": "json len --fmt json /knowledge_base/planning/tasks.json --path tasks",
+            "exit_code": 127,
+            "observation_bytes": 19,
+            "approx_observation_tokens": 5,
+            "classification": "environment_misunderstanding",
+            "retry": true,
+            "wasted": true,
+            "environment_misunderstood": true,
+            "misunderstanding_kind": "missing_json_query_surface",
+            "note": "json inspector is unavailable; falling back to full-file read"
+          },
+          {
+            "index": 2,
+            "label": "read_planning_fallback",
+            "command": "cat /knowledge_base/planning/tasks.json",
+            "exit_code": 0,
+            "observation_bytes": 15108,
+            "approx_observation_tokens": 3777,
+            "classification": "progress",
+            "note": "full-file fallback yielded planning facts"
+          }
+        ],
+        "notes": [
+          "observation budget exceeded: got 3782 tokens, limit 320"
+        ]
+      }
+    }
+  ]
+}
