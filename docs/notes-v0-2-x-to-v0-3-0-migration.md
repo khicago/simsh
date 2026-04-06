@@ -189,6 +189,17 @@ Before cutting `v0.3.0`, the repo should satisfy all of these:
 - release docs and migration docs are aligned with the actual version line
 - benchmark evidence is current enough to support the release story
 
+## Current Closeout Order
+
+Given the current `main` state, the remaining closeout order should be:
+
+1. keep execution SSOT aligned with the actual completed benchmark/evidence waves;
+2. prove that `remote_high_latency` mounts fail closed instead of silently fanning out when critical capabilities are absent;
+3. only then do the final `v0.3.0` release-readiness closeout around docs, migration guidance, and current benchmark evidence.
+
+This order matters.
+If step 2 is skipped, the release gate would still rely too heavily on documented mount intent instead of direct proof.
+
 ## Decision Rule
 
 If your integration only needs the stable session/result/trace contract line and does not care yet about stronger mount dispatch or agent-efficiency evidence, `v0.2.x` may still be enough.

@@ -940,6 +940,53 @@ Optional but recommended:
 - Rollback note:
   - If the slice starts depending on host-shell drift, benchmark-only product nouns, or uncontrolled task expansion, cut it back to one controlled baseline substrate, one small paired task set, and explicit per-run evidence only.
 
+### K-031: Prove remote_high_latency mounts fail closed instead of silently fanning out
+- Status: proposed
+- Why now: `K-030` closed the current benchmark-evidence question, so the next highest-value remaining release-gate risk is mount behavior under high latency. The architecture and migration docs already require `remote_high_latency` mounts to refuse or narrow scope when critical capabilities are missing, but the direct proof layer for those fail-closed paths is still too thin.
+- Kernel invariant: `remote_high_latency` mounts must not silently degrade into per-file or per-entry fanout when required capabilities are missing; refusal and scope-narrowing semantics must be explicit, testable, and user-visible.
+- Proposed scope:
+  - Add focused tests around `remote_high_latency` mount profiles in contract and engine dispatch layers.
+  - Cover the highest-fanout pressure points: entry listing, path enumeration, bulk read, content search, and mutation batching.
+  - Tighten user-facing usage/docs so adapter authors and runtime callers can tell when a mount must add a capability versus when the runtime will refuse.
+- Files to touch:
+  - `pkg/contract/*`
+  - `pkg/engine/*`
+  - selected builtin tests under `pkg/builtin/*_test.go`
+  - `docs/architecture-high-performance-mount-system.md`
+  - `docs/notes-v0-2-x-to-v0-3-0-migration.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `go test ./pkg/contract ./pkg/engine ./pkg/builtin ./pkg/mount -count=1`
+  - `go test ./...`
+  - `make check`
+- Done gate:
+  - Direct tests prove that `remote_high_latency` mounts refuse missing critical capabilities instead of falling back to fanout-heavy loops.
+  - The refusal paths cover at least path enumeration and bulk-read/search pressure, not only one narrow helper.
+  - Docs explain the fail-closed rule and the expected operator or adapter response when a capability is absent.
+  - No new optimistic fallback path is introduced for `remote_high_latency` mounts.
+- Non-goals:
+  - Do not implement a cache layer just to avoid proving the refusal semantics.
+  - Do not broaden the mount contract into a product-specific remote filesystem protocol.
+  - Do not weaken `local_fast` fallback behavior where it is still explicitly allowed and testable.
+- Rollback note:
+  - If the slice starts widening mount semantics instead of proving the existing contract, keep only the proof/doc tightening and move any broader mount-feature work into a separate feat.
+
+### K-032: Close out v0.3.0 release readiness
+- Status: proposed
+- Why now: once `K-031` removes the largest remaining release-gate ambiguity, the repo should explicitly close the `v0.3.0` line instead of letting docs, evidence freshness, and migration guidance drift independently.
+- Kernel invariant: release closeout should align existing contracts, docs, evidence, and versioning; it should not introduce a new feature wave under the label of “release work.”
+- Proposed scope:
+  - Refresh release-facing docs and migration guidance against the actual `main` contract set.
+  - Re-run and record the current benchmark and paired-uplift evidence needed for the release story.
+  - Produce one explicit release-readiness checklist or closeout note for the `v0.3.0` line.
+- Non-goals:
+  - Do not open a new runtime noun or benchmark family while doing release closeout.
+  - Do not change benchmark semantics just to improve release optics.
+  - Do not turn the release closeout into a generic project-roadmap rewrite.
+- Rollback note:
+  - If release closeout starts uncovering missing runtime proof rather than stale docs/evidence, stop and push that gap back into a bounded engineering feat first.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

@@ -2,7 +2,7 @@
 
 ## Run Metadata
 
-- Updated At (UTC): 2026-04-04T07:24:00Z
+- Updated At (UTC): 2026-04-06T08:38:14Z
 - Updated By: codex
 - Branch: main
 - Worktree (optional):
@@ -14,17 +14,17 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-029: automate Terminal-Bench comparison freshness` is now complete, and the recommended next wave is `K-030: paired A/B uplift proof harness`. Long-run should remain explicitly idle until that next manual row is deliberately created.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-030: paired A/B uplift proof harness` is now complete, and the recommended next wave is `K-031: remote_high_latency fail-closed proof`. Long-run should remain explicitly idle until that next manual row is deliberately created.
 
 ## Acceptance Criteria
 
 - [ ] Refresh long-run rows before using `ralphloop` again.
-- [ ] Keep handoff aligned with `next-action.json` while the current freshness-automation slice is fully closed.
+- [ ] Keep handoff aligned with `next-action.json` while the current paired-uplift slice is fully closed.
 
 ## Execution Plan
 
 1. Keep long-run explicitly idle until the next row is deliberately created.
-2. When the next slice is selected, reopen handoff with that new row instead of pointing at the closed benchmark-mapping feat.
+2. When the next slice is selected, reopen handoff with that new row instead of pointing at the closed paired-uplift feat.
 3. Do not let handoff drift from `next-action.json` while work proceeds through feat-task harness.
 
 ## Files To Touch
@@ -47,16 +47,16 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: `K-029: automate Terminal-Bench comparison freshness` is complete. The repository now has a deterministic refresh entrypoint for the checked-in native baseline and the checked-in Terminal-Bench comparison pair. The recommended next wave is `K-030: paired A/B uplift proof harness`, but no new row is active yet.
-- Tests: `go test ./benchmarks/... -count=1`, `go test ./...`, `make benchmark-refresh`, `make lint`, and `make check`.
+- Summary: `K-030: paired A/B uplift proof harness` is complete. The repository now has a checked-in paired A/B evidence layer on top of the native benchmark and Terminal-Bench comparison stack. The recommended next wave is `K-031: remote_high_latency fail-closed proof`, but no new row is active yet.
+- Tests: `go test ./benchmarks/paired_uplift -count=1`, `go test ./benchmarks/... -count=1`, `go test ./...`, `make benchmark-uplift`, `make lint`, and `make check`.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
 ## Response Driver Snapshot
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-029` is closed and the repo is explicitly idle with `K-030` recommended as the next wave.
-- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-029 refresh path landed | K-030 recommended but not started; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-030` is closed and the repo is explicitly idle with `K-031` recommended as the next wave.
+- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-030 paired uplift landed | K-031 recommended but not started; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions
