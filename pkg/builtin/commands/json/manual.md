@@ -37,7 +37,7 @@ Use it to:
 - `--path QUERY` -- extract one or more subtrees using a minimal path syntax such as `title`, `meta.author`, or `items[0].name`
 - `--raw` -- emit compact JSON instead of pretty JSON for object/array results; for repeated `--path`, this applies to the combined object result
 - `--fmt json` -- for repeated `--path`, emit one compact JSON object keyed by the exact query strings supplied on the command line
-- `--fmt jsonl` -- for repeated `--path`, emit one flat record per requested `--path` with fields `path`, `query`, and `value`
+- `--fmt jsonl` -- for one or more `--path` values, emit one flat record per requested `--path` with fields `path`, `query`, and `value`
 
 ### `keys`
 
@@ -79,7 +79,7 @@ json len -r --path items /workspace
 - repeated `--path` turns `json get` into a small multi-extract tool, not a general query language:
   - default output is one pretty JSON object keyed by the exact query strings
   - `--raw` and `--fmt json` emit the same object in compact JSON form
-  - `--fmt jsonl` emits one record per query in command-line order
+  - `--fmt jsonl` emits one record per query in command-line order, even when only one `--path` is requested
 - `json keys` is only for object-key inspection; it does not filter, map, transform, or coerce non-objects.
 - `json len` is only for object/array/string length inspection; it does not aggregate across files beyond one row per file and does not coerce non-countable values.
 

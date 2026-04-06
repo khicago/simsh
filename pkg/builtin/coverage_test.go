@@ -360,6 +360,15 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			},
 		},
 		{
+			name: "json-get-jsonl-single",
+			cmd:  "json get --fmt jsonl --path meta.author " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != 0 || !strings.Contains(out, `"query":"meta.author"`) || !strings.Contains(out, `"value":"simsh"`) {
+					t.Fatalf("json get --fmt jsonl single failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
 			name: "json-get-multi-json",
 			cmd:  "json get --path meta.author --path items[1].name --fmt json " + jsonDoc,
 			want: func(t *testing.T, out string, code int) {
@@ -419,6 +428,15 @@ func TestBuiltinCommandCoverage(t *testing.T) {
 			want: func(t *testing.T, out string, code int) {
 				if code != contract.ExitCodeUsage || !strings.Contains(out, "json get: unsupported flag --bad") {
 					t.Fatalf("json get bad flag failed: code=%d out=%q", code, out)
+				}
+			},
+		},
+		{
+			name: "json-get-bad-path-syntax",
+			cmd:  "json get --path items[ " + jsonDoc,
+			want: func(t *testing.T, out string, code int) {
+				if code != contract.ExitCodeUsage || !strings.Contains(out, "unterminated array index") {
+					t.Fatalf("json get bad path syntax failed: code=%d out=%q", code, out)
 				}
 			},
 		},

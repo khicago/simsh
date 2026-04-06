@@ -185,11 +185,17 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 		return "json get: expected one file path", contract.ExitCodeUsage
 	}
 	seenQueries := map[string]struct{}{}
+	parsedQueries := make([]parsedJSONQuery, 0, len(pathQueries))
 	for _, query := range pathQueries {
 		if _, ok := seenQueries[query]; ok {
 			return fmt.Sprintf("json get: duplicate --path value %q", query), contract.ExitCodeUsage
 		}
 		seenQueries[query] = struct{}{}
+		parsed, err := parseJSONQuery(query)
+		if err != nil {
+			return fmt.Sprintf("json get: %v", err), contract.ExitCodeUsage
+		}
+		parsedQueries = append(parsedQueries, parsed)
 	}
 	if rawOutput && format == jsonQueryFormatJSONL {
 		return "json get: --raw is not supported with --fmt jsonl", contract.ExitCodeUsage
@@ -213,13 +219,16 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 		return fmt.Sprintf("json get: invalid json: %v", err), contract.ExitCodeGeneral
 	}
 	if len(pathQueries) <= 1 {
-		query := ""
-		if len(pathQueries) == 1 {
-			query = pathQueries[0]
+		query := parsedJSONQuery{}
+		if len(parsedQueries) == 1 {
+			query = parsedQueries[0]
 		}
-		selected, err := selectJSONQuery(value, query)
+		selected, err := selectParsedJSONQuery(value, query)
 		if err != nil {
 			return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
+		}
+		if format == jsonQueryFormatJSONL {
+			return renderJSONGetMulti(pathValue, []parsedJSONQuery{query}, map[string]any{query.raw: selected}, format, rawOutput), 0
 		}
 		if format == jsonQueryFormatJSON {
 			return compactJSONString(selected), 0
@@ -242,19 +251,19 @@ func runJSONGet(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 
 	values := make(map[string]any, len(pathQueries))
-	for _, query := range pathQueries {
-		selected, err := selectJSONQuery(value, query)
+	for _, query := range parsedQueries {
+		selected, err := selectParsedJSONQuery(value, query)
 		if err != nil {
 			return fmt.Sprintf("json get: %v", err), contract.ExitCodeGeneral
 		}
-		values[query] = selected
+		values[query.raw] = selected
 	}
-	return renderJSONGetMulti(pathValue, pathQueries, values, format, rawOutput), 0
+	return renderJSONGetMulti(pathValue, parsedQueries, values, format, rawOutput), 0
 }
 
 type jsonBatchQueryOptions struct {
 	recursive bool
-	query     string
+	query     parsedJSONQuery
 	format    jsonQueryFormat
 	targets   []string
 }
@@ -314,15 +323,25 @@ func parseJSONBatchQueryArgs(runtime engine.CommandRuntime, label string, args [
 				return opts, fmt.Sprintf("%s: --path requires a value", label), contract.ExitCodeUsage, false
 			}
 			idx++
-			opts.query = strings.TrimSpace(args[idx])
-			if opts.query == "" {
+			query := strings.TrimSpace(args[idx])
+			if query == "" {
 				return opts, fmt.Sprintf("%s: path must not be empty", label), contract.ExitCodeUsage, false
 			}
+			parsed, err := parseJSONQuery(query)
+			if err != nil {
+				return opts, fmt.Sprintf("%s: %v", label, err), contract.ExitCodeUsage, false
+			}
+			opts.query = parsed
 		case strings.HasPrefix(arg, "--path="):
-			opts.query = strings.TrimSpace(strings.TrimPrefix(arg, "--path="))
-			if opts.query == "" {
+			query := strings.TrimSpace(strings.TrimPrefix(arg, "--path="))
+			if query == "" {
 				return opts, fmt.Sprintf("%s: path must not be empty", label), contract.ExitCodeUsage, false
 			}
+			parsed, err := parseJSONQuery(query)
+			if err != nil {
+				return opts, fmt.Sprintf("%s: %v", label, err), contract.ExitCodeUsage, false
+			}
+			opts.query = parsed
 		case arg == "--fmt":
 			if idx+1 >= len(args) {
 				return opts, fmt.Sprintf("%s: --fmt requires one value: text|json|jsonl", label), contract.ExitCodeUsage, false
@@ -473,17 +492,13 @@ func expandJSONTargets(runtime engine.CommandRuntime, label string, targets []st
 			}
 			continue
 		}
-		children, err := runtime.Ops.ListChildren(runtime.Ctx, target)
+		entries, err := listDirectoryEntries(runtime, target, false)
 		if err != nil {
 			return nil, fmt.Sprintf("%s: %v", label, err), contract.ExitCodeGeneral
 		}
-		for _, child := range children {
-			childDir, err := runtime.Ops.IsDirPath(runtime.Ctx, child)
-			if err != nil {
-				return nil, fmt.Sprintf("%s: %v", label, err), contract.ExitCodeGeneral
-			}
-			if !childDir {
-				appendFile(child)
+		for _, entry := range entries {
+			if !entry.Meta.IsDir {
+				appendFile(entry.Path)
 			}
 		}
 	}

@@ -41,6 +41,11 @@ type jsonGetRecord struct {
 	Value any    `json:"value"`
 }
 
+type parsedJSONQuery struct {
+	raw   string
+	steps []jsonPathStep
+}
+
 func parseJSONQueryFormat(raw string) (jsonQueryFormat, bool) {
 	switch strings.TrimSpace(raw) {
 	case string(jsonQueryFormatText), "":
@@ -61,18 +66,22 @@ func jsonQueryDisplay(query string) string {
 	return strings.TrimSpace(query)
 }
 
-func selectJSONQuery(value any, query string) (any, error) {
+func parseJSONQuery(query string) (parsedJSONQuery, error) {
 	steps, err := parseJSONPath(query)
 	if err != nil {
-		return nil, err
+		return parsedJSONQuery{}, err
 	}
-	return applyJSONPath(value, steps)
+	return parsedJSONQuery{raw: query, steps: steps}, nil
 }
 
-func buildJSONKeysRow(filePath string, query string, raw string) jsonKeysRow {
+func selectParsedJSONQuery(value any, query parsedJSONQuery) (any, error) {
+	return applyJSONPath(value, query.steps)
+}
+
+func buildJSONKeysRow(filePath string, query parsedJSONQuery, raw string) jsonKeysRow {
 	row := jsonKeysRow{
 		Path:  filePath,
-		Query: jsonQueryDisplay(query),
+		Query: jsonQueryDisplay(query.raw),
 		OK:    false,
 		Kind:  "invalid",
 		Count: -1,
@@ -82,7 +91,7 @@ func buildJSONKeysRow(filePath string, query string, raw string) jsonKeysRow {
 		row.Error = fmt.Sprintf("invalid json: %v", err)
 		return row
 	}
-	selected, err := selectJSONQuery(value, query)
+	selected, err := selectParsedJSONQuery(value, query)
 	if err != nil {
 		row.Kind = "error"
 		row.Error = err.Error()
@@ -106,10 +115,10 @@ func buildJSONKeysRow(filePath string, query string, raw string) jsonKeysRow {
 	return row
 }
 
-func buildJSONLenRow(filePath string, query string, raw string) jsonLenRow {
+func buildJSONLenRow(filePath string, query parsedJSONQuery, raw string) jsonLenRow {
 	row := jsonLenRow{
 		Path:   filePath,
-		Query:  jsonQueryDisplay(query),
+		Query:  jsonQueryDisplay(query.raw),
 		OK:     false,
 		Kind:   "invalid",
 		Length: -1,
@@ -119,7 +128,7 @@ func buildJSONLenRow(filePath string, query string, raw string) jsonLenRow {
 		row.Error = fmt.Sprintf("invalid json: %v", err)
 		return row
 	}
-	selected, err := selectJSONQuery(value, query)
+	selected, err := selectParsedJSONQuery(value, query)
 	if err != nil {
 		row.Kind = "error"
 		row.Error = err.Error()
@@ -224,15 +233,15 @@ func renderJSONLens(rows []jsonLenRow, format jsonQueryFormat) string {
 	}
 }
 
-func renderJSONGetMulti(pathValue string, queries []string, values map[string]any, format jsonQueryFormat, rawOutput bool) string {
+func renderJSONGetMulti(pathValue string, queries []parsedJSONQuery, values map[string]any, format jsonQueryFormat, rawOutput bool) string {
 	switch format {
 	case jsonQueryFormatJSONL:
 		lines := make([]string, 0, len(queries))
 		for _, query := range queries {
 			raw, _ := json.Marshal(jsonGetRecord{
 				Path:  pathValue,
-				Query: query,
-				Value: values[query],
+				Query: jsonQueryDisplay(query.raw),
+				Value: values[query.raw],
 			})
 			lines = append(lines, string(raw))
 		}

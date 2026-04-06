@@ -37,6 +37,42 @@ func TestRunJSONGetRejectsRawWithJSONL(t *testing.T) {
 	}
 }
 
+func TestRunJSONGetSinglePathJSONL(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			IsDirPath:           func(context.Context, string) (bool, error) { return false, nil },
+			ReadRawContent: func(context.Context, string) (string, error) {
+				return `{"meta":{"author":"simsh"}}`, nil
+			},
+		},
+	}
+
+	out, code := runJSONGet(runtime, []string{"--fmt", "jsonl", "--path", "meta.author", "/tmp/data.json"})
+	if code != 0 || !strings.Contains(out, `"path":"/tmp/data.json"`) || !strings.Contains(out, `"query":"meta.author"`) || !strings.Contains(out, `"value":"simsh"`) {
+		t.Fatalf("runJSONGet single-path jsonl = (%q, %d)", out, code)
+	}
+}
+
+func TestRunJSONGetRejectsMalformedQueryBeforeRead(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			ReadRawContent: func(context.Context, string) (string, error) {
+				t.Fatal("runJSONGet should reject malformed query before reading any file")
+				return "", nil
+			},
+		},
+	}
+
+	out, code := runJSONGet(runtime, []string{"--path", "items[", "/tmp/data.json"})
+	if code != contract.ExitCodeUsage || !strings.Contains(out, "unterminated array index") {
+		t.Fatalf("runJSONGet malformed query = (%q, %d), want usage error", out, code)
+	}
+}
+
 func TestRunJSONKeysReportsExplicitErrorRows(t *testing.T) {
 	runtime := engine.CommandRuntime{
 		Ctx: context.Background(),
@@ -73,6 +109,42 @@ func TestRunJSONLenSupportsStrings(t *testing.T) {
 	}
 }
 
+func TestRunJSONKeysRejectsMalformedQueryBeforeRead(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			ReadRawContent: func(context.Context, string) (string, error) {
+				t.Fatal("runJSONKeys should reject malformed query before reading any file")
+				return "", nil
+			},
+		},
+	}
+
+	out, code := runJSONKeys(runtime, []string{"--path", "items[", "/tmp/data.json"})
+	if code != contract.ExitCodeUsage || !strings.Contains(out, "unterminated array index") {
+		t.Fatalf("runJSONKeys malformed query = (%q, %d), want usage error", out, code)
+	}
+}
+
+func TestRunJSONLenRejectsMalformedQueryBeforeRead(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			ReadRawContent: func(context.Context, string) (string, error) {
+				t.Fatal("runJSONLen should reject malformed query before reading any file")
+				return "", nil
+			},
+		},
+	}
+
+	out, code := runJSONLen(runtime, []string{"--path", "items[", "/tmp/data.json"})
+	if code != contract.ExitCodeUsage || !strings.Contains(out, "unterminated array index") {
+		t.Fatalf("runJSONLen malformed query = (%q, %d), want usage error", out, code)
+	}
+}
+
 func TestReadJSONInputsUsesReadMany(t *testing.T) {
 	called := false
 	runtime := engine.CommandRuntime{
@@ -103,5 +175,36 @@ func TestReadJSONInputsUsesReadMany(t *testing.T) {
 	}
 	if len(inputs) != 2 || inputs[0].Path != "/a.json" || inputs[1].Path != "/b.json" {
 		t.Fatalf("readJSONInputs returned %#v", inputs)
+	}
+}
+
+func TestExpandJSONTargetsUsesListEntriesForNonRecursiveDirs(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			IsDirPath: func(ctx context.Context, path string) (bool, error) {
+				return path == "/docs", nil
+			},
+			ListEntries: func(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
+				if req.Dir != "/docs" || req.Recursive {
+					t.Fatalf("unexpected ListEntries request: %+v", req)
+				}
+				return contract.ListEntriesResult{
+					Entries: []contract.MountEntry{
+						{Path: "/docs/a.json", Meta: contract.PathMeta{Exists: true, IsDir: false}},
+						{Path: "/docs/sub", Meta: contract.PathMeta{Exists: true, IsDir: true}},
+					},
+				}, nil
+			},
+			ListChildren: func(ctx context.Context, dir string) ([]string, error) {
+				t.Fatal("expandJSONTargets should not fall back to ListChildren when ListEntries succeeds")
+				return nil, nil
+			},
+		},
+	}
+
+	files, out, code := expandJSONTargets(runtime, "json stat", []string{"/docs"}, false)
+	if code != 0 || out != "" || len(files) != 1 || files[0] != "/docs/a.json" {
+		t.Fatalf("expandJSONTargets non-recursive dir = (%#v, %q, %d)", files, out, code)
 	}
 }
