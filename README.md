@@ -16,11 +16,11 @@ It is not a fit when you need broad POSIX compatibility, VM-grade isolation, or 
 
 ## Release Status
 
-The latest released line in this repository is `v0.2.x`, with `v0.2.4` as the most recent tag. Current `main` should be read as the closing stretch toward `v0.3.0`, not as another small `0.2.x` maintenance branch, so the docs on `main` now bias toward stronger harness positioning, sharper memory and mount guidance, and more direct benchmark evidence. The forward-looking upgrade guide for that line is [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md).
+The latest tagged release line in this repository is now `v0.3.0`. Current `main` should be read as the post-`v0.3.0` patch candidate line for `v0.3.1`, not as another `v0.3.0` closeout branch and not as a new feature wave. The migration guide for the released line remains [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md).
 
-The released `v0.2` contract line already covers session lifecycle, structured execution results, execution traces, and adapter-backed seam validation. Current `main` adds post-`v0.2.4` hardening and evidence work, especially around builtin ACI, mount capability dispatch, benchmark refresh, and paired uplift proof. The project is still experimental in product positioning, but that is an expectation-setting statement rather than a claim that the current tree lacks tests, benchmarks, or runtime discipline.
+The released `v0.3.0` line already includes the kernel-first positioning, stronger mount contract language, richer benchmark evidence, and paired uplift proof story. Current `main` is narrower: it carries post-`v0.3.0` hardening and release-facing truth cleanup, especially around remote high-latency mount proof and release/evidence alignment. The project is still experimental in product positioning, but that is an expectation-setting statement rather than a claim that the current tree lacks tests, benchmarks, or runtime discipline.
 
-The explicit repository closeout checklist for the upcoming line lives in [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md).
+Historical `v0.3.0` closeout lives in [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md). The current patch-line closeout lives in [`docs/notes-v0-3-1-patch-release-readiness.md`](docs/notes-v0-3-1-patch-release-readiness.md).
 
 ## Quick Start
 
@@ -184,8 +184,9 @@ make benchmark-uplift
 - [`docs/architecture-path-access-metadata.md`](docs/architecture-path-access-metadata.md): path metadata and listing/API formats
 - [`docs/architecture-high-performance-mount-system.md`](docs/architecture-high-performance-mount-system.md): high-performance mount design and capability dispatch
 - [`docs/notes-v0-1-0-to-v0-2-migration.md`](docs/notes-v0-1-0-to-v0-2-migration.md): migration guide from `v0.1.0` to the released `v0.2` contract line
-- [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md): migration guide from the `v0.2.x` release line to the planned `v0.3.0` line
-- [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md): current closeout checklist and cut criteria for the `v0.3.0` line
+- [`docs/notes-v0-2-x-to-v0-3-0-migration.md`](docs/notes-v0-2-x-to-v0-3-0-migration.md): migration guide from the `v0.2.x` release line to the released `v0.3.0` line
+- [`docs/notes-v0-3-0-release-readiness.md`](docs/notes-v0-3-0-release-readiness.md): historical closeout checklist for the `v0.3.0` line
+- [`docs/notes-v0-3-1-patch-release-readiness.md`](docs/notes-v0-3-1-patch-release-readiness.md): current patch-line closeout note for `v0.3.1`
 
 ### Historical Context
 

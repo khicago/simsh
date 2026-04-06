@@ -44,6 +44,7 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/notes-v0-1-0-to-v0-2-migration.md`
   - `docs/notes-v0-2-x-to-v0-3-0-migration.md`
   - `docs/notes-v0-3-0-release-readiness.md`
+  - `docs/notes-v0-3-1-patch-release-readiness.md`
 - Kernel optimization plan:
   - `docs/notes-kernel-optimization-plan.md`
 - Kernel execution backlog:

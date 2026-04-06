@@ -14,7 +14,7 @@
 - Source Ref: docs/notes-kernel-execution-backlog.md
 - Title: No active long-run row
 - Status: blocked
-- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-032: v0.3.0 release-readiness closeout` is now complete. The repository is explicitly idle again; the next action is a deliberate `v0.3.0` release cut or a separately chosen post-release wave rather than another implicit kernel item.
+- Why This Item Now: `.bagakit/long-run/next-action.json` still has no actionable row. `K-033: v0.3.1 patch release truth cleanup` is now complete. The repository is explicitly idle again; the next action is a deliberate `v0.3.1` patch cut or a separately chosen post-`v0.3.1` wave rather than another implicit kernel item.
 
 ## Acceptance Criteria
 
@@ -47,7 +47,7 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ## Results
 
-- Summary: `K-032: v0.3.0 release-readiness closeout` is complete. The repository now has an explicit release-readiness note, refreshed benchmark evidence, aligned migration/docs state, and no additional in-repo kernel wave is required before a deliberate `v0.3.0` cut.
+- Summary: `K-033: v0.3.1 patch release truth cleanup` is complete. The repository now treats `v0.3.0` as the historical tagged baseline, frames current `main` as the patch candidate line for `v0.3.1`, and no additional in-repo docs/process cleanup is required before a deliberate `v0.3.1` cut.
 - Tests: `make benchmark-refresh`, `make benchmark-uplift`, `go test ./...`, and `make check`.
 - Gate / Verification: `.bagakit/long-run/next-action.json` remains `next_row: null`, and this handoff again matches that idle state.
 
@@ -55,8 +55,8 @@ bash .bagakit/long-run/check_and_resume.sh
 
 ```text
 [[BAGAKIT]]
-- LivingDoc: backlog and handoff refreshed so `K-032` is closed and the repo is explicitly idle with release cut as the next deliberate action instead of another implicit kernel wave.
-- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-032 release closeout landed | repo ready for deliberate v0.3.0 cut; Next=bash .bagakit/long-run/check_and_resume.sh
+- LivingDoc: backlog and handoff refreshed so `K-033` is closed and the repo is explicitly idle with `v0.3.1` patch cut as the next deliberate action instead of another implicit kernel wave.
+- LongRun: Item=none; Status=blocked; Confidence=0.97; Evidence=next_row null | K-033 patch-release truth cleanup landed | repo ready for deliberate v0.3.1 cut; Next=bash .bagakit/long-run/check_and_resume.sh
 ```
 
 ## Risks / Open Questions

@@ -2,8 +2,8 @@
 title: Migration Guide: v0.2.x to v0.3.0
 required: false
 sop:
-  - Read this doc before upgrading integrations from the v0.2.x release line to the planned v0.3.0 line.
-  - Update this doc when the v0.3.0 scope, compatibility strategy, or release gates change.
+  - Read this doc before upgrading integrations from the v0.2.x release line to the released v0.3.0 line.
+  - Update this doc when the v0.3.0 migration guidance or compatibility notes change.
   - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 ---
 
@@ -33,7 +33,7 @@ It is:
 - harness authors embedding `simsh` as an execution substrate
 - AgentOS-style platform teams using `simsh` beneath planning, review, or workflow layers
 - adapter authors exposing memory, skills, resources, or RPC-backed projections
-- maintainers preparing the `v0.3.0` release cut and rollout notes
+- maintainers or integrators reviewing the released `v0.3.0` line and its rollout notes
 
 ## What Stays Stable
 
@@ -197,9 +197,13 @@ Before cutting `v0.3.0`, the repo should satisfy all of these:
 - release docs and migration docs are aligned with the actual version line
 - benchmark evidence is current enough to support the release story
 
-The checked-in closeout status for current `main` now lives in:
+The historical `v0.3.0` closeout artifact lives in:
 
 - `docs/notes-v0-3-0-release-readiness.md`
+
+The current post-`v0.3.0` patch-line closeout artifact lives in:
+
+- `docs/notes-v0-3-1-patch-release-readiness.md`
 
 ## Current Closeout Status
 

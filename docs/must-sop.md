@@ -135,14 +135,20 @@ Source: `docs/notes-v0-1-0-to-v0-2-migration.md`
 
 ### Migration Guide: v0.2.x to v0.3.0
 Source: `docs/notes-v0-2-x-to-v0-3-0-migration.md`
-- Read this doc before upgrading integrations from the v0.2.x release line to the planned v0.3.0 line.
-- Update this doc when the v0.3.0 scope, compatibility strategy, or release gates change.
+- Read this doc before upgrading integrations from the v0.2.x release line to the released v0.3.0 line.
+- Update this doc when the v0.3.0 migration guidance or compatibility notes change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### v0.3.0 Release Readiness
 Source: `docs/notes-v0-3-0-release-readiness.md`
-- Read this doc before cutting the v0.3.0 line or claiming the repository is release-ready.
-- Update this doc when the v0.3.0 closeout checklist, evidence set, or cut criteria change.
+- Read this doc when you need the historical closeout artifact for the v0.3.0 line.
+- Update this doc only if the recorded v0.3.0 closeout history or references need correction.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### v0.3.1 Patch Release Readiness
+Source: `docs/notes-v0-3-1-patch-release-readiness.md`
+- Read this doc before cutting the v0.3.1 patch line or claiming the current post-v0.3.0 tree is ready to tag.
+- Update this doc when the v0.3.1 patch scope, evidence set, or cut criteria change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Execute Preflight Performance References

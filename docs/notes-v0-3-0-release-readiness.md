@@ -2,12 +2,17 @@
 title: v0.3.0 Release Readiness
 required: false
 sop:
-  - Read this doc before cutting the v0.3.0 line or claiming the repository is release-ready.
-  - Update this doc when the v0.3.0 closeout checklist, evidence set, or cut criteria change.
+  - Read this doc when you need the historical closeout artifact for the v0.3.0 line.
+  - Update this doc only if the recorded v0.3.0 closeout history or references need correction.
   - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 ---
 
 # v0.3.0 Release Readiness
+
+Historical note:
+- `v0.3.0` is already tagged.
+- This document is now the historical closeout artifact for that line, not the current patch-candidate SSOT.
+- The current patch-line closeout note is `docs/notes-v0-3-1-patch-release-readiness.md`.
 
 ## Why This Doc Exists
 
@@ -117,15 +122,15 @@ Interpretation:
 - this is not cross-project leaderboard evidence
 - it is repo-controlled proof that the current kernel reduces wasted model work under a fixed task set
 
-## Remaining Risks
+## Historical Risks At Cut Time
 
-- The repository is release-ready in the engineering sense, but it is not yet a published `v0.3.0` release line.
+- At closeout time, the repository was release-ready in the engineering sense but not yet a published `v0.3.0` release line.
 - Benchmark freshness snapshots intentionally include volatile timing fields; release discussion should focus on gate pass/fail and directional deltas, not byte-stable timing numbers.
 - Long-run should remain explicitly idle unless a real post-closeout row is created; release execution should not quietly masquerade as another feature wave.
 
-## Cut Criteria
+## Cut Criteria Used For v0.3.0
 
-The repository is ready for a deliberate `v0.3.0` cut when all of the following are true:
+The repository was treated as ready for a deliberate `v0.3.0` cut when all of the following were true:
 
 1. `make check` is green.
 2. `make benchmark-refresh` has been run and the checked-in native + Terminal-Bench comparison evidence is current.
@@ -135,11 +140,10 @@ The repository is ready for a deliberate `v0.3.0` cut when all of the following 
 
 ## Out Of Scope After This Closeout
 
-Once this closeout is complete, the next step is a deliberate release action or a new bounded engineering wave.
+Once this closeout completed, the next step was a deliberate release action or a new bounded engineering wave.
 
 It should not be:
 
 - a stealth benchmark-family expansion
 - a stealth mount-feature expansion
 - a silent rewrite of migration/versioning language
-

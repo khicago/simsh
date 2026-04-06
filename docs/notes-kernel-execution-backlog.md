@@ -1023,7 +1023,7 @@ Optional but recommended:
 
 ### K-033: Align v0.3.1 patch release truth and release-facing docs
 - Feat: `f-20260406-v0-3-1-patch-release-truth-cleanup`
-- Status: in_progress
+- Status: done
 - Why now: `v0.3.0` is already tagged, but several release-facing docs and handoff surfaces still describe that line as upcoming. Before cutting `v0.3.1`, the repository should stop mixing historical `v0.3.0` closeout language with the current patch-candidate line.
 - Kernel invariant: patch-release truth cleanup must not rewrite technical history or smuggle in a new engineering wave; it should only align docs and process state with the actual tagged version line.
 - Files to touch:
@@ -1042,6 +1042,10 @@ Optional but recommended:
   - Current `main` is framed consistently as the post-`v0.3.0` patch line for `v0.3.1`.
   - A checked-in `v0.3.1` patch release note or readiness artifact exists.
   - Backlog and handoff point at deliberate `v0.3.1` packaging instead of a stale `v0.3.0` cut narrative.
+- Notes:
+  - The current patch-line closeout artifact is `docs/notes-v0-3-1-patch-release-readiness.md`.
+  - `docs/notes-v0-3-0-release-readiness.md` is now a historical closeout artifact for the already-tagged `v0.3.0` line.
+  - After this slice, the next action is a deliberate `v0.3.1` patch cut or a separately chosen post-`v0.3.1` engineering wave.
 - Non-goals:
   - Do not move or retag `v0.3.0`.
   - Do not open a new engineering feature wave under the `0.3.1` patch label.
