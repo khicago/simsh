@@ -215,3 +215,35 @@ func TestRunMvDoesNotFallbackOnRemoteHighLatencyMutationRefusal(t *testing.T) {
 		t.Fatalf("runMv unexpectedly fell back after remote_high refusal: write=%v remove=%v", writeCalled, removeCalled)
 	}
 }
+
+func TestRunRmDoesNotFallbackOnRemoteHighLatencyMutationRefusal(t *testing.T) {
+	mount := newBuiltinRemoteHighMount(contract.MountCLIMutate)
+	removeCalled := false
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			Policy: contract.ExecutionPolicy{
+				WriteMode:      contract.WriteModeFull,
+				MaxOutputBytes: 4 << 20,
+				Timeout:        contract.DefaultPolicy().Timeout,
+			},
+			CheckPathOp: func(context.Context, contract.PathOp, string) error { return nil },
+			ApplyMutations: func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+				return contract.ApplyMountMutations(ctx, mount, req)
+			},
+			RemoveFile: func(context.Context, string) error {
+				removeCalled = true
+				return nil
+			},
+		},
+	}
+
+	out, code := runRm(runtime, []string{"/remote/obsolete.txt"})
+	if code == 0 || !strings.Contains(out, "remote_high_latency") {
+		t.Fatalf("runRm(...) = (%q, %d), want explicit remote_high_latency failure", out, code)
+	}
+	if removeCalled {
+		t.Fatal("runRm unexpectedly fell back to RemoveFile after remote_high refusal")
+	}
+}

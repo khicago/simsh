@@ -439,6 +439,7 @@ Current implementation status:
 - `ls` / `tree` now consume `ListEntries` + `MountEntry.Meta` when available, and only fall back to older path-by-path inspection when the capability is absent.
 - `grep` / `rg` now try `SearchContent` before resolve-then-read loops, and only fall back when the runtime explicitly returns `ErrUnsupported`.
 - `mv` / `rm` / `mkdir` now try one `ApplyMutations` batch before sequential fallback, so mount-backed factual writes can observe a single mutation batch.
+- `remote_high_latency` refusal is now part of the direct proof layer: contract, engine, and builtin tests distinguish ordinary unsupported fallbacks from explicit high-latency capability refusal, so missing `EntryLister`, `PathEnumerator`, `BulkReader`, `ContentSearcher`, or `Mutator` no longer silently degrade into optimistic fallback loops.
 
 ### Rule 5
 

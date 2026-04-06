@@ -942,7 +942,7 @@ Optional but recommended:
 
 ### K-031: Prove remote_high_latency mounts fail closed instead of silently fanning out
 - Feat: `f-20260406-remote-high-latency-mount-fail-closed-proof`
-- Status: in_progress
+- Status: done
 - Why now: `K-030` closed the current benchmark-evidence question, so the next highest-value remaining release-gate risk is mount behavior under high latency. The architecture and migration docs already require `remote_high_latency` mounts to refuse or narrow scope when critical capabilities are missing, but the direct proof layer for those fail-closed paths is still too thin.
 - Kernel invariant: `remote_high_latency` mounts must not silently degrade into per-file or per-entry fanout when required capabilities are missing; refusal and scope-narrowing semantics must be explicit, testable, and user-visible.
 - Proposed scope:
@@ -966,6 +966,10 @@ Optional but recommended:
   - The refusal paths cover at least path enumeration and bulk-read/search pressure, not only one narrow helper.
   - Docs explain the fail-closed rule and the expected operator or adapter response when a capability is absent.
   - No new optimistic fallback path is introduced for `remote_high_latency` mounts.
+- Notes:
+  - `pkg/contract/mount_unsupported.go` now holds the shared unsupported classification used by contract, engine, and builtin fallback sites.
+  - The proof layer now spans contract dispatch tests, engine-facing regression tests, and builtin-level no-fallback tests for `ls`, `json`, `grep`/`rg`, and mount-backed mutation flows.
+  - Validated with `go test ./pkg/contract ./pkg/engine ./pkg/builtin ./pkg/mount -count=1`, `go test ./...`, and `make check`.
 - Non-goals:
   - Do not implement a cache layer just to avoid proving the refusal semantics.
   - Do not broaden the mount contract into a product-specific remote filesystem protocol.

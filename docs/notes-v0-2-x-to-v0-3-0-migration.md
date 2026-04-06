@@ -202,11 +202,11 @@ Before cutting `v0.3.0`, the repo should satisfy all of these:
 Given the current `main` state, the remaining closeout order should be:
 
 1. keep execution SSOT aligned with the actual completed benchmark/evidence waves;
-2. prove that `remote_high_latency` mounts fail closed instead of silently fanning out when critical capabilities are absent;
-3. only then do the final `v0.3.0` release-readiness closeout around docs, migration guidance, and current benchmark evidence.
+2. keep the newly proven `remote_high_latency` fail-closed contract in sync across docs, adapters, and tests;
+3. then do the final `v0.3.0` release-readiness closeout around docs, migration guidance, and current benchmark evidence.
 
 This order matters.
-If step 2 is skipped, the release gate would still rely too heavily on documented mount intent instead of direct proof.
+If step 2 drifts, the release gate would fall back to documented mount intent instead of maintained proof.
 
 ## Decision Rule
 
