@@ -978,13 +978,33 @@ Optional but recommended:
   - If the slice starts widening mount semantics instead of proving the existing contract, keep only the proof/doc tightening and move any broader mount-feature work into a separate feat.
 
 ### K-032: Close out v0.3.0 release readiness
-- Status: proposed
+- Feat: `f-20260406-v0-3-0-release-readiness-closeout`
+- Status: in_progress
 - Why now: once `K-031` removes the largest remaining release-gate ambiguity, the repo should explicitly close the `v0.3.0` line instead of letting docs, evidence freshness, and migration guidance drift independently.
 - Kernel invariant: release closeout should align existing contracts, docs, evidence, and versioning; it should not introduce a new feature wave under the label of “release work.”
 - Proposed scope:
   - Refresh release-facing docs and migration guidance against the actual `main` contract set.
   - Re-run and record the current benchmark and paired-uplift evidence needed for the release story.
   - Produce one explicit release-readiness checklist or closeout note for the `v0.3.0` line.
+- Files to touch:
+  - `benchmarks/simsh_native_reference/reports/*`
+  - `benchmarks/terminal_bench_compare/reports/*`
+  - `benchmarks/paired_uplift/reports/*`
+  - `docs/notes-v0-2-x-to-v0-3-0-migration.md`
+  - `docs/notes-kernel-execution-backlog.md`
+  - `README.md`
+  - `docs/must-guidebook.md`
+  - `.bagakit/long-run/bk-execution-handoff.md`
+- Validation command:
+  - `make benchmark-refresh`
+  - `make benchmark-uplift`
+  - `go test ./...`
+  - `make check`
+- Done gate:
+  - One explicit `v0.3.0` release-readiness checklist or closeout note is checked in.
+  - README, migration docs, backlog, and handoff all describe the same current release line and evidence stack.
+  - Checked-in benchmark evidence has been refreshed through the canonical refresh commands.
+  - The slice leaves the repo in a state where cutting `v0.3.0` is a deliberate release action rather than another planning exercise.
 - Non-goals:
   - Do not open a new runtime noun or benchmark family while doing release closeout.
   - Do not change benchmark semantics just to improve release optics.

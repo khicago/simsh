@@ -1,7 +1,7 @@
 {
   "version": 1,
   "generated_by": "bagakit-feat-task-harness",
-  "updated_at": "2026-04-06T09:00:15Z",
+  "updated_at": "2026-04-06T09:05:21Z",
   "feats": [
     {
       "feat_id": "f-20260217-vfs-mount-ancestors",
@@ -321,6 +321,15 @@
       "branch": "",
       "worktree_name": "",
       "updated_at": "2026-04-06T09:00:15Z"
+    },
+    {
+      "feat_id": "f-20260406-v0-3-0-release-readiness-closeout",
+      "title": "v0.3.0 release readiness closeout",
+      "status": "in_progress",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": "",
+      "updated_at": "2026-04-06T09:05:21Z"
     }
   ]
 }
