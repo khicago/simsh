@@ -941,7 +941,8 @@ Optional but recommended:
   - If the slice starts depending on host-shell drift, benchmark-only product nouns, or uncontrolled task expansion, cut it back to one controlled baseline substrate, one small paired task set, and explicit per-run evidence only.
 
 ### K-031: Prove remote_high_latency mounts fail closed instead of silently fanning out
-- Status: proposed
+- Feat: `f-20260406-remote-high-latency-mount-fail-closed-proof`
+- Status: in_progress
 - Why now: `K-030` closed the current benchmark-evidence question, so the next highest-value remaining release-gate risk is mount behavior under high latency. The architecture and migration docs already require `remote_high_latency` mounts to refuse or narrow scope when critical capabilities are missing, but the direct proof layer for those fail-closed paths is still too thin.
 - Kernel invariant: `remote_high_latency` mounts must not silently degrade into per-file or per-entry fanout when required capabilities are missing; refusal and scope-narrowing semantics must be explicit, testable, and user-visible.
 - Proposed scope:
