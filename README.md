@@ -152,6 +152,7 @@ Examples:
 - `find --fmt jsonl ...` for one JSON record per discovered path
 - `json stat --fmt json ...` for one structured JSON-shape report
 - `json get --path items[0].name ...` for one targeted JSON subtree extraction
+- repeated `json get --path ... --path ...` returns one small object keyed by the exact query strings, or one `jsonl` record per query with `--fmt jsonl`
 - `json keys --path meta ...` for one object-key inspection without dumping the whole file
 - `json len --path items ...` for one narrow length query instead of re-reading full JSON
 

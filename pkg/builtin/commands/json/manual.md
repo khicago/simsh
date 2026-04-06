@@ -35,21 +35,25 @@ Use it to:
 ### `get`
 
 - `--path QUERY` -- extract one or more subtrees using a minimal path syntax such as `title`, `meta.author`, or `items[0].name`
-- `--raw` -- emit compact JSON instead of pretty JSON for object/array results
-- `--fmt json` -- emit one compact JSON object when extracting multiple `--path` values
-- `--fmt jsonl` -- emit one flat record per requested `--path`
+- `--raw` -- emit compact JSON instead of pretty JSON for object/array results; for repeated `--path`, this applies to the combined object result
+- `--fmt json` -- for repeated `--path`, emit one compact JSON object keyed by the exact query strings supplied on the command line
+- `--fmt jsonl` -- for repeated `--path`, emit one flat record per requested `--path` with fields `path`, `query`, and `value`
 
 ### `keys`
 
 - `-r` -- recursively include files under directory targets
 - `--path QUERY` -- resolve one subtree first, then list object keys from that subtree
 - `--fmt text|json|jsonl` -- output format. Default `text`
+  - succeeds only when the selected value is an object
+  - invalid JSON, missing paths, arrays, numbers, booleans, and null become explicit per-file error rows instead of implicit coercions
 
 ### `len`
 
 - `-r` -- recursively include files under directory targets
 - `--path QUERY` -- resolve one subtree first, then report the length of that subtree
 - `--fmt text|json|jsonl` -- output format. Default `text`
+  - supports objects, arrays, and strings
+  - invalid JSON, missing paths, numbers, booleans, and null become explicit per-file error rows instead of implicit coercions
 
 ## EXAMPLES
 
@@ -72,9 +76,12 @@ json len -r --path items /workspace
   - JSON text for numbers, booleans, and null
   - pretty JSON for objects/arrays by default
   - compact JSON for objects/arrays with `--raw`
-- repeated `--path` turns `json get` into a small multi-extract tool, not a general query language.
-- `json keys` is only for object-key inspection; it does not filter, map, or transform.
-- `json len` is only for container/string length inspection; it does not aggregate across files beyond one row per file.
+- repeated `--path` turns `json get` into a small multi-extract tool, not a general query language:
+  - default output is one pretty JSON object keyed by the exact query strings
+  - `--raw` and `--fmt json` emit the same object in compact JSON form
+  - `--fmt jsonl` emits one record per query in command-line order
+- `json keys` is only for object-key inspection; it does not filter, map, transform, or coerce non-objects.
+- `json len` is only for object/array/string length inspection; it does not aggregate across files beyond one row per file and does not coerce non-countable values.
 
 ## SEE ALSO
 
