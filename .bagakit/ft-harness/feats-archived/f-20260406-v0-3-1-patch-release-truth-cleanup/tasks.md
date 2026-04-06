@@ -3,7 +3,7 @@
 JSON SSOT: `tasks.json`
 
 ## Task Checklist
-- [ ] T-001 Align v0.3.1 patch-release truth across docs and process state
+- [x] T-001 Align v0.3.1 patch-release truth across docs and process state
 
 ## Status Legend
 - todo

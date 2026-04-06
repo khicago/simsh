@@ -1,20 +1,26 @@
 {
   "version": 1,
   "feat_id": "f-20260406-v0-3-1-patch-release-truth-cleanup",
-  "updated_at": "2026-04-06T17:13:17Z",
+  "updated_at": "2026-04-06T17:18:18Z",
   "tasks": [
     {
       "id": "T-001",
       "title": "Align v0.3.1 patch-release truth across docs and process state",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Stop describing v0.3.0 as upcoming, frame current main as the v0.3.1 candidate line, and add one explicit v0.3.1 patch release note/readiness artifact.",
-      "gate_result": null,
-      "last_gate_at": null,
-      "last_gate_commands": [],
+      "gate_result": "pass",
+      "last_gate_at": "2026-04-06T17:18:00Z",
+      "last_gate_commands": [
+        {
+          "command": "go test ./...",
+          "exit_code": 0,
+          "status": "pass"
+        }
+      ],
       "last_commit_hash": null,
       "started_at": "2026-04-06T17:13:17Z",
-      "finished_at": null,
-      "updated_at": "2026-04-06T17:13:17Z",
+      "finished_at": "2026-04-06T17:18:17Z",
+      "updated_at": "2026-04-06T17:18:17Z",
       "notes": []
     }
   ]
