@@ -301,9 +301,19 @@ func unsupportedMountCapability(mount VirtualMount, capability string) error {
 	}
 	profile := NormalizeMountProfile(mount.Profile())
 	if profile.LatencyClass == MountLatencyRemoteHigh {
-		return fmt.Errorf("%w: %s: %s requires an explicit mount capability on remote_high_latency mounts", ErrUnsupported, mount.MountPoint(), capability)
+		return &MountUnsupportedError{
+			MountPoint:   mount.MountPoint(),
+			Capability:   capability,
+			LatencyClass: profile.LatencyClass,
+			Detail:       fmt.Sprintf("%s: %s requires an explicit mount capability on remote_high_latency mounts", mount.MountPoint(), capability),
+		}
 	}
-	return fmt.Errorf("%w: %s: mount does not implement %s", ErrUnsupported, mount.MountPoint(), capability)
+	return &MountUnsupportedError{
+		MountPoint:   mount.MountPoint(),
+		Capability:   capability,
+		LatencyClass: profile.LatencyClass,
+		Detail:       fmt.Sprintf("%s: mount does not implement %s", mount.MountPoint(), capability),
+	}
 }
 
 func requireMountCLIClass(mount VirtualMount, class MountCLIClass, capability string) error {
@@ -314,7 +324,12 @@ func requireMountCLIClass(mount VirtualMount, class MountCLIClass, capability st
 	if MountSupportsCLIClass(profile, class) {
 		return nil
 	}
-	return fmt.Errorf("%w: %s: mount profile does not declare %s support for %s", ErrUnsupported, mount.MountPoint(), class, capability)
+	return &MountUnsupportedError{
+		MountPoint:   mount.MountPoint(),
+		Capability:   capability,
+		LatencyClass: profile.LatencyClass,
+		Detail:       fmt.Sprintf("%s: mount profile does not declare %s support for %s", mount.MountPoint(), class, capability),
+	}
 }
 
 func mountDeclaresConsistency(profile MountProfile) bool {

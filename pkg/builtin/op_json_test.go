@@ -178,6 +178,30 @@ func TestReadJSONInputsUsesReadMany(t *testing.T) {
 	}
 }
 
+func TestReadJSONInputsDoesNotFallbackWhenRemoteHighUnsupported(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			ReadMany: func(ctx context.Context, req contract.ReadManyRequest) (contract.ReadManyResult, error) {
+				return contract.ReadManyResult{}, &contract.MountUnsupportedError{
+					MountPoint:   "/remote",
+					Capability:   "bulk read",
+					LatencyClass: contract.MountLatencyRemoteHigh,
+					Detail:       "/remote: bulk read requires an explicit mount capability on remote_high_latency mounts",
+				}
+			},
+			ReadRawContent: func(context.Context, string) (string, error) {
+				t.Fatal("readJSONInputs should not fall back to ReadRawContent for remote_high_latency refusal")
+				return "", nil
+			},
+		},
+	}
+
+	if _, err := readJSONInputs(runtime, "json stat", []string{"/remote/a.json", "/remote/b.json"}); err == nil || !strings.Contains(err.Error(), "remote_high_latency") {
+		t.Fatalf("readJSONInputs remote_high_latency error = %v, want explicit refusal", err)
+	}
+}
+
 func TestExpandJSONTargetsUsesListEntriesForNonRecursiveDirs(t *testing.T) {
 	runtime := engine.CommandRuntime{
 		Ctx: context.Background(),

@@ -222,6 +222,14 @@ func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool
 		}
 		lister, ok := mounted.mount.(contract.EntryLister)
 		if !ok {
+			if mounted.mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
+				return contract.ListEntriesResult{}, true, &contract.MountUnsupportedError{
+					MountPoint:   mounted.mount.MountPoint(),
+					Capability:   "entry listing",
+					LatencyClass: contract.MountLatencyRemoteHigh,
+					Detail:       fmt.Sprintf("%s: entry listing requires EntryLister for remote_high_latency mount", dir),
+				}
+			}
 			return contract.ListEntriesResult{}, true, fmt.Errorf("%s: mount does not support entry listing", dir)
 		}
 		result, err := lister.ListEntries(ctx, contract.ListEntriesRequest{
@@ -266,7 +274,12 @@ func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursiv
 			return result, true, err
 		}
 		if mounted.mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
-			return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: path enumeration requires PathEnumerator for remote_high_latency mount", target)
+			return contract.EnumeratePathsResult{}, true, &contract.MountUnsupportedError{
+				MountPoint:   mounted.mount.MountPoint(),
+				Capability:   "path enumeration",
+				LatencyClass: contract.MountLatencyRemoteHigh,
+				Detail:       fmt.Sprintf("%s: path enumeration requires PathEnumerator for remote_high_latency mount", target),
+			}
 		}
 		if lister, ok := mounted.mount.(contract.EntryLister); ok {
 			result, err := enumerateEntriesViaListing(ctx, lister, target, recursive)

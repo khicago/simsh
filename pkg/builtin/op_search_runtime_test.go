@@ -105,3 +105,33 @@ func TestRunRGFallsBackWhenRuntimeSearchUnsupported(t *testing.T) {
 		t.Fatalf("expected fallback path, got resolve=%v read=%v", resolveCalled, readCalled)
 	}
 }
+
+func TestRunRGDoesNotFallbackWhenRuntimeSearchRemoteHighUnsupported(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			SearchContent: func(ctx context.Context, req contract.SearchRequest) (contract.SearchResult, error) {
+				return contract.SearchResult{}, &contract.MountUnsupportedError{
+					MountPoint:   "/remote",
+					Capability:   "content search",
+					LatencyClass: contract.MountLatencyRemoteHigh,
+					Detail:       "/remote: content search requires an explicit mount capability on remote_high_latency mounts",
+				}
+			},
+			ResolveSearchPaths: func(ctx context.Context, target string, recursive bool) ([]string, error) {
+				t.Fatal("runRG should not fall back to ResolveSearchPaths for remote_high_latency refusal")
+				return nil, nil
+			},
+			ReadRawContent: func(ctx context.Context, path string) (string, error) {
+				t.Fatal("runRG should not fall back to ReadRawContent for remote_high_latency refusal")
+				return "", nil
+			},
+		},
+	}
+
+	out, code := runRG(runtime, []string{"hello", "/remote"})
+	if code == 0 || !strings.Contains(out, "remote_high_latency") {
+		t.Fatalf("runRG remote_high_latency = (%q, %d), want explicit refusal", out, code)
+	}
+}

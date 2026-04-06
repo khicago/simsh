@@ -76,7 +76,7 @@ func runMv(runtime engine.CommandRuntime, args []string) (string, int) {
 				return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 			}
 			return rendered, 0
-		} else if !errors.Is(err, contract.ErrUnsupported) {
+		} else if !contract.AllowsUnsupportedFallback(err) {
 			return fmt.Sprintf("mv: %v", err), contract.ExitCodeGeneral
 		}
 	}

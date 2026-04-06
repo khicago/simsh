@@ -90,7 +90,7 @@ func runMkdir(runtime engine.CommandRuntime, args []string) (string, int) {
 				return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
 			}
 			return rendered, 0
-		} else if !errors.Is(err, contract.ErrUnsupported) {
+		} else if !contract.AllowsUnsupportedFallback(err) {
 			return fmt.Sprintf("mkdir: %v", err), contract.ExitCodeGeneral
 		}
 	}

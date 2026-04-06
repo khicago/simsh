@@ -94,3 +94,31 @@ func TestListDirectoryEntriesPropagatesNonUnsupportedErrors(t *testing.T) {
 		t.Fatalf("listDirectoryEntries error = %v, want %v", err, context.DeadlineExceeded)
 	}
 }
+
+func TestListDirectoryEntriesDoesNotFallbackWhenRemoteHighUnsupported(t *testing.T) {
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			ListEntries: func(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
+				return contract.ListEntriesResult{}, &contract.MountUnsupportedError{
+					MountPoint:   "/remote",
+					Capability:   "entry listing",
+					LatencyClass: contract.MountLatencyRemoteHigh,
+					Detail:       "/remote: entry listing requires EntryLister for remote_high_latency mount",
+				}
+			},
+			ListChildren: func(ctx context.Context, dir string) ([]string, error) {
+				t.Fatal("listDirectoryEntries should not fall back to ListChildren for remote_high_latency refusal")
+				return nil, nil
+			},
+		},
+	}
+
+	err := func() error {
+		_, err := listDirectoryEntries(runtime, "/remote", false)
+		return err
+	}()
+	if err == nil || !strings.Contains(err.Error(), "remote_high_latency") {
+		t.Fatalf("listDirectoryEntries remote_high_latency error = %v, want explicit refusal", err)
+	}
+}

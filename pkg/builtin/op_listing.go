@@ -149,7 +149,7 @@ func listDirectoryEntries(runtime engine.CommandRuntime, target string, recursiv
 		if err == nil {
 			return result.Entries, nil
 		}
-		if !errors.Is(err, contract.ErrUnsupported) {
+		if !contract.AllowsUnsupportedFallback(err) {
 			return nil, err
 		}
 	}

@@ -2,7 +2,6 @@ package builtin
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"path"
 	"regexp"
@@ -256,7 +255,7 @@ func tryRuntimeSearch(runtime engine.CommandRuntime, req contract.SearchRequest)
 	}
 	result, err := runtime.Ops.SearchContent(runtime.Ctx, req)
 	if err != nil {
-		if errors.Is(err, contract.ErrUnsupported) {
+		if contract.AllowsUnsupportedFallback(err) {
 			return false, contract.SearchResult{}, nil
 		}
 		return false, contract.SearchResult{}, err

@@ -3,7 +3,6 @@ package builtin
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -532,7 +531,7 @@ func readJSONInputs(runtime engine.CommandRuntime, label string, files []string)
 			}
 			return inputs, nil
 		}
-		if !errors.Is(err, contract.ErrUnsupported) {
+		if !contract.AllowsUnsupportedFallback(err) {
 			return nil, err
 		}
 	}
