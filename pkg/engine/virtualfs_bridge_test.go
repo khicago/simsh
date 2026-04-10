@@ -208,3 +208,75 @@ func TestWrapOpsReadManyBatchesFilesystemPaths(t *testing.T) {
 		t.Fatalf("ReadMany result order = %#v, want request order", result.Entries)
 	}
 }
+
+func TestWrapOpsApplyMutationsPreservesRequestOrderAcrossFilesystemAndMount(t *testing.T) {
+	mount := &bridgeMutatingMount{bridgeTestMount: newBridgeTestMount(contract.MountProfile{
+		TruthModel:          contract.MountTruthFactual,
+		WriteSemantics:      contract.MountWriteThrough,
+		LatencyClass:        contract.MountLatencyRemoteModerate,
+		Consistency:         contract.MountConsistency{PathReadAfterWrite: true},
+		SupportedCLIClasses: []contract.MountCLIClass{contract.MountCLIMutate},
+	})}
+	router, err := newMountRouter([]contract.VirtualMount{mount})
+	if err != nil {
+		t.Fatalf("newMountRouter(...) error = %v", err)
+	}
+
+	ops := router.wrapOps(contract.Ops{
+		ApplyMutations: func(_ context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+			records := make([]contract.MutationRecord, 0, len(req.Ops))
+			for _, op := range req.Ops {
+				records = append(records, contract.MutationRecord{Kind: op.Kind, Path: op.Path, Status: "ok"})
+			}
+			return contract.MutationResult{Records: records}, nil
+		},
+	})
+
+	requestOps := []contract.MutationSpec{
+		{Kind: contract.MutationWriteFile, Path: virtualPath("workspace", "local-1.txt"), Content: "a"},
+		{Kind: contract.MutationWriteFile, Path: virtualPath("mounted", "mount-1.txt"), Content: "b"},
+		{Kind: contract.MutationWriteFile, Path: virtualPath("workspace", "local-2.txt"), Content: "c"},
+	}
+	result, err := ops.ApplyMutations(context.Background(), contract.MutationBatch{Ops: requestOps})
+	if err != nil {
+		t.Fatalf("ApplyMutations(...) error = %v", err)
+	}
+	if len(result.Records) != len(requestOps) {
+		t.Fatalf("record count = %d, want %d", len(result.Records), len(requestOps))
+	}
+	for idx, op := range requestOps {
+		record := result.Records[idx]
+		if record.Kind != op.Kind || record.Path != op.Path {
+			t.Fatalf("record[%d] = %+v, want kind=%s path=%s", idx, record, op.Kind, op.Path)
+		}
+	}
+}
+
+func TestWrapOpsApplyMutationsPreservesMountUnsupportedDetail(t *testing.T) {
+	mount := newBridgeTestMount(contract.MountProfile{
+		TruthModel:          contract.MountTruthFactual,
+		WriteSemantics:      contract.MountWriteThrough,
+		LatencyClass:        contract.MountLatencyRemoteModerate,
+		Consistency:         contract.MountConsistency{PathReadAfterWrite: true},
+		SupportedCLIClasses: []contract.MountCLIClass{contract.MountCLIMutate},
+	})
+	router, err := newMountRouter([]contract.VirtualMount{mount})
+	if err != nil {
+		t.Fatalf("newMountRouter(...) error = %v", err)
+	}
+
+	ops := router.wrapOps(contract.Ops{})
+	_, err = ops.ApplyMutations(context.Background(), contract.MutationBatch{
+		Ops: []contract.MutationSpec{{Kind: contract.MutationWriteFile, Path: virtualPath("mounted", "file.txt"), Content: "mount"}},
+	})
+	if !errors.Is(err, contract.ErrUnsupported) {
+		t.Fatalf("ApplyMutations(...) error = %v, want ErrUnsupported", err)
+	}
+	var mountErr *contract.MountUnsupportedError
+	if !errors.As(err, &mountErr) {
+		t.Fatalf("ApplyMutations(...) error = %v, want MountUnsupportedError detail", err)
+	}
+	if mountErr.Capability != "mutation batch" {
+		t.Fatalf("mount unsupported capability = %q, want %q", mountErr.Capability, "mutation batch")
+	}
+}

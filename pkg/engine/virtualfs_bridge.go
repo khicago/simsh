@@ -376,19 +376,8 @@ func validateMountedMutationBatch(mount contract.VirtualMount, ops []contract.Mu
 			return err
 		}
 	}
-	if _, ok := mount.(contract.Mutator); ok {
-		return nil
-	}
-	profile := contract.NormalizeMountProfile(mount.Profile())
-	if profile.LatencyClass == contract.MountLatencyRemoteHigh {
-		return &contract.MountUnsupportedError{
-			MountPoint:   mount.MountPoint(),
-			Capability:   "mutation batch",
-			LatencyClass: profile.LatencyClass,
-			Detail:       fmt.Sprintf("%s: mutation batch requires an explicit mount capability on remote_high_latency mounts", mount.MountPoint()),
-		}
-	}
-	return contract.ErrUnsupported
+	_, err := contract.ApplyMountMutations(context.Background(), mount, contract.MutationBatch{})
+	return err
 }
 
 func validateFilesystemFallbackMutation(
@@ -457,6 +446,37 @@ func applyFilesystemFallbackMutation(
 	default:
 		return fmt.Errorf("unsupported mutation kind %q", op.Kind)
 	}
+}
+
+func mutationRecordKey(kind contract.MutationKind, pathValue string) string {
+	return string(kind) + "\x00" + normalizeAbsolutePath(pathValue)
+}
+
+func reorderMutationRecords(requestOps []contract.MutationSpec, records []contract.MutationRecord) ([]contract.MutationRecord, error) {
+	if len(records) == 0 {
+		return nil, nil
+	}
+	index := make(map[string][]contract.MutationRecord, len(records))
+	for _, record := range records {
+		key := mutationRecordKey(record.Kind, record.Path)
+		index[key] = append(index[key], record)
+	}
+	ordered := make([]contract.MutationRecord, 0, len(records))
+	for _, op := range requestOps {
+		key := mutationRecordKey(op.Kind, op.Path)
+		queued := index[key]
+		if len(queued) == 0 {
+			return nil, fmt.Errorf("missing mutation record for %s", op.Path)
+		}
+		ordered = append(ordered, queued[0])
+		index[key] = queued[1:]
+	}
+	for _, queued := range index {
+		if len(queued) > 0 {
+			ordered = append(ordered, queued...)
+		}
+	}
+	return ordered, nil
 }
 
 func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
@@ -886,7 +906,11 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 			}
 			results = append(results, result.Records...)
 		}
-		return contract.MutationResult{Records: results}, nil
+		ordered, err := reorderMutationRecords(req.Ops, results)
+		if err != nil {
+			return contract.MutationResult{}, err
+		}
+		return contract.MutationResult{Records: ordered}, nil
 	}
 
 	ops.CheckPathOp = func(ctx context.Context, op contract.PathOp, pathValue string) error {
