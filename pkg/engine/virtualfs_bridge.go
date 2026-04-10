@@ -353,6 +353,84 @@ func containsPathCapability(caps []string, target string) bool {
 	return false
 }
 
+func mutationSpecPathOp(kind contract.MutationKind) (contract.PathOp, error) {
+	switch kind {
+	case contract.MutationWriteFile, contract.MutationAppend, contract.MutationEdit:
+		return contract.PathOpWrite, nil
+	case contract.MutationMakeDir:
+		return contract.PathOpMkdir, nil
+	case contract.MutationRemoveFile, contract.MutationRemoveDir:
+		return contract.PathOpRemove, nil
+	default:
+		return "", fmt.Errorf("unsupported mutation kind %q", kind)
+	}
+}
+
+func validateMountedMutationBatch(mount contract.VirtualMount, ops []contract.MutationSpec) error {
+	for _, op := range ops {
+		pathOp, err := mutationSpecPathOp(op.Kind)
+		if err != nil {
+			return err
+		}
+		if err := contract.CheckMountPathOp(mount, pathOp); err != nil {
+			return err
+		}
+	}
+	if _, ok := mount.(contract.Mutator); ok {
+		return nil
+	}
+	profile := contract.NormalizeMountProfile(mount.Profile())
+	if profile.LatencyClass == contract.MountLatencyRemoteHigh {
+		return &contract.MountUnsupportedError{
+			MountPoint:   mount.MountPoint(),
+			Capability:   "mutation batch",
+			LatencyClass: profile.LatencyClass,
+			Detail:       fmt.Sprintf("%s: mutation batch requires an explicit mount capability on remote_high_latency mounts", mount.MountPoint()),
+		}
+	}
+	return contract.ErrUnsupported
+}
+
+func validateFilesystemFallbackMutation(
+	op contract.MutationSpec,
+	writeFile func(context.Context, string, string) error,
+	appendFile func(context.Context, string, string) error,
+	editFile func(context.Context, string, string, string, bool) error,
+	makeDir func(context.Context, string) error,
+	removeFile func(context.Context, string) error,
+	removeDir func(context.Context, string) error,
+) error {
+	switch op.Kind {
+	case contract.MutationWriteFile:
+		if writeFile == nil {
+			return contract.ErrUnsupported
+		}
+	case contract.MutationAppend:
+		if appendFile == nil {
+			return contract.ErrUnsupported
+		}
+	case contract.MutationEdit:
+		if editFile == nil {
+			return contract.ErrUnsupported
+		}
+	case contract.MutationMakeDir:
+		if makeDir == nil {
+			return contract.ErrUnsupported
+		}
+	case contract.MutationRemoveFile:
+		if removeFile == nil {
+			return contract.ErrUnsupported
+		}
+	case contract.MutationRemoveDir:
+		if removeDir == nil {
+			return contract.ErrUnsupported
+		}
+	default:
+		return fmt.Errorf("unsupported mutation kind %q", op.Kind)
+	}
+	return nil
+}
+
 func applyFilesystemFallbackMutation(
 	ctx context.Context,
 	op contract.MutationSpec,
@@ -544,6 +622,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		groups := map[string][]string{}
 		groupMounts := map[string]contract.VirtualMount{}
 		groupOrder := make([]string, 0)
+		fsPaths := make([]string, 0, len(req.Paths))
 		for _, rawPath := range req.Paths {
 			pathValue := normalizeAbsolutePath(rawPath)
 			if mounted, ok, err := r.activeForPath(ctx, pathValue); err != nil {
@@ -558,11 +637,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 				continue
 			}
 			if origReadMany != nil {
-				partial, err := origReadMany(ctx, contract.ReadManyRequest{Paths: []string{pathValue}})
-				if err != nil {
-					return contract.ReadManyResult{}, err
-				}
-				appendReadManyEntries(resultsByPath, partial.Entries)
+				fsPaths = append(fsPaths, pathValue)
 				continue
 			}
 			raw, err := origReadRawContent(ctx, pathValue)
@@ -570,6 +645,13 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 				return contract.ReadManyResult{}, err
 			}
 			appendReadManyEntries(resultsByPath, []contract.MountContentEntry{{Path: pathValue, Content: raw}})
+		}
+		if len(fsPaths) > 0 {
+			partial, err := origReadMany(ctx, contract.ReadManyRequest{Paths: fsPaths})
+			if err != nil {
+				return contract.ReadManyResult{}, err
+			}
+			appendReadManyEntries(resultsByPath, partial.Entries)
 		}
 		for _, groupKey := range groupOrder {
 			groupedPaths := groups[groupKey]
@@ -747,49 +829,58 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.ApplyMutations = func(ctx context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
 		mountedOps := make([]contract.MutationSpec, 0, len(req.Ops))
-		results := make([]contract.MutationRecord, 0)
+		fsOps := make([]contract.MutationSpec, 0, len(req.Ops))
+		var mountedPoint string
+		var mountedMount contract.VirtualMount
 		for _, op := range req.Ops {
 			pathValue := normalizeAbsolutePath(op.Path)
 			if r.isSyntheticPrefix(pathValue) {
 				return contract.MutationResult{}, contract.ErrUnsupported
 			}
-			if _, ok := r.match(pathValue); ok {
-				op.Path = pathValue
+			op.Path = pathValue
+			if mounted, ok := r.match(pathValue); ok {
+				if mountedPoint == "" {
+					mountedPoint = mounted.point
+					mountedMount = mounted.mount
+				} else if mounted.point != mountedPoint {
+					return contract.MutationResult{}, fmt.Errorf("cross-mount mutation batches are not supported")
+				}
 				mountedOps = append(mountedOps, op)
 				continue
 			}
+			fsOps = append(fsOps, op)
+		}
+		if len(mountedOps) > 0 {
+			if err := validateMountedMutationBatch(mountedMount, mountedOps); err != nil {
+				return contract.MutationResult{}, err
+			}
+		}
+		if len(fsOps) > 0 && origApplyMutations == nil {
+			for _, op := range fsOps {
+				if err := validateFilesystemFallbackMutation(op, origWriteFile, origAppendFile, origEditFile, origMakeDir, origRemoveFile, origRemoveDir); err != nil {
+					return contract.MutationResult{}, err
+				}
+			}
+		}
+		results := make([]contract.MutationRecord, 0, len(req.Ops))
+		if len(fsOps) > 0 {
 			if origApplyMutations != nil {
-				result, err := origApplyMutations(ctx, contract.MutationBatch{Ops: []contract.MutationSpec{op}})
+				result, err := origApplyMutations(ctx, contract.MutationBatch{Ops: fsOps})
 				if err != nil {
 					return contract.MutationResult{}, err
 				}
 				results = append(results, result.Records...)
-				continue
-			}
-			if err := applyFilesystemFallbackMutation(ctx, op, origWriteFile, origAppendFile, origEditFile, origMakeDir, origRemoveFile, origRemoveDir); err != nil {
-				return contract.MutationResult{}, err
-			}
-			results = append(results, contract.MutationRecord{Kind: op.Kind, Path: pathValue, Status: "ok"})
-		}
-		if len(mountedOps) > 0 {
-			mounted, ok := r.match(mountedOps[0].Path)
-			if !ok {
-				return contract.MutationResult{}, contract.ErrUnsupported
-			}
-			for _, op := range mountedOps[1:] {
-				nextMounted, nextOK := r.match(op.Path)
-				if !nextOK || nextMounted.point != mounted.point {
-					return contract.MutationResult{}, fmt.Errorf("cross-mount mutation batches are not supported")
+			} else {
+				for _, op := range fsOps {
+					if err := applyFilesystemFallbackMutation(ctx, op, origWriteFile, origAppendFile, origEditFile, origMakeDir, origRemoveFile, origRemoveDir); err != nil {
+						return contract.MutationResult{}, err
+					}
+					results = append(results, contract.MutationRecord{Kind: op.Kind, Path: op.Path, Status: "ok"})
 				}
 			}
-			if mounted.mount.Profile().WriteSemantics == contract.MountWriteReadOnly {
-				return contract.MutationResult{}, contract.ErrUnsupported
-			}
-			mutator, ok := mounted.mount.(contract.Mutator)
-			if !ok {
-				return contract.MutationResult{}, contract.ErrUnsupported
-			}
-			result, err := mutator.ApplyMutations(ctx, contract.MutationBatch{Ops: mountedOps})
+		}
+		if len(mountedOps) > 0 {
+			result, err := contract.ApplyMountMutations(ctx, mountedMount, contract.MutationBatch{Ops: mountedOps})
 			if err != nil {
 				return contract.MutationResult{}, err
 			}
