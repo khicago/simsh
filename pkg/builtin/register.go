@@ -7,6 +7,15 @@ import (
 	"github.com/khicago/simsh/pkg/engine"
 )
 
+const canonicalDefaultBuiltinSourceTree = "pkg/builtin/spec* implementations in pkg/builtin/*.go"
+
+type defaultBuiltinRegistration struct {
+	Name            string
+	CanonicalSource string
+	ShadowSources   []string
+	Build           func() engine.CommandSpec
+}
+
 func RegisterDefaults(reg *engine.Registry) {
 	if reg == nil {
 		return
@@ -51,38 +60,65 @@ func RegisterDefaultSubset(reg *engine.Registry, names []string) error {
 }
 
 func defaultCommandSpecs() []engine.CommandSpec {
-	return []engine.CommandSpec{
-		applyCommandDocContract(specLS()),
-		applyCommandDocContract(specTree()),
-		applyCommandDocContract(specCd()),
-		applyCommandDocContract(specPwd()),
-		applyCommandDocContract(specEnv()),
-		applyCommandDocContract(specFrontmatter()),
-		applyCommandDocContract(specJSON()),
-		applyCommandDocContract(specCat()),
-		applyCommandDocContract(specHead()),
-		applyCommandDocContract(specTail()),
-		applyCommandDocContract(specGrep()),
-		applyCommandDocContract(specRG()),
-		applyCommandDocContract(specFind()),
-		applyCommandDocContract(specWhich()),
-		applyCommandDocContract(specType()),
-		applyCommandDocContract(specEcho()),
-		applyCommandDocContract(specTee()),
-		applyCommandDocContract(specSed()),
-		applyCommandDocContract(specMan()),
-		applyCommandDocContract(specDate()),
-		applyCommandDocContract(specMkdir()),
-		applyCommandDocContract(specCp()),
-		applyCommandDocContract(specMv()),
-		applyCommandDocContract(specRm()),
-		applyCommandDocContract(specRmdir()),
-		applyCommandDocContract(specTouch()),
-		applyCommandDocContract(specWc()),
-		applyCommandDocContract(specSort()),
-		applyCommandDocContract(specUniq()),
-		applyCommandDocContract(specDiff()),
+	registrations := defaultBuiltinRegistrations()
+	specs := make([]engine.CommandSpec, 0, len(registrations))
+	seen := make(map[string]struct{}, len(registrations))
+	for _, registration := range registrations {
+		spec := applyCommandDocContract(registration.Build())
+		if spec.Name != registration.Name {
+			panic(fmt.Sprintf("builtin registration %q produced spec %q from %s", registration.Name, spec.Name, registration.CanonicalSource))
+		}
+		if _, exists := seen[spec.Name]; exists {
+			panic(fmt.Sprintf("duplicate builtin registration %q", spec.Name))
+		}
+		seen[spec.Name] = struct{}{}
+		specs = append(specs, spec)
 	}
+	return specs
+}
+
+func defaultBuiltinRegistrations() []defaultBuiltinRegistration {
+	return []defaultBuiltinRegistration{
+		{Name: CommandLS, CanonicalSource: "pkg/builtin/op_listing.go", Build: specLS},
+		{Name: CommandTree, CanonicalSource: "pkg/builtin/op_tree.go", Build: specTree},
+		{Name: CommandCd, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specCd},
+		{Name: CommandPwd, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specPwd},
+		{Name: CommandEnv, CanonicalSource: "pkg/builtin/op_environment.go", ShadowSources: []string{"pkg/builtin/commands/env/command.go"}, Build: specEnv},
+		{Name: CommandFrontmatter, CanonicalSource: "pkg/builtin/op_frontmatter.go", Build: specFrontmatter},
+		{Name: CommandJSON, CanonicalSource: "pkg/builtin/op_json.go", Build: specJSON},
+		{Name: CommandCat, CanonicalSource: "pkg/builtin/op_readfile.go", ShadowSources: []string{"pkg/builtin/commands/cat/command.go"}, Build: specCat},
+		{Name: CommandHead, CanonicalSource: "pkg/builtin/op_window.go", Build: specHead},
+		{Name: CommandTail, CanonicalSource: "pkg/builtin/op_window.go", Build: specTail},
+		{Name: CommandGrep, CanonicalSource: "pkg/builtin/op_pattern_scan.go", Build: specGrep},
+		{Name: CommandRG, CanonicalSource: "pkg/builtin/op_rg.go", Build: specRG},
+		{Name: CommandFind, CanonicalSource: "pkg/builtin/op_path_discovery.go", Build: specFind},
+		{Name: CommandWhich, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specWhich},
+		{Name: CommandType, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specType},
+		{Name: CommandEcho, CanonicalSource: "pkg/builtin/op_emit_text.go", ShadowSources: []string{"pkg/builtin/commands/echo/command.go"}, Build: specEcho},
+		{Name: CommandTee, CanonicalSource: "pkg/builtin/op_mirror_write.go", Build: specTee},
+		{Name: CommandSed, CanonicalSource: "pkg/builtin/op_stream_edit.go", Build: specSed},
+		{Name: CommandMan, CanonicalSource: "pkg/builtin/op_help_manual.go", Build: specMan},
+		{Name: CommandDate, CanonicalSource: "pkg/builtin/op_clock.go", ShadowSources: []string{"pkg/builtin/commands/date/command.go"}, Build: specDate},
+		{Name: CommandMkdir, CanonicalSource: "pkg/builtin/op_mkdir.go", ShadowSources: []string{"pkg/builtin/commands/mkdir/command.go"}, Build: specMkdir},
+		{Name: CommandCp, CanonicalSource: "pkg/builtin/op_copy.go", ShadowSources: []string{"pkg/builtin/commands/cp/command.go"}, Build: specCp},
+		{Name: CommandMv, CanonicalSource: "pkg/builtin/op_move.go", ShadowSources: []string{"pkg/builtin/commands/mv/command.go"}, Build: specMv},
+		{Name: CommandRm, CanonicalSource: "pkg/builtin/op_remove.go", ShadowSources: []string{"pkg/builtin/commands/rm/command.go"}, Build: specRm},
+		{Name: CommandRmdir, CanonicalSource: "pkg/builtin/op_rmdir.go", Build: specRmdir},
+		{Name: CommandTouch, CanonicalSource: "pkg/builtin/op_touch.go", ShadowSources: []string{"pkg/builtin/commands/touch/command.go"}, Build: specTouch},
+		{Name: CommandWc, CanonicalSource: "pkg/builtin/op_wordcount.go", ShadowSources: []string{"pkg/builtin/commands/wc/command.go"}, Build: specWc},
+		{Name: CommandSort, CanonicalSource: "pkg/builtin/op_sort.go", ShadowSources: []string{"pkg/builtin/commands/sort/command.go"}, Build: specSort},
+		{Name: CommandUniq, CanonicalSource: "pkg/builtin/op_uniq.go", ShadowSources: []string{"pkg/builtin/commands/uniq/command.go"}, Build: specUniq},
+		{Name: CommandDiff, CanonicalSource: "pkg/builtin/op_diff.go", ShadowSources: []string{"pkg/builtin/commands/diff/command.go"}, Build: specDiff},
+	}
+}
+
+func defaultBuiltinOwnershipByName() map[string]defaultBuiltinRegistration {
+	registrations := defaultBuiltinRegistrations()
+	ownership := make(map[string]defaultBuiltinRegistration, len(registrations))
+	for _, registration := range registrations {
+		ownership[registration.Name] = registration
+	}
+	return ownership
 }
 
 func normalizeDefaultCommandName(name string) string {
