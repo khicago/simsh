@@ -73,6 +73,36 @@ func TestEngineExecuteResultTracePaths(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultTraceNormalizesRelativeRedirectionPaths(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.ExecutionPolicy{
+		WriteMode:        contract.WriteModeFull,
+		MaxPipelineDepth: 16,
+		MaxOutputBytes:   4 << 20,
+		Timeout:          contract.DefaultPolicy().Timeout,
+	}
+
+	workspaceDir := "/" + "workspace"
+	notePath := workspaceDir + "/" + "note.txt"
+	result := eng.ExecuteResult(context.Background(), "cd "+workspaceDir+"; echo hello > note.txt", ops)
+	if result.ExitCode != 0 {
+		t.Fatalf("unexpected exit_code=%d stdout=%q", result.ExitCode, result.Stdout)
+	}
+	if containsTracePath(result.Trace.RequestedPaths, "note.txt") {
+		t.Fatalf("requested_paths unexpectedly contains raw relative path: %+v", result.Trace)
+	}
+	if !containsTracePath(result.Trace.RequestedPaths, notePath) {
+		t.Fatalf("expected resolved requested path in trace: %+v", result.Trace)
+	}
+	if !containsTracePath(result.Trace.WrittenPaths, notePath) {
+		t.Fatalf("expected resolved written path in trace: %+v", result.Trace)
+	}
+}
+
 func TestEngineExecuteResultTraceAppendAndRemove(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)

@@ -183,9 +183,15 @@ func preflightOutputRedirections(ctx context.Context, commandName string, redirs
 		if redir.kind != redirectOutputWrite && redir.kind != redirectOutputAppend {
 			continue
 		}
-		markTraceRequestedPath(ctx, redir.target)
 		if !ops.Policy.AllowWrite() {
-			markTraceDeniedPath(ctx, redir.target)
+			pathValue, err := ops.RequireAbsolutePath(redir.target)
+			if err == nil {
+				markTraceRequestedPath(ctx, pathValue)
+				markTraceDeniedPath(ctx, pathValue)
+			} else {
+				markTraceRequestedPath(ctx, redir.target)
+				markTraceDeniedPath(ctx, redir.target)
+			}
 			return "redirection: write is not allowed by policy", contract.ExitCodeUnsupported
 		}
 		if isNullDevice(redir.target) {
@@ -195,14 +201,15 @@ func preflightOutputRedirections(ctx context.Context, commandName string, redirs
 		if err != nil {
 			return fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeUsage
 		}
+		markTraceRequestedPath(ctx, pathValue)
 		if redir.kind == redirectOutputAppend && ops.AppendFile == nil {
-			markTraceDeniedPath(ctx, redir.target)
+			markTraceDeniedPath(ctx, pathValue)
 			return "redirection: append is not supported", contract.ExitCodeUnsupported
 		}
 		if ops.CheckPathOp != nil {
 			if err := ops.CheckPathOp(ctx, contract.PathOpWrite, pathValue); err != nil {
 				if errors.Is(err, contract.ErrUnsupported) {
-					markTraceDeniedPath(ctx, redir.target)
+					markTraceDeniedPath(ctx, pathValue)
 					if redir.kind == redirectOutputAppend {
 						return "redirection: append is not supported", contract.ExitCodeUnsupported
 					}
