@@ -232,3 +232,13 @@ func TestExpandJSONTargetsUsesListEntriesForNonRecursiveDirs(t *testing.T) {
 		t.Fatalf("expandJSONTargets non-recursive dir = (%#v, %q, %d)", files, out, code)
 	}
 }
+
+func TestRunJSONUsageListsCurrentSubcommands(t *testing.T) {
+	out, code := runJSON(engine.CommandRuntime{}, nil)
+	if code != contract.ExitCodeUsage {
+		t.Fatalf("runJSON(nil) code = %d, want %d", code, contract.ExitCodeUsage)
+	}
+	if out != "json: expected subcommand: stat|get|keys|len" {
+		t.Fatalf("runJSON(nil) out = %q", out)
+	}
+}

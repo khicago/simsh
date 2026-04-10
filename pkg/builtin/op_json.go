@@ -44,7 +44,7 @@ func specJSON() engine.CommandSpec {
 
 func runJSON(runtime engine.CommandRuntime, args []string) (string, int) {
 	if len(args) == 0 {
-		return "json: expected subcommand: stat|get", contract.ExitCodeUsage
+		return "json: expected subcommand: stat|get|keys|len", contract.ExitCodeUsage
 	}
 	switch strings.TrimSpace(args[0]) {
 	case "stat":

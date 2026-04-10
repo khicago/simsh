@@ -123,14 +123,16 @@ Examples:
     head -n 5 /task_outputs/report.md
 
 #### json
-    json <stat|get> ...
+    json <stat|get|keys|len> ...
 - Use json stat to inspect JSON shape across files and directories.
 - Use json get --path QUERY to extract a JSON subtree without dumping the whole file.
+- Use json keys and json len for narrow structure-aware JSON queries.
 
 Examples:
     json stat /task_outputs/data.json
     json stat -r --fmt json /workspace
     json get --path items[0].name /task_outputs/data.json
+    json keys --path meta data.json
 
 #### ls
     ls [-a] [-R] [-l] [--fmt text|md|json] [PATH...]
