@@ -5,6 +5,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -13,9 +14,11 @@ type fakeConsoleExecutor struct {
 	calls  []string
 	output string
 	code   int
+	ctxs   []context.Context
 }
 
-func (f *fakeConsoleExecutor) Execute(_ context.Context, commandLine string) (string, int) {
+func (f *fakeConsoleExecutor) Execute(ctx context.Context, commandLine string) (string, int) {
+	f.ctxs = append(f.ctxs, ctx)
 	f.calls = append(f.calls, commandLine)
 	return f.output, f.code
 }
@@ -152,5 +155,50 @@ func TestConsoleModelCommandLifecycleAndClear(t *testing.T) {
 	model = updated.(consoleModel)
 	if len(model.transcript) != 0 {
 		t.Fatalf("transcript len = %d, want 0 after ctrl+l", len(model.transcript))
+	}
+}
+
+func TestConsoleModelQuitCancelsInFlightExecution(t *testing.T) {
+	env := &fakeConsoleExecutor{}
+	model := newConsoleModel(context.Background(), env, ConsoleOptions{})
+	model.input.SetValue("echo demo")
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter returned nil cmd for executable input")
+	}
+	model = updated.(consoleModel)
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok || len(batch) == 0 {
+		t.Fatalf("cmd() = %T, want non-empty tea.BatchMsg", cmd())
+	}
+	_ = batch[0]()
+	if len(env.ctxs) != 1 {
+		t.Fatalf("executor ctx count = %d, want 1", len(env.ctxs))
+	}
+	if err := env.ctxs[0].Err(); err != nil {
+		t.Fatalf("execution ctx err before quit = %v, want nil", err)
+	}
+
+	updated, quitCmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if quitCmd == nil {
+		t.Fatal("ctrl+c returned nil cmd, want quit cmd")
+	}
+	if _, ok := quitCmd().(tea.QuitMsg); !ok {
+		t.Fatalf("ctrl+c cmd did not return tea.QuitMsg")
+	}
+	model = updated.(consoleModel)
+	if model.cancelRunning != nil {
+		t.Fatal("cancelRunning not cleared after quit")
+	}
+
+	deadline := time.After(time.Second)
+	for env.ctxs[0].Err() == nil {
+		select {
+		case <-deadline:
+			t.Fatal("execution ctx was not canceled on quit")
+		default:
+			time.Sleep(time.Millisecond)
+		}
 	}
 }

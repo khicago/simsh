@@ -51,11 +51,13 @@ type consoleModel struct {
 	commandCount int
 	lastExitCode int
 	transcript   []string
+
+	cancelRunning context.CancelFunc
 }
 
 func RunConsoleTUI(ctx context.Context, env Executor, opts ConsoleOptions) error {
 	model := newConsoleModel(ctx, env, opts)
-	programOptions := []tea.ProgramOption{tea.WithAltScreen()}
+	programOptions := []tea.ProgramOption{tea.WithAltScreen(), tea.WithContext(ctx)}
 	if opts.Input != nil {
 		programOptions = append(programOptions, tea.WithInput(opts.Input))
 	}
@@ -123,6 +125,7 @@ func (m consoleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch message.Type {
 		case tea.KeyCtrlC, tea.KeyEsc:
+			m.cancelExecution()
 			return m, tea.Quit
 		case tea.KeyCtrlL:
 			m.transcript = nil
@@ -137,15 +140,19 @@ func (m consoleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if commandLine == "exit" || commandLine == "quit" {
+				m.cancelExecution()
 				return m, tea.Quit
 			}
 			m.appendCommand(commandLine)
 			m.input.SetValue("")
 			m.running = true
-			return m, tea.Batch(runCommand(m.ctx, m.env, commandLine), m.spinner.Tick)
+			commandCtx, cancel := context.WithCancel(m.ctx)
+			m.cancelRunning = cancel
+			return m, tea.Batch(runCommand(commandCtx, m.env, commandLine), m.spinner.Tick)
 		}
 	case executeResultMsg:
 		m.running = false
+		m.cancelRunning = nil
 		m.commandCount++
 		m.lastExitCode = message.ExitCode
 		m.appendOutput(message.Output, message.ExitCode)
@@ -255,6 +262,13 @@ func (m *consoleModel) appendOutput(output string, exitCode int) {
 func (m *consoleModel) refreshViewport() {
 	m.output.SetContent(strings.Join(m.transcript, "\n"))
 	m.output.GotoBottom()
+}
+
+func (m *consoleModel) cancelExecution() {
+	if m.cancelRunning != nil {
+		m.cancelRunning()
+		m.cancelRunning = nil
+	}
 }
 
 func composeStatusLine(left, right string, width int) string {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"sort"
@@ -146,7 +147,7 @@ func NewHandler(cfg Config) http.Handler {
 		defer r.Body.Close()
 
 		var req executeRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeStrictJSON(r.Body, &req); err != nil {
 			http.Error(w, "invalid json body", http.StatusBadRequest)
 			return
 		}
@@ -218,7 +219,7 @@ func decodeOptionalJSON(r *http.Request, target any) error {
 		return nil
 	}
 	var raw json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+	if err := decodeStrictJSON(r.Body, &raw); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil
 		}
@@ -228,6 +229,20 @@ func decodeOptionalJSON(r *http.Request, target any) error {
 		return nil
 	}
 	return json.Unmarshal(raw, target)
+}
+
+func decodeStrictJSON(reader io.Reader, target any) error {
+	dec := json.NewDecoder(reader)
+	if err := dec.Decode(target); err != nil {
+		return err
+	}
+	if err := dec.Decode(new(struct{})); err != io.EOF {
+		if err == nil {
+			return fmt.Errorf("invalid trailing json content")
+		}
+		return err
+	}
+	return nil
 }
 
 func buildRuntimeOptions(cfg Config, defaultProfile string, defaultPolicy string, hostRootRaw string, rootDirRaw string, profileRaw string, policyRaw string) (runtimeengine.Options, error) {

@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -53,6 +54,21 @@ func TestParseCLIOptionsInvalidMount(t *testing.T) {
 	_, err := parseCLIOptions([]string{"serve", "-mount", "invalid"})
 	if err == nil {
 		t.Fatalf("expected error for invalid mount")
+	}
+}
+
+func TestParseCLIOptionsPreservesRCFileOrder(t *testing.T) {
+	rcValues := []string{"third.rc", "first.rc", "second.rc", "first.rc"}
+	for i := range rcValues {
+		rcValues[i] = "/" + rcValues[i]
+	}
+	opts, err := parseCLIOptions([]string{"serve", "-rc", strings.Join(rcValues, ",")})
+	if err != nil {
+		t.Fatalf("parse serve options failed: %v", err)
+	}
+	want := rcValues[:3]
+	if !reflect.DeepEqual(opts.rcFiles, want) {
+		t.Fatalf("rcFiles = %v, want %v", opts.rcFiles, want)
 	}
 }
 

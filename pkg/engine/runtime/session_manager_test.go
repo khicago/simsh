@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -235,6 +236,111 @@ func TestSessionManagerPersistsWorkingDirAcrossExecuteResume(t *testing.T) {
 	}
 	if executed.Session.State.WorkingDir != "/task_outputs/project" {
 		t.Fatalf("unexpected working dir after resume execute: %+v", executed.Session.State)
+	}
+}
+
+func TestSessionManagerExecuteSerializesSameSession(t *testing.T) {
+	adapter := &testMemoryAdapter{
+		observeStarted: make(chan struct{}),
+		observeRelease: make(chan struct{}),
+	}
+	hostRoot := t.TempDir()
+	targetDir := filepath.Join(hostRoot, "task_outputs", "first")
+	virtualTargetDir := "/" + filepath.ToSlash(filepath.Join("task_outputs", "first"))
+	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		t.Fatalf("mkdir target dir failed: %v", err)
+	}
+	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_serial" }})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: hostRoot,
+		Profile:  contract.ProfileBashPlus,
+		Policy:   fullSessionPolicy(),
+		Adapters: []contract.SessionAdapter{adapter},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	firstDone := make(chan struct{})
+	secondDone := make(chan struct{})
+	errCh := make(chan error, 2)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	results := make(chan SessionExecution, 2)
+
+	go func() {
+		defer wg.Done()
+		executed, execErr := manager.Execute(context.Background(), session.SessionID, "cd "+virtualTargetDir, contract.ExecutionPolicy{})
+		if execErr == nil {
+			results <- executed
+		}
+		errCh <- execErr
+		close(firstDone)
+	}()
+
+	select {
+	case <-adapter.observeStarted:
+	case <-time.After(time.Second):
+		t.Fatal("first execute did not reach observe phase")
+	}
+
+	go func() {
+		defer wg.Done()
+		executed, execErr := manager.Execute(context.Background(), session.SessionID, "pwd", contract.ExecutionPolicy{})
+		if execErr == nil {
+			results <- executed
+		}
+		errCh <- execErr
+		close(secondDone)
+	}()
+
+	select {
+	case <-secondDone:
+		t.Fatal("second execute completed before first released session lock")
+	case <-time.After(50 * time.Millisecond):
+	}
+	if adapter.observeCalls != 1 {
+		t.Fatalf("observeCalls while first execute blocked = %d, want 1", adapter.observeCalls)
+	}
+
+	close(adapter.observeRelease)
+	wg.Wait()
+	close(errCh)
+	for execErr := range errCh {
+		if execErr != nil {
+			t.Fatalf("Execute(...) error = %v, want nil", execErr)
+		}
+	}
+	close(results)
+
+	seen := make([]SessionExecution, 0, 2)
+	for executed := range results {
+		seen = append(seen, executed)
+	}
+	if len(seen) != 2 {
+		t.Fatalf("completed executes = %d, want 2", len(seen))
+	}
+	var pwdResult SessionExecution
+	foundPwd := false
+	for _, executed := range seen {
+		if strings.TrimSpace(executed.Result.Stdout) == virtualTargetDir {
+			pwdResult = executed
+			foundPwd = true
+		}
+	}
+	if !foundPwd {
+		t.Fatalf("did not observe pwd result with updated session state: %+v", seen)
+	}
+	if got := pwdResult.Session.State.WorkingDir; got != virtualTargetDir {
+		t.Fatalf("session working dir after serialized executes = %q, want %q", got, virtualTargetDir)
+	}
+
+	executed, err := manager.Execute(context.Background(), session.SessionID, "pwd", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("final pwd execute failed: %v", err)
+	}
+	if got := strings.TrimSpace(executed.Result.Stdout); got != virtualTargetDir {
+		t.Fatalf("pwd after serialized execute = %q, want %q", got, virtualTargetDir)
 	}
 }
 
@@ -534,16 +640,19 @@ func TestSessionManagerResumeLifecycleEdges(t *testing.T) {
 }
 
 type testMemoryAdapter struct {
-	failCreate      bool
-	failObserve     bool
-	failResume      bool
-	failCheckpoint  bool
-	failClose       bool
-	createCalls     int
-	resumeCalls     int
-	observeCalls    int
-	checkpointCalls int
-	closeCalls      int
+	failCreate         bool
+	failObserve        bool
+	failResume         bool
+	failCheckpoint     bool
+	failClose          bool
+	observeStarted     chan struct{}
+	observeRelease     chan struct{}
+	observeStartedOnce sync.Once
+	createCalls        int
+	resumeCalls        int
+	observeCalls       int
+	checkpointCalls    int
+	closeCalls         int
 }
 
 type testMemoryState struct {
@@ -572,8 +681,17 @@ func (a *testMemoryAdapter) ResumeSession(ctx context.Context, session contract.
 }
 
 func (a *testMemoryAdapter) ObserveExecution(ctx context.Context, session contract.Session, result contract.ExecutionResult) (contract.AdapterProjection, error) {
-	_ = ctx
 	a.observeCalls++
+	if a.observeStarted != nil {
+		a.observeStartedOnce.Do(func() { close(a.observeStarted) })
+	}
+	if a.observeRelease != nil {
+		select {
+		case <-a.observeRelease:
+		case <-ctx.Done():
+			return contract.AdapterProjection{}, ctx.Err()
+		}
+	}
 	if a.failObserve {
 		return contract.AdapterProjection{}, errors.New("observe failed")
 	}

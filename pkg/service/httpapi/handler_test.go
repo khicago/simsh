@@ -90,6 +90,13 @@ func TestSessionHandlerOptionalJSONBody(t *testing.T) {
 			wantStatusCode: http.StatusBadRequest,
 			wantBody:       "invalid json body",
 		},
+		{
+			name:           "trailing json rejected",
+			body:           "{}{}",
+			hasBody:        true,
+			wantStatusCode: http.StatusBadRequest,
+			wantBody:       "invalid json body",
+		},
 	}
 
 	for _, tc := range cases {
@@ -172,6 +179,25 @@ func TestExecuteHandlerInvalidJSONBody(t *testing.T) {
 	defer ts.Close()
 
 	resp := postBody(t, ts.URL+"/v1/execute", strings.NewReader("{"))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(raw), "invalid json body") {
+		t.Fatalf("unexpected body %q", string(raw))
+	}
+}
+
+func TestExecuteHandlerRejectsTrailingJSONBody(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	executePath := "/" + strings.Join([]string{"v1", "execute"}, "/")
+	resp := postBody(t, ts.URL+executePath, strings.NewReader(`{"command":"echo hi"}{"command":"echo again"}`))
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		raw, _ := io.ReadAll(resp.Body)

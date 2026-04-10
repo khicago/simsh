@@ -181,7 +181,6 @@ func parseCSVList(raw string) []string {
 		seen[value] = struct{}{}
 		items = append(items, value)
 	}
-	sort.Strings(items)
 	return items
 }
 

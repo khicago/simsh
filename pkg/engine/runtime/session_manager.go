@@ -42,6 +42,7 @@ type managedSession struct {
 	runtime       *Stack
 	active        bool
 	adapterMounts []contract.VirtualMount
+	executeMu     sync.Mutex
 }
 
 var sessionCounter uint64
@@ -131,10 +132,12 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 		}, nil
 	}
 
-	record, err := m.lookup(strings.TrimSpace(sessionID))
+	record, err := m.lookupManaged(strings.TrimSpace(sessionID))
 	if err != nil {
 		return SessionExecution{}, err
 	}
+	record.executeMu.Lock()
+	defer record.executeMu.Unlock()
 	if !record.active || record.runtime == nil {
 		return SessionExecution{}, ErrSessionClosed
 	}
@@ -192,35 +195,41 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 }
 
 func (m *SessionManager) Checkpoint(ctx context.Context, sessionID string) (contract.Session, error) {
-	record, err := m.lookup(strings.TrimSpace(sessionID))
+	record, err := m.lookupManaged(strings.TrimSpace(sessionID))
 	if err != nil {
 		return contract.Session{}, err
+	}
+	record.executeMu.Lock()
+	defer record.executeMu.Unlock()
+	if !record.active || record.runtime == nil {
+		return contract.Session{}, ErrSessionClosed
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	current := m.sessions[record.snapshot.SessionID]
-	nextSession := current.snapshot.Clone()
+	nextSession := record.snapshot.Clone()
 	nextSession.UpdatedAt = m.now()
-	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
-	if len(current.base.Adapters) > 0 {
+	nextSession.State = mergeSessionState(nextSession.State, record.runtime)
+	if len(record.base.Adapters) > 0 {
 		var adapterMounts []contract.VirtualMount
-		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
+		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, record.base.Adapters, adapterPhaseCheckpoint, contract.ExecutionResult{})
 		if err != nil {
 			return contract.Session{}, err
 		}
-		current.adapterMounts = adapterMounts
+		record.adapterMounts = adapterMounts
 	}
-	current.snapshot = nextSession.Clone()
-	current.checkpoint = current.snapshot.Clone()
-	return current.checkpoint.Clone(), nil
+	record.snapshot = nextSession.Clone()
+	record.checkpoint = record.snapshot.Clone()
+	return record.checkpoint.Clone(), nil
 }
 
 func (m *SessionManager) Resume(ctx context.Context, sessionID string) (contract.Session, error) {
-	record, err := m.lookup(strings.TrimSpace(sessionID))
+	record, err := m.lookupManaged(strings.TrimSpace(sessionID))
 	if err != nil {
 		return contract.Session{}, err
 	}
+	record.executeMu.Lock()
+	defer record.executeMu.Unlock()
 	if record.active && record.runtime != nil {
 		return record.snapshot.Clone(), nil
 	}
@@ -236,40 +245,43 @@ func (m *SessionManager) Resume(ctx context.Context, sessionID string) (contract
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	current := m.sessions[record.snapshot.SessionID]
-	current.runtime = runtime
-	current.active = true
-	current.snapshot = resumed.Clone()
-	current.adapterMounts = cloneMounts(adapterMounts)
-	current.snapshot.UpdatedAt = m.now()
-	return current.snapshot.Clone(), nil
+	record.runtime = runtime
+	record.active = true
+	record.snapshot = resumed.Clone()
+	record.adapterMounts = cloneMounts(adapterMounts)
+	record.snapshot.UpdatedAt = m.now()
+	return record.snapshot.Clone(), nil
 }
 
 func (m *SessionManager) Close(ctx context.Context, sessionID string) (contract.Session, error) {
-	record, err := m.lookup(strings.TrimSpace(sessionID))
+	record, err := m.lookupManaged(strings.TrimSpace(sessionID))
 	if err != nil {
 		return contract.Session{}, err
+	}
+	record.executeMu.Lock()
+	defer record.executeMu.Unlock()
+	if !record.active || record.runtime == nil {
+		return contract.Session{}, ErrSessionClosed
 	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	current := m.sessions[record.snapshot.SessionID]
-	nextSession := current.snapshot.Clone()
+	nextSession := record.snapshot.Clone()
 	nextSession.UpdatedAt = m.now()
-	nextSession.State = mergeSessionState(nextSession.State, current.runtime)
-	if len(current.base.Adapters) > 0 {
+	nextSession.State = mergeSessionState(nextSession.State, record.runtime)
+	if len(record.base.Adapters) > 0 {
 		var adapterMounts []contract.VirtualMount
-		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, current.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
+		nextSession, adapterMounts, err = applySessionAdapters(ctx, nextSession, record.base.Adapters, adapterPhaseClose, contract.ExecutionResult{})
 		if err != nil {
 			return contract.Session{}, err
 		}
-		current.adapterMounts = adapterMounts
+		record.adapterMounts = adapterMounts
 	}
-	current.snapshot = nextSession.Clone()
-	current.checkpoint = current.snapshot.Clone()
-	current.runtime = nil
-	current.active = false
-	return current.snapshot.Clone(), nil
+	record.snapshot = nextSession.Clone()
+	record.checkpoint = record.snapshot.Clone()
+	record.runtime = nil
+	record.active = false
+	return record.snapshot.Clone(), nil
 }
 
 func (m *SessionManager) lookup(sessionID string) (*managedSession, error) {
@@ -291,6 +303,22 @@ func (m *SessionManager) lookup(sessionID string) (*managedSession, error) {
 	clone.base = cloneOptions(record.base)
 	clone.adapterMounts = cloneMounts(record.adapterMounts)
 	return &clone, nil
+}
+
+func (m *SessionManager) lookupManaged(sessionID string) (*managedSession, error) {
+	if m == nil {
+		return nil, fmt.Errorf("session manager is not initialized")
+	}
+	if sessionID == "" {
+		return nil, ErrSessionNotFound
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	record, ok := m.sessions[sessionID]
+	if !ok {
+		return nil, ErrSessionNotFound
+	}
+	return record, nil
 }
 
 func runtimeOptionsForSession(record *managedSession, policy contract.ExecutionPolicy) Options {
