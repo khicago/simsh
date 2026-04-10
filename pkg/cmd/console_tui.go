@@ -28,6 +28,7 @@ type ConsoleOptions struct {
 type executeResultMsg struct {
 	Output   string
 	ExitCode int
+	RunID    int
 }
 
 type consoleModel struct {
@@ -53,6 +54,8 @@ type consoleModel struct {
 	transcript   []string
 
 	cancelRunning context.CancelFunc
+	activeRunID   int
+	nextRunID     int
 }
 
 func RunConsoleTUI(ctx context.Context, env Executor, opts ConsoleOptions) error {
@@ -146,13 +149,19 @@ func (m consoleModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.appendCommand(commandLine)
 			m.input.SetValue("")
 			m.running = true
+			m.nextRunID++
+			m.activeRunID = m.nextRunID
 			commandCtx, cancel := context.WithCancel(m.ctx)
 			m.cancelRunning = cancel
-			return m, tea.Batch(runCommand(commandCtx, m.env, commandLine), m.spinner.Tick)
+			return m, tea.Batch(runCommand(commandCtx, m.env, commandLine, m.activeRunID), m.spinner.Tick)
 		}
 	case executeResultMsg:
+		if message.RunID == 0 || message.RunID != m.activeRunID {
+			return m, nil
+		}
 		m.running = false
 		m.cancelRunning = nil
+		m.activeRunID = 0
 		m.commandCount++
 		m.lastExitCode = message.ExitCode
 		m.appendOutput(message.Output, message.ExitCode)
@@ -209,10 +218,10 @@ func (m consoleModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, title, meta, statusBar, outputPane, inputPane, help)
 }
 
-func runCommand(ctx context.Context, env Executor, commandLine string) tea.Cmd {
+func runCommand(ctx context.Context, env Executor, commandLine string, runID int) tea.Cmd {
 	return func() tea.Msg {
 		out, code := env.Execute(ctx, commandLine)
-		return executeResultMsg{Output: out, ExitCode: code}
+		return executeResultMsg{Output: out, ExitCode: code, RunID: runID}
 	}
 }
 
@@ -269,6 +278,8 @@ func (m *consoleModel) cancelExecution() {
 		m.cancelRunning()
 		m.cancelRunning = nil
 	}
+	m.running = false
+	m.activeRunID = 0
 }
 
 func composeStatusLine(left, right string, width int) string {

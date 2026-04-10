@@ -209,6 +209,25 @@ func TestExecuteHandlerRejectsTrailingJSONBody(t *testing.T) {
 	}
 }
 
+func TestExecuteHandlerRejectsUnknownFields(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	executePath := "/" + strings.Join([]string{"v1", "execute"}, "/")
+	resp := postBody(t, ts.URL+executePath, strings.NewReader(`{"command":"echo hi","unexpected":true}`))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(raw), "invalid json body") {
+		t.Fatalf("unexpected body %q", string(raw))
+	}
+}
+
 func TestExecuteHandlerCommandRequired(t *testing.T) {
 	tmp := t.TempDir()
 	h := NewHandler(Config{DefaultHostRoot: tmp})
@@ -915,6 +934,25 @@ func TestExecuteHandlerRejectsSessionOverrides(t *testing.T) {
 				t.Fatalf("unexpected body %q", string(raw))
 			}
 		})
+	}
+}
+
+func TestSessionHandlerRejectsUnknownFields(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	sessionsPath := "/" + strings.Join([]string{"v1", "sessions"}, "/")
+	resp := postBody(t, ts.URL+sessionsPath, strings.NewReader(`{"host_root":".","unexpected":true}`))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	raw, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(raw), "invalid json body") {
+		t.Fatalf("unexpected body %q", string(raw))
 	}
 }
 

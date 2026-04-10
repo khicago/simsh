@@ -222,6 +222,10 @@ func preflightOutputRedirections(ctx context.Context, commandName string, redirs
 	return "", 0
 }
 
+func resolvedRedirectionPath(redir commandRedirect, ops contract.Ops) (string, error) {
+	return ops.RequireAbsolutePath(redir.target)
+}
+
 func applyOutputRedirections(ctx context.Context, commandName string, redirs []commandRedirect, output string, ops contract.Ops) (string, string, int) {
 	if err := executionContextErr(ctx); err != nil {
 		return "", contextExecOutput(err).stdout, contract.ExitCodeGeneral
@@ -247,7 +251,7 @@ func applyOutputRedirections(ctx context.Context, commandName string, redirs []c
 		if isNullDevice(redir.target) {
 			continue
 		}
-		pathValue, err := ops.RequireAbsolutePath(redir.target)
+		pathValue, err := resolvedRedirectionPath(redir, ops)
 		if err != nil {
 			return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeUsage
 		}
@@ -256,19 +260,19 @@ func applyOutputRedirections(ctx context.Context, commandName string, redirs []c
 		case redirectOutputWrite:
 			if err := ops.WriteFile(ctx, pathValue, payload); err != nil {
 				if errors.Is(err, contract.ErrUnsupported) {
-					markTraceDeniedPath(ctx, redir.target)
+					markTraceDeniedPath(ctx, pathValue)
 					return "", "redirection: write is not supported", contract.ExitCodeUnsupported
 				}
 				return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
 			}
 		case redirectOutputAppend:
 			if ops.AppendFile == nil {
-				markTraceDeniedPath(ctx, redir.target)
+				markTraceDeniedPath(ctx, pathValue)
 				return "", "redirection: append is not supported", contract.ExitCodeUnsupported
 			}
 			if err := ops.AppendFile(ctx, pathValue, payload); err != nil {
 				if errors.Is(err, contract.ErrUnsupported) {
-					markTraceDeniedPath(ctx, redir.target)
+					markTraceDeniedPath(ctx, pathValue)
 					return "", "redirection: append is not supported", contract.ExitCodeUnsupported
 				}
 				return "", fmt.Sprintf("%s: %v", commandName, err), contract.ExitCodeGeneral
@@ -301,7 +305,11 @@ func preflightOutputRedirectionPayload(ctx context.Context, redirs []commandRedi
 	if len(output) <= ops.Policy.MaxWriteBytes {
 		return "", 0
 	}
-	markTraceDeniedPath(ctx, last.target)
+	if pathValue, err := resolvedRedirectionPath(last, ops); err == nil {
+		markTraceDeniedPath(ctx, pathValue)
+	} else {
+		markTraceDeniedPath(ctx, last.target)
+	}
 	return fmt.Sprintf("redirection: write exceeds limit (%d bytes)", ops.Policy.MaxWriteBytes), contract.ExitCodeGeneral
 }
 

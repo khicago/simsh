@@ -181,6 +181,81 @@ func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultTraceNormalizesRelativeDeniedRedirectionPaths(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+
+	workspaceDir := "/" + "workspace"
+	outPath := workspaceDir + "/" + "out.txt"
+	appendPath := workspaceDir + "/" + "append.txt"
+	largePath := workspaceDir + "/" + "large.txt"
+
+	t.Run("policy denial", func(t *testing.T) {
+		ops := contract.OpsFromFilesystem(newTestFS())
+		ops.Profile = contract.ProfileBashPlus
+		ops.Policy = contract.DefaultPolicy()
+
+		result := eng.ExecuteResult(context.Background(), "cd "+workspaceDir+"; echo hello > out.txt", ops)
+		if result.ExitCode == 0 {
+			t.Fatalf("expected denied redirection, got %+v", result)
+		}
+		if containsTracePath(result.Trace.DeniedPaths, "out.txt") {
+			t.Fatalf("denied_paths unexpectedly contains raw relative path: %+v", result.Trace)
+		}
+		if !containsTracePath(result.Trace.DeniedPaths, outPath) {
+			t.Fatalf("expected resolved denied path in trace: %+v", result.Trace)
+		}
+	})
+
+	t.Run("append unsupported", func(t *testing.T) {
+		fs := newTestFS()
+		ops := contract.OpsFromFilesystem(fs)
+		ops.Profile = contract.ProfileBashPlus
+		ops.Policy = contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeFull,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		}
+		ops.AppendFile = nil
+
+		result := eng.ExecuteResult(context.Background(), "cd "+workspaceDir+"; echo hello >> append.txt", ops)
+		if result.ExitCode == 0 {
+			t.Fatalf("expected append redirection failure, got %+v", result)
+		}
+		if containsTracePath(result.Trace.DeniedPaths, "append.txt") {
+			t.Fatalf("denied_paths unexpectedly contains raw relative path: %+v", result.Trace)
+		}
+		if !containsTracePath(result.Trace.DeniedPaths, appendPath) {
+			t.Fatalf("expected resolved denied path in trace: %+v", result.Trace)
+		}
+	})
+
+	t.Run("write limited payload denial", func(t *testing.T) {
+		ops := contract.OpsFromFilesystem(newTestFS())
+		ops.Profile = contract.ProfileBashPlus
+		ops.Policy = contract.ExecutionPolicy{
+			WriteMode:        contract.WriteModeWriteLimited,
+			MaxWriteBytes:    1,
+			MaxPipelineDepth: 16,
+			MaxOutputBytes:   4 << 20,
+			Timeout:          contract.DefaultPolicy().Timeout,
+		}
+
+		result := eng.ExecuteResult(context.Background(), "cd "+workspaceDir+"; echo hello > large.txt", ops)
+		if result.ExitCode == 0 {
+			t.Fatalf("expected write-limited redirection failure, got %+v", result)
+		}
+		if containsTracePath(result.Trace.DeniedPaths, "large.txt") {
+			t.Fatalf("denied_paths unexpectedly contains raw relative path: %+v", result.Trace)
+		}
+		if !containsTracePath(result.Trace.DeniedPaths, largePath) {
+			t.Fatalf("expected resolved denied path in trace: %+v", result.Trace)
+		}
+	})
+}
+
 func TestEngineExecuteResultTraceMutationDenials(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)

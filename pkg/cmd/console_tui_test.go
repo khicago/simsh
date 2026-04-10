@@ -202,3 +202,54 @@ func TestConsoleModelQuitCancelsInFlightExecution(t *testing.T) {
 		}
 	}
 }
+
+func TestConsoleModelDropsLateExecuteResultAfterCancel(t *testing.T) {
+	env := &fakeConsoleExecutor{}
+	model := newConsoleModel(context.Background(), env, ConsoleOptions{})
+	model.input.SetValue("echo demo")
+
+	updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("enter returned nil cmd for executable input")
+	}
+	model = updated.(consoleModel)
+	batch, ok := cmd().(tea.BatchMsg)
+	if !ok || len(batch) == 0 {
+		t.Fatalf("cmd() = %T, want non-empty tea.BatchMsg", cmd())
+	}
+	result, ok := batch[0]().(executeResultMsg)
+	if !ok {
+		t.Fatalf("first batch cmd type = %T, want executeResultMsg", batch[0]())
+	}
+	if result.RunID == 0 {
+		t.Fatalf("execute result run id = %d, want non-zero", result.RunID)
+	}
+
+	updated, quitCmd := model.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	if quitCmd == nil {
+		t.Fatal("ctrl+c returned nil cmd, want quit cmd")
+	}
+	model = updated.(consoleModel)
+	if model.running {
+		t.Fatal("running = true after cancel, want false")
+	}
+	if model.activeRunID != 0 {
+		t.Fatalf("activeRunID = %d after cancel, want 0", model.activeRunID)
+	}
+
+	before := append([]string(nil), model.transcript...)
+	updated, cmd = model.Update(result)
+	if cmd != nil {
+		t.Fatalf("late executeResultMsg returned unexpected cmd")
+	}
+	model = updated.(consoleModel)
+	if model.commandCount != 0 {
+		t.Fatalf("commandCount = %d, want 0 after dropping late result", model.commandCount)
+	}
+	if model.lastExitCode != 0 {
+		t.Fatalf("lastExitCode = %d, want 0 after dropping late result", model.lastExitCode)
+	}
+	if !reflect.DeepEqual(model.transcript, before) {
+		t.Fatalf("late result changed transcript = %#v, want %#v", model.transcript, before)
+	}
+}

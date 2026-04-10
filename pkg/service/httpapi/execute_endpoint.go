@@ -228,11 +228,12 @@ func decodeOptionalJSON(r *http.Request, target any) error {
 	if len(raw) == 0 || string(raw) == "null" {
 		return nil
 	}
-	return json.Unmarshal(raw, target)
+	return decodeStrictJSON(strings.NewReader(string(raw)), target)
 }
 
 func decodeStrictJSON(reader io.Reader, target any) error {
 	dec := json.NewDecoder(reader)
+	dec.DisallowUnknownFields()
 	if err := dec.Decode(target); err != nil {
 		return err
 	}
