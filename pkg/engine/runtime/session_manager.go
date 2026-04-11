@@ -18,6 +18,7 @@ var (
 	ErrSessionClosed     = errors.New("runtime session is closed")
 	ErrSessionNotRunning = errors.New("runtime session has no active execution")
 	ErrExecutionChanged  = errors.New("runtime session active execution changed")
+	ErrExecutionRequired = errors.New("runtime session cancel requires active execution id")
 )
 
 type SessionManagerOptions struct {
@@ -135,6 +136,19 @@ func (m *SessionManager) Get(sessionID string) (contract.Session, error) {
 	if err != nil {
 		return contract.Session{}, err
 	}
+	if record.activeExecution != nil && executionFinished(record.activeExecution) {
+		m.mu.Lock()
+		current, ok := m.sessions[strings.TrimSpace(sessionID)]
+		if ok && current.activeExecution != nil && executionFinished(current.activeExecution) {
+			current.activeExecution = nil
+			current.snapshot.ActiveExecution = nil
+		}
+		record = current
+		m.mu.Unlock()
+		if record == nil {
+			return contract.Session{}, ErrSessionNotFound
+		}
+	}
 	return record.snapshot.Clone(), nil
 }
 
@@ -161,11 +175,17 @@ func (m *SessionManager) Cancel(sessionID string, expectedExecutionID string) (c
 		return contract.Session{}, ErrSessionNotRunning
 	}
 	if executionFinished(current.activeExecution) {
+		current.activeExecution = nil
+		current.snapshot.ActiveExecution = nil
 		m.mu.Unlock()
 		return contract.Session{}, ErrSessionNotRunning
 	}
 	expectedExecutionID = strings.TrimSpace(expectedExecutionID)
-	if expectedExecutionID != "" && current.snapshot.ActiveExecution.ExecutionID != expectedExecutionID {
+	if expectedExecutionID == "" {
+		m.mu.Unlock()
+		return contract.Session{}, ErrExecutionRequired
+	}
+	if current.snapshot.ActiveExecution.ExecutionID != expectedExecutionID {
 		m.mu.Unlock()
 		return contract.Session{}, ErrExecutionChanged
 	}

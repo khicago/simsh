@@ -349,6 +349,8 @@ func statusForSessionError(err error) int {
 		return http.StatusConflict
 	case errors.Is(err, runtimeengine.ErrExecutionChanged):
 		return http.StatusConflict
+	case errors.Is(err, runtimeengine.ErrExecutionRequired):
+		return http.StatusBadRequest
 	case errors.Is(err, contract.ErrPolicyCeilingExceeded):
 		return http.StatusBadRequest
 	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):

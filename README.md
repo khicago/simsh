@@ -104,7 +104,11 @@ curl -sS "$BASE_URL/$EXECUTE_ROUTE" \
   -d "{\"session_id\":\"$SESSION_ID\",\"command\":\"sleep 30\"}" >/tmp/simsh-exec.json &
 EXEC_PID=$!
 
-ACTIVE_EXECUTION_ID="$(curl -sS "$BASE_URL/$SESSIONS_ROUTE/$SESSION_ID" | jq -r '.session.active_execution.execution_id')"
+ACTIVE_EXECUTION_ID=""
+while [ -z "$ACTIVE_EXECUTION_ID" ] || [ "$ACTIVE_EXECUTION_ID" = "null" ]; do
+  ACTIVE_EXECUTION_ID="$(curl -sS "$BASE_URL/$SESSIONS_ROUTE/$SESSION_ID" | jq -r '.session.active_execution.execution_id')"
+  [ "$ACTIVE_EXECUTION_ID" = "null" ] && sleep 0.1
+done
 curl -sS "$BASE_URL/$SESSIONS_ROUTE/$SESSION_ID/$CANCEL_ACTION" \
   -H 'Content-Type: application/json' \
   -d "{\"expected_execution_id\":\"$ACTIVE_EXECUTION_ID\"}"

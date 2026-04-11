@@ -526,6 +526,97 @@ func TestSessionManagerCancelRejectsChangedExecution(t *testing.T) {
 	}
 }
 
+func TestSessionManagerCancelRequiresExecutionID(t *testing.T) {
+	manager := NewSessionManager(SessionManagerOptions{
+		Now:            func() time.Time { return time.Date(2026, 5, 20, 11, 30, 0, 0, time.UTC) },
+		NewID:          func() string { return "sess_require_exec" },
+		NewExecutionID: func() string { return "exec_require_exec" },
+	})
+
+	runStarted := make(chan struct{})
+	runReleased := make(chan struct{})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		ExternalCallbacks: fs.ExternalCallbacks{
+			ListExternalCommands: func(context.Context) ([]contract.ExternalCommand, error) {
+				return []contract.ExternalCommand{{Name: "blocker", Summary: "blocks until canceled"}}, nil
+			},
+			RunExternalCommand: func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				close(runStarted)
+				<-ctx.Done()
+				close(runReleased)
+				return contract.ExternalCommandResult{}, ctx.Err()
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, execErr := manager.Execute(context.Background(), session.SessionID, "blocker", contract.ExecutionPolicy{})
+		errCh <- execErr
+	}()
+	select {
+	case <-runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("active execution did not start")
+	}
+
+	if _, err := manager.Cancel(session.SessionID, ""); !errors.Is(err, ErrExecutionRequired) {
+		t.Fatalf("Cancel(%q, empty execution id) error = %v, want ErrExecutionRequired", session.SessionID, err)
+	}
+	if _, err := manager.Cancel(session.SessionID, "exec_require_exec"); err != nil {
+		t.Fatalf("Cancel(%q, current execution) error = %v", session.SessionID, err)
+	}
+	select {
+	case <-runReleased:
+	case <-time.After(time.Second):
+		t.Fatal("active execution was not canceled")
+	}
+	if execErr := <-errCh; execErr != nil {
+		t.Fatalf("Execute(...) error = %v, want nil", execErr)
+	}
+}
+
+func TestSessionManagerGetClearsFinishedActiveExecution(t *testing.T) {
+	manager := NewSessionManager(SessionManagerOptions{
+		Now:            func() time.Time { return time.Date(2026, 5, 20, 12, 30, 0, 0, time.UTC) },
+		NewID:          func() string { return "sess_get_clear" },
+		NewExecutionID: func() string { return "exec_get_clear" },
+	})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	record, err := manager.lookupManaged(session.SessionID)
+	if err != nil {
+		t.Fatalf("lookupManaged(%q) error = %v", session.SessionID, err)
+	}
+	record.activeExecution = &activeExecutionControl{
+		state: *newActiveExecutionState("exec_get_clear", "echo hi", time.Date(2026, 5, 20, 12, 30, 1, 0, time.UTC), contract.SessionExecutionStatusRunning),
+		done:  make(chan struct{}),
+	}
+	record.snapshot.ActiveExecution = cloneActiveExecutionPtr(&record.activeExecution.state)
+	close(record.activeExecution.done)
+
+	got, err := manager.Get(session.SessionID)
+	if err != nil {
+		t.Fatalf("Get(%q) error = %v", session.SessionID, err)
+	}
+	if got.ActiveExecution != nil {
+		t.Fatalf("Get(%q).ActiveExecution = %+v, want nil after finished execution", session.SessionID, got.ActiveExecution)
+	}
+}
+
 type steppingClock struct {
 	Values []time.Time
 	idx    int
