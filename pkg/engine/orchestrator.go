@@ -644,7 +644,31 @@ func effectiveRawExitCode(result contract.ExternalCommandResult) *int {
 func enforceOutputLimit(ctx context.Context, out execOutput, policy contract.ExecutionPolicy) execOutput {
 	if policy.MaxOutputBytes > 0 && len(flattenExecOutput(out)) > policy.MaxOutputBytes {
 		markTraceOutputTruncated(ctx)
-		return execOutput{stdout: fmt.Sprintf("execute: output exceeds limit (%d bytes)", policy.MaxOutputBytes), code: contract.ExitCodeGeneral}
+		return truncateExecOutput(out, policy.MaxOutputBytes)
+	}
+	return out
+}
+
+func truncateExecOutput(out execOutput, limit int) execOutput {
+	if limit <= 0 {
+		return out
+	}
+	flat := flattenExecOutput(out)
+	if len(flat) <= limit {
+		return out
+	}
+	truncated := flat[:limit]
+	switch {
+	case out.stdout == "":
+		out.stderr = truncated
+	case out.stderr == "":
+		out.stdout = truncated
+	default:
+		out.stdout = truncated
+		out.stderr = ""
+	}
+	if out.code == 0 {
+		out.code = contract.ExitCodeGeneral
 	}
 	return out
 }

@@ -142,6 +142,7 @@ Example shape:
 - Traces SHOULD record direct side effects, not inferred heuristics.
 - Builtins and external commands should project into the same high-level trace categories even if collection mechanisms differ.
 - A parsed pipeline summary MAY remain for compatibility, but runtime-ordered executed steps SHOULD be the machine-consumable truth for "what actually ran".
+- Output-size enforcement SHOULD preserve structured stdout/stderr truth in truncated form rather than overwriting the result with prose-only fallback text.
 
 ### External Outcome Truth
 For external commands, the structured contract SHOULD preserve:

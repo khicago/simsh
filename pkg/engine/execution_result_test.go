@@ -183,6 +183,12 @@ func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
 	if !truncated.Trace.OutputTruncated {
 		t.Fatalf("expected output_truncated trace flag: %+v", truncated.Trace)
 	}
+	if truncated.Stdout != "hell" || truncated.Stderr != "" {
+		t.Fatalf("unexpected truncated stdout/stderr: %+v", truncated)
+	}
+	if truncated.ExitCode != contract.ExitCodeGeneral {
+		t.Fatalf("unexpected truncated exit_code=%d, want %d", truncated.ExitCode, contract.ExitCodeGeneral)
+	}
 }
 
 func TestEngineExecuteResultTraceNormalizesRelativeDeniedRedirectionPaths(t *testing.T) {
