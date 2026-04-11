@@ -199,6 +199,9 @@ func TestWrapOpsReadManyBatchesFilesystemPaths(t *testing.T) {
 	if got, want := gotReqs[0].Paths, wantPaths; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("orig ReadMany paths = %#v, want %#v", gotReqs[0].Paths, want)
 	}
+	if gotReqs[0].MaxEntries != 0 {
+		t.Fatalf("filesystem ReadMany MaxEntries = %d, want 0 on filesystem-only leg", gotReqs[0].MaxEntries)
+	}
 	if len(result.Entries) != 3 {
 		t.Fatalf("ReadMany entries = %d, want 3", len(result.Entries))
 	}

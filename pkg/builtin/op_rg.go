@@ -96,7 +96,7 @@ func runRG(runtime engine.CommandRuntime, args []string) (string, int) {
 		req := buildContractSearchRequest(opts.pattern, searchMatcherOptions{
 			Regex:    !opts.fixed,
 			CaseMode: opts.caseMode,
-		}, opts.globs, targets, opts.listFiles, opts.before, opts.after)
+		}, opts.globs, targets, opts.listFiles, opts.before, opts.after, 0)
 		if used, result, err := tryRuntimeSearch(runtime, req); err != nil {
 			return fmt.Sprintf("rg: %v", err), contract.ExitCodeGeneral
 		} else if used {

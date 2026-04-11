@@ -42,7 +42,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.ListEntries = func(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
 		req.Dir = normalizeAbsolutePath(req.Dir)
-		if result, ok, err := r.listEntries(ctx, req.Dir, req.Recursive); err != nil {
+		if result, ok, err := r.listEntries(ctx, req); err != nil {
 			return contract.ListEntriesResult{}, err
 		} else if ok {
 			return result, nil
@@ -55,7 +55,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.EnumeratePaths = func(ctx context.Context, req contract.EnumeratePathsRequest) (contract.EnumeratePathsResult, error) {
 		req.Target = normalizeAbsolutePath(req.Target)
-		if result, ok, err := r.enumeratePaths(ctx, req.Target, req.Recursive); err != nil {
+		if result, ok, err := r.enumeratePaths(ctx, req); err != nil {
 			return contract.EnumeratePathsResult{}, err
 		} else if ok {
 			return result, nil
@@ -68,7 +68,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.ListChildren = func(ctx context.Context, dir string) ([]string, error) {
 		dir = normalizeAbsolutePath(dir)
-		if result, ok, err := r.listEntries(ctx, dir, false); err != nil {
+		if result, ok, err := r.listEntries(ctx, contract.ListEntriesRequest{Dir: dir, Recursive: false}); err != nil {
 			return nil, err
 		} else if ok {
 			children := make([]string, 0, len(result.Entries))
@@ -114,7 +114,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.CollectFilesUnder = func(ctx context.Context, target string) ([]string, error) {
 		target = normalizeAbsolutePath(target)
-		if result, ok, err := r.enumeratePaths(ctx, target, true); err != nil {
+		if result, ok, err := r.enumeratePaths(ctx, contract.EnumeratePathsRequest{Target: target, Recursive: true}); err != nil {
 			return nil, err
 		} else if ok {
 			paths := make([]string, 0, len(result.Entries))
@@ -128,7 +128,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 
 	ops.ResolveSearchPaths = func(ctx context.Context, target string, recursive bool) ([]string, error) {
 		target = normalizeAbsolutePath(target)
-		if result, ok, err := r.enumeratePaths(ctx, target, recursive); err != nil {
+		if result, ok, err := r.enumeratePaths(ctx, contract.EnumeratePathsRequest{Target: target, Recursive: recursive}); err != nil {
 			return nil, err
 		} else if ok {
 			paths := make([]string, 0, len(result.Entries))
@@ -205,7 +205,7 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 		for _, groupKey := range groupOrder {
 			groupedPaths := groups[groupKey]
 			mount := groupMounts[groupKey]
-			entries, err := contract.ReadManyFromMount(ctx, mount, groupedPaths)
+			entries, err := contract.ReadManyFromMountRequest(ctx, mount, contract.ReadManyRequest{Paths: groupedPaths, MaxEntries: len(groupedPaths)})
 			if err != nil {
 				return contract.ReadManyResult{}, err
 			}

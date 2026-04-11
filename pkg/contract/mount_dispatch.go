@@ -113,13 +113,26 @@ func ListMountChildren(ctx context.Context, mount VirtualMount, dir string) ([]s
 	return children, nil
 }
 
+func CheckMountListScope(mount VirtualMount, req ListEntriesRequest) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	if req.MaxDepth > 0 && profile.SLO.MaxSearchPaths > 0 && req.MaxDepth > profile.SLO.MaxSearchPaths {
+		return overMountBudget(mount, "entry listing depth", fmt.Sprintf("max_depth=%d exceeds declared mount budget=%d", req.MaxDepth, profile.SLO.MaxSearchPaths))
+	}
+	return nil
+}
+
 func EnumerateMountFiles(ctx context.Context, mount VirtualMount, target string, recursive bool) ([]string, error) {
+	return EnumerateMountFilesWithRequest(ctx, mount, EnumeratePathsRequest{Target: target, Recursive: recursive})
+}
+
+func EnumerateMountFilesWithRequest(ctx context.Context, mount VirtualMount, req EnumeratePathsRequest) ([]string, error) {
+	target := req.Target
 	entry, err := StatMountPath(ctx, mount, target)
 	if err != nil {
 		return nil, err
 	}
 	requiredClass := MountCLIRead
-	if recursive || entry.Meta.IsDir {
+	if req.Recursive || entry.Meta.IsDir {
 		requiredClass = MountCLIFind
 	}
 	if err := requireMountCLIClass(mount, requiredClass, "path enumeration"); err != nil {
@@ -128,11 +141,14 @@ func EnumerateMountFiles(ctx context.Context, mount VirtualMount, target string,
 	if !entry.Meta.IsDir {
 		return []string{entry.Path}, nil
 	}
-	if !recursive {
+	if !req.Recursive {
 		return nil, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
 	}
+	if err := checkMountEnumerateScope(mount, req); err != nil {
+		return nil, err
+	}
 	if enumerator, ok := mount.(PathEnumerator); ok {
-		result, err := enumerator.EnumeratePaths(ctx, EnumeratePathsRequest{Target: target, Recursive: true})
+		result, err := enumerator.EnumeratePaths(ctx, req)
 		if err != nil {
 			return nil, err
 		}
@@ -145,7 +161,7 @@ func EnumerateMountFiles(ctx context.Context, mount VirtualMount, target string,
 	if !ok {
 		return nil, unsupportedMountCapability(mount, "path enumeration")
 	}
-	result, err := lister.ListEntries(ctx, ListEntriesRequest{Dir: target, Recursive: true})
+	result, err := lister.ListEntries(ctx, ListEntriesRequest{Dir: target, Recursive: true, MaxDepth: req.MaxDepth})
 	if err != nil {
 		return nil, err
 	}
@@ -164,15 +180,24 @@ func ReadMountContent(ctx context.Context, mount VirtualMount, pathValue string)
 }
 
 func ReadManyFromMount(ctx context.Context, mount VirtualMount, paths []string) ([]MountContentEntry, error) {
+	return ReadManyFromMountRequest(ctx, mount, ReadManyRequest{Paths: paths})
+}
+
+func ReadManyFromMountRequest(ctx context.Context, mount VirtualMount, req ReadManyRequest) ([]MountContentEntry, error) {
+	paths := append([]string(nil), req.Paths...)
 	requiredClass := MountCLIRead
 	if len(paths) > 1 {
 		requiredClass = MountCLIBulkRead
+	}
+	if err := checkMountReadManyBudget(mount, req); err != nil {
+		return nil, err
 	}
 	if err := requireMountCLIClass(mount, requiredClass, "bulk read"); err != nil {
 		return nil, err
 	}
 	if bulk, ok := mount.(BulkReader); ok {
-		result, err := bulk.ReadMany(ctx, ReadManyRequest{Paths: append([]string(nil), paths...)})
+		req.Paths = paths
+		result, err := bulk.ReadMany(ctx, req)
 		if err != nil {
 			return nil, err
 		}
@@ -193,6 +218,9 @@ func ReadManyFromMount(ctx context.Context, mount VirtualMount, paths []string) 
 }
 
 func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchRequest) (SearchResult, error) {
+	if err := checkMountSearchBudget(mount, req); err != nil {
+		return SearchResult{}, err
+	}
 	if err := requireMountCLIClass(mount, MountCLIContentSearch, "content search"); err != nil {
 		return SearchResult{}, err
 	}
@@ -208,7 +236,7 @@ func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchReque
 	}
 	paths := make([]string, 0)
 	for _, target := range targets {
-		targetPaths, err := EnumerateMountFiles(ctx, mount, target, true)
+		targetPaths, err := EnumerateMountFilesWithRequest(ctx, mount, EnumeratePathsRequest{Target: target, Recursive: true})
 		if err != nil {
 			return SearchResult{}, err
 		}
@@ -219,7 +247,7 @@ func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchReque
 	if err != nil {
 		return SearchResult{}, err
 	}
-	files, err := ReadManyFromMount(ctx, mount, filtered)
+	files, err := ReadManyFromMountRequest(ctx, mount, ReadManyRequest{Paths: filtered})
 	if err != nil {
 		return SearchResult{}, err
 	}
@@ -247,6 +275,9 @@ func SearchMountContent(ctx context.Context, mount VirtualMount, req SearchReque
 
 func ApplyMountMutations(ctx context.Context, mount VirtualMount, batch MutationBatch) (MutationResult, error) {
 	profile := NormalizeMountProfile(mount.Profile())
+	if err := checkMountMutationBudget(mount, batch); err != nil {
+		return MutationResult{}, err
+	}
 	if err := requireMountCLIClass(mount, MountCLIMutate, "mutation batch"); err != nil {
 		return MutationResult{}, err
 	}
@@ -338,6 +369,60 @@ func mountDeclaresConsistency(profile MountProfile) bool {
 		profile.Consistency.ListAfterWrite ||
 		profile.Consistency.SearchAfterWrite ||
 		profile.Consistency.RefreshRequired
+}
+
+func checkMountEnumerateScope(mount VirtualMount, req EnumeratePathsRequest) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	if req.MaxDepth > 0 && profile.SLO.MaxSearchPaths > 0 && req.MaxDepth > profile.SLO.MaxSearchPaths {
+		return overMountBudget(mount, "path enumeration depth", fmt.Sprintf("max_depth=%d exceeds declared mount budget=%d", req.MaxDepth, profile.SLO.MaxSearchPaths))
+	}
+	return nil
+}
+
+func checkMountReadManyBudget(mount VirtualMount, req ReadManyRequest) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	if profile.SLO.MaxBatchCount > 0 && len(req.Paths) > profile.SLO.MaxBatchCount {
+		return overMountBudget(mount, "bulk read batch", fmt.Sprintf("requested paths=%d exceeds declared mount batch count=%d", len(req.Paths), profile.SLO.MaxBatchCount))
+	}
+	if profile.SLO.MaxBatchBytes > 0 && req.MaxBytes > profile.SLO.MaxBatchBytes {
+		return overMountBudget(mount, "bulk read batch", fmt.Sprintf("requested max_bytes=%d exceeds declared mount batch bytes=%d", req.MaxBytes, profile.SLO.MaxBatchBytes))
+	}
+	return nil
+}
+
+func checkMountSearchBudget(mount VirtualMount, req SearchRequest) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	if profile.SLO.MaxSearchPaths > 0 && len(req.Targets) > profile.SLO.MaxSearchPaths {
+		return overMountBudget(mount, "content search", fmt.Sprintf("requested targets=%d exceeds declared mount search path budget=%d", len(req.Targets), profile.SLO.MaxSearchPaths))
+	}
+	return nil
+}
+
+func checkMountMutationBudget(mount VirtualMount, batch MutationBatch) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	if profile.SLO.MaxBatchCount > 0 && len(batch.Ops) > profile.SLO.MaxBatchCount {
+		return overMountBudget(mount, "mutation batch", fmt.Sprintf("requested ops=%d exceeds declared mount batch count=%d", len(batch.Ops), profile.SLO.MaxBatchCount))
+	}
+	if profile.SLO.MaxBatchBytes > 0 {
+		var total int64
+		for _, op := range batch.Ops {
+			total += int64(len(op.Content) + len(op.NewString) + len(op.OldString))
+		}
+		if total > profile.SLO.MaxBatchBytes {
+			return overMountBudget(mount, "mutation batch", fmt.Sprintf("requested batch bytes=%d exceeds declared mount batch bytes=%d", total, profile.SLO.MaxBatchBytes))
+		}
+	}
+	return nil
+}
+
+func overMountBudget(mount VirtualMount, capability string, detail string) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	return &MountUnsupportedError{
+		MountPoint:   mount.MountPoint(),
+		Capability:   capability,
+		LatencyClass: profile.LatencyClass,
+		Detail:       fmt.Sprintf("%s: %s", mount.MountPoint(), detail),
+	}
 }
 
 func mountPathsFromEntries(entries []MountEntry) []string {

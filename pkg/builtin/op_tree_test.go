@@ -49,3 +49,26 @@ func TestAppendTreeChildrenASCIIUsesEntryMetadata(t *testing.T) {
 		t.Fatalf("appendTreeChildrenASCII(...) output = %q", out)
 	}
 }
+
+func TestAppendTreeChildrenASCIIPropagatesDepthLimitToListEntries(t *testing.T) {
+	var depths []int
+	docsPath := "/" + "docs"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			ListEntries: func(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, error) {
+				depths = append(depths, req.MaxDepth)
+				return contract.ListEntriesResult{Entries: []contract.MountEntry{}}, nil
+			},
+		},
+	}
+
+	lines := []string{docsPath}
+	visited := map[string]struct{}{docsPath: {}}
+	if err := appendTreeChildrenASCII(runtime, docsPath, "", 0, 2, false, visited, &lines); err != nil {
+		t.Fatalf("appendTreeChildrenASCII(...) error = %v", err)
+	}
+	if len(depths) != 1 || depths[0] != 2 {
+		t.Fatalf("ListEntries MaxDepth = %v, want [2]", depths)
+	}
+}

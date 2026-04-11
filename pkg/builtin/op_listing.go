@@ -143,8 +143,12 @@ func parseLSFormat(raw string) (lsLongFormat, bool) {
 }
 
 func listDirectoryEntries(runtime engine.CommandRuntime, target string, recursive bool) ([]contract.MountEntry, error) {
+	return listDirectoryEntriesWithDepth(runtime, target, recursive, 0)
+}
+
+func listDirectoryEntriesWithDepth(runtime engine.CommandRuntime, target string, recursive bool, maxDepth int) ([]contract.MountEntry, error) {
 	if runtime.Ops.ListEntries != nil {
-		req := contract.ListEntriesRequest{Dir: target, Recursive: recursive}
+		req := contract.ListEntriesRequest{Dir: target, Recursive: recursive, MaxDepth: maxDepth}
 		result, err := runtime.Ops.ListEntries(runtime.Ctx, req)
 		if err == nil {
 			return result.Entries, nil

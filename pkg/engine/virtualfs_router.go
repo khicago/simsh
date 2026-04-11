@@ -212,11 +212,15 @@ func (r mountRouter) statEntry(ctx context.Context, pathValue string) (contract.
 	return contract.MountEntry{}, false, nil
 }
 
-func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool) (contract.ListEntriesResult, bool, error) {
+func (r mountRouter) listEntries(ctx context.Context, req contract.ListEntriesRequest) (contract.ListEntriesResult, bool, error) {
+	dir := normalizeAbsolutePath(req.Dir)
 	dir = normalizeAbsolutePath(dir)
 	if mounted, ok, err := r.activeForPath(ctx, dir); err != nil {
 		return contract.ListEntriesResult{}, false, err
 	} else if ok {
+		if err := contract.CheckMountListScope(mounted.mount, req); err != nil {
+			return contract.ListEntriesResult{}, true, err
+		}
 		if !contract.MountSupportsCLIClass(mounted.mount.Profile(), contract.MountCLIList) {
 			return contract.ListEntriesResult{}, true, fmt.Errorf("%s: mount profile does not declare list support", dir)
 		}
@@ -234,7 +238,8 @@ func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool
 		}
 		result, err := lister.ListEntries(ctx, contract.ListEntriesRequest{
 			Dir:       dir,
-			Recursive: recursive,
+			Recursive: req.Recursive,
+			MaxDepth:  req.MaxDepth,
 		})
 		return result, true, err
 	}
@@ -258,19 +263,21 @@ func (r mountRouter) listEntries(ctx context.Context, dir string, recursive bool
 	return contract.ListEntriesResult{}, false, nil
 }
 
-func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursive bool) (contract.EnumeratePathsResult, bool, error) {
+func (r mountRouter) enumeratePaths(ctx context.Context, req contract.EnumeratePathsRequest) (contract.EnumeratePathsResult, bool, error) {
+	target := normalizeAbsolutePath(req.Target)
 	target = normalizeAbsolutePath(target)
 	if mounted, ok, err := r.activeForPath(ctx, target); err != nil {
 		return contract.EnumeratePathsResult{}, false, err
 	} else if ok {
+		if err := contract.CheckMountListScope(mounted.mount, contract.ListEntriesRequest{Dir: target, Recursive: req.Recursive, MaxDepth: req.MaxDepth}); err != nil {
+			return contract.EnumeratePathsResult{}, true, err
+		}
 		if !contract.MountSupportsCLIClass(mounted.mount.Profile(), contract.MountCLIFind) {
 			return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: mount profile does not declare find support", target)
 		}
 		if enumerator, ok := mounted.mount.(contract.PathEnumerator); ok {
-			result, err := enumerator.EnumeratePaths(ctx, contract.EnumeratePathsRequest{
-				Target:    target,
-				Recursive: recursive,
-			})
+			req.Target = target
+			result, err := enumerator.EnumeratePaths(ctx, req)
 			return result, true, err
 		}
 		if mounted.mount.Profile().LatencyClass == contract.MountLatencyRemoteHigh {
@@ -282,7 +289,7 @@ func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursiv
 			}
 		}
 		if lister, ok := mounted.mount.(contract.EntryLister); ok {
-			result, err := enumerateEntriesViaListing(ctx, lister, target, recursive)
+			result, err := enumerateEntriesViaListing(ctx, lister, target, req.Recursive, req.MaxDepth)
 			return result, true, err
 		}
 		return contract.EnumeratePathsResult{}, true, fmt.Errorf("%s: mount does not support path enumeration", target)
@@ -290,7 +297,7 @@ func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursiv
 	if isSynthetic, err := r.isSyntheticDir(ctx, target); err != nil {
 		return contract.EnumeratePathsResult{}, false, err
 	} else if isSynthetic {
-		if !recursive {
+		if !req.Recursive {
 			return contract.EnumeratePathsResult{}, false, fmt.Errorf("%s: Is a directory (use -r to search recursively)", target)
 		}
 		files, err := r.collectFilesForSyntheticDir(ctx, target)
@@ -313,10 +320,11 @@ func (r mountRouter) enumeratePaths(ctx context.Context, target string, recursiv
 	return contract.EnumeratePathsResult{}, false, nil
 }
 
-func enumerateEntriesViaListing(ctx context.Context, lister contract.EntryLister, target string, recursive bool) (contract.EnumeratePathsResult, error) {
+func enumerateEntriesViaListing(ctx context.Context, lister contract.EntryLister, target string, recursive bool, maxDepth int) (contract.EnumeratePathsResult, error) {
 	result, err := lister.ListEntries(ctx, contract.ListEntriesRequest{
 		Dir:       target,
 		Recursive: recursive,
+		MaxDepth:  maxDepth,
 	})
 	if err != nil {
 		return contract.EnumeratePathsResult{}, err

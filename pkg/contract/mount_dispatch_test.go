@@ -143,6 +143,44 @@ func TestReadManyFromMountRemoteHighRequiresBulkReader(t *testing.T) {
 	}
 }
 
+func TestReadManyFromMountRejectsBatchCountOverSLO(t *testing.T) {
+	mount := newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteModerate,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead, MountCLIBulkRead},
+		SLO:                 MountSLO{MaxBatchCount: 1},
+	})
+	dataPath := mount.point + "/" + "data.json"
+	_, err := ReadManyFromMountRequest(context.Background(), mount, ReadManyRequest{
+		Paths:      []string{dataPath, dataPath},
+		MaxEntries: 2,
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("ReadManyFromMountRequest(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "batch count") {
+		t.Fatalf("ReadManyFromMountRequest(...) error = %v, want batch-count refusal", err)
+	}
+}
+
+func TestSearchMountContentRejectsTargetCountOverSLO(t *testing.T) {
+	mount := newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteModerate,
+		SupportedCLIClasses: []MountCLIClass{MountCLIContentSearch},
+		SLO:                 MountSLO{MaxSearchPaths: 1},
+	})
+	otherPath := mount.point + "/" + "other"
+	_, err := SearchMountContent(context.Background(), mount, SearchRequest{
+		Pattern: "ok",
+		Targets: []string{mount.point, otherPath},
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("SearchMountContent(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "search path budget") {
+		t.Fatalf("SearchMountContent(...) error = %v, want search-budget refusal", err)
+	}
+}
+
 func TestSearchMountContentRemoteHighRequiresContentSearcher(t *testing.T) {
 	mount := newDispatchTestMount(MountProfile{
 		LatencyClass:        MountLatencyRemoteHigh,
@@ -183,4 +221,3 @@ func TestApplyMountMutationsRemoteHighRequiresMutator(t *testing.T) {
 		t.Fatalf("ApplyMountMutations(...) error = %v, want mutation batch refusal", err)
 	}
 }
-

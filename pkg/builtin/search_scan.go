@@ -230,7 +230,7 @@ func searchCaseModeToContract(mode searchCaseMode) contract.SearchCaseMode {
 	}
 }
 
-func buildContractSearchRequest(pattern string, opts searchMatcherOptions, globs, targets []string, listFiles bool, before, after int) contract.SearchRequest {
+func buildContractSearchRequest(pattern string, opts searchMatcherOptions, globs, targets []string, listFiles bool, before, after int, maxResults int) contract.SearchRequest {
 	if len(targets) == 0 {
 		return contract.SearchRequest{}
 	}
@@ -240,9 +240,10 @@ func buildContractSearchRequest(pattern string, opts searchMatcherOptions, globs
 		CaseMode:  searchCaseModeToContract(opts.CaseMode),
 		Targets:   append([]string(nil), targets...),
 		Globs:     append([]string(nil), globs...),
-		Before:    before,
-		After:     after,
-		ListFiles: listFiles,
+		Before:     before,
+		After:      after,
+		MaxResults: maxResults,
+		ListFiles:  listFiles,
 	}
 }
 

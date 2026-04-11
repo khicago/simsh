@@ -78,7 +78,7 @@ func runGrep(runtime engine.CommandRuntime, args []string) (string, int) {
 		req := buildContractSearchRequest(opts.pattern, searchMatcherOptions{
 			Regex:    opts.regex,
 			CaseMode: searchCaseSensitive,
-		}, nil, []string{target}, opts.listFiles, opts.before, opts.after)
+		}, nil, []string{target}, opts.listFiles, opts.before, opts.after, 0)
 		if used, result, err := tryRuntimeSearch(runtime, req); err != nil {
 			return fmt.Sprintf("grep: %v", err), contract.ExitCodeGeneral
 		} else if used {

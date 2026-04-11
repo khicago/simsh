@@ -116,7 +116,9 @@ type MountContentEntry struct {
 }
 
 type ReadManyRequest struct {
-	Paths []string `json:"paths"`
+	Paths      []string `json:"paths"`
+	MaxEntries int      `json:"max_entries,omitempty"`
+	MaxBytes   int64    `json:"max_bytes,omitempty"`
 }
 
 type ReadManyResult struct {

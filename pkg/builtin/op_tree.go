@@ -236,7 +236,14 @@ func appendTreeEntries(
 	if maxDepth >= 0 && depth >= maxDepth {
 		return nil
 	}
-	children, err := listDirectoryEntries(runtime, dir, false)
+	depthLimit := 0
+	if maxDepth >= 0 {
+		depthLimit = maxDepth - depth
+		if depthLimit < 0 {
+			depthLimit = 0
+		}
+	}
+	children, err := listDirectoryEntriesWithDepth(runtime, dir, false, depthLimit)
 	if err != nil {
 		return err
 	}
@@ -329,7 +336,14 @@ func appendTreeChildrenASCII(
 	if maxDepth >= 0 && depth >= maxDepth {
 		return nil
 	}
-	children, err := listDirectoryEntries(runtime, dir, false)
+	depthLimit := 0
+	if maxDepth >= 0 {
+		depthLimit = maxDepth - depth
+		if depthLimit < 0 {
+			depthLimit = 0
+		}
+	}
+	children, err := listDirectoryEntriesWithDepth(runtime, dir, false, depthLimit)
 	if err != nil {
 		return err
 	}
