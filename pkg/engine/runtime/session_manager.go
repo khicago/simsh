@@ -132,22 +132,24 @@ func (m *SessionManager) Create(ctx context.Context, opts Options) (contract.Ses
 }
 
 func (m *SessionManager) Get(sessionID string) (contract.Session, error) {
-	record, err := m.lookup(strings.TrimSpace(sessionID))
-	if err != nil {
-		return contract.Session{}, err
+	sessionID = strings.TrimSpace(sessionID)
+	if m == nil {
+		return contract.Session{}, fmt.Errorf("session manager is not initialized")
+	}
+	if sessionID == "" {
+		return contract.Session{}, ErrSessionNotFound
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	record, ok := m.sessions[sessionID]
+	if !ok {
+		return contract.Session{}, ErrSessionNotFound
 	}
 	if record.activeExecution != nil && executionFinished(record.activeExecution) {
-		m.mu.Lock()
-		current, ok := m.sessions[strings.TrimSpace(sessionID)]
-		if ok && current.activeExecution != nil && executionFinished(current.activeExecution) {
-			current.activeExecution = nil
-			current.snapshot.ActiveExecution = nil
-		}
-		record = current
-		m.mu.Unlock()
-		if record == nil {
-			return contract.Session{}, ErrSessionNotFound
-		}
+		record.activeExecution = nil
+		record.snapshot.ActiveExecution = nil
 	}
 	return record.snapshot.Clone(), nil
 }

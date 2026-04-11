@@ -617,6 +617,54 @@ func TestSessionManagerGetClearsFinishedActiveExecution(t *testing.T) {
 	}
 }
 
+func TestSessionManagerGetClearsFinishedActiveExecutionWithoutDroppingSnapshotState(t *testing.T) {
+	finalWorkingDir := strings.Join([]string{"", "task_outputs", "finalized"}, "/")
+	manager := NewSessionManager(SessionManagerOptions{
+		Now:            func() time.Time { return time.Date(2026, 5, 20, 12, 45, 0, 0, time.UTC) },
+		NewID:          func() string { return "sess_get_final" },
+		NewExecutionID: func() string { return "exec_get_final" },
+	})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+	})
+	if err != nil {
+		t.Fatalf("create session failed: %v", err)
+	}
+
+	record, err := manager.lookupManaged(session.SessionID)
+	if err != nil {
+		t.Fatalf("lookupManaged(%q) error = %v", session.SessionID, err)
+	}
+	record.activeExecution = &activeExecutionControl{
+		state: *newActiveExecutionState("exec_get_final", "echo hi", time.Date(2026, 5, 20, 12, 45, 1, 0, time.UTC), contract.SessionExecutionStatusRunning),
+		done:  make(chan struct{}),
+	}
+	record.snapshot.ActiveExecution = cloneActiveExecutionPtr(&record.activeExecution.state)
+	record.snapshot.UpdatedAt = time.Date(2026, 5, 20, 12, 45, 2, 0, time.UTC)
+	record.snapshot.State.WorkingDir = finalWorkingDir
+	record.snapshot.State.EnvVars = map[string]string{"FINAL_FLAG": "set"}
+	close(record.activeExecution.done)
+
+	got, err := manager.Get(session.SessionID)
+	if err != nil {
+		t.Fatalf("Get(%q) error = %v", session.SessionID, err)
+	}
+	if got.ActiveExecution != nil {
+		t.Fatalf("Get(%q).ActiveExecution = %+v, want nil after finished execution", session.SessionID, got.ActiveExecution)
+	}
+	if got.UpdatedAt != record.snapshot.UpdatedAt {
+		t.Fatalf("Get(%q).UpdatedAt = %v, want %v", session.SessionID, got.UpdatedAt, record.snapshot.UpdatedAt)
+	}
+	if got.State.WorkingDir != finalWorkingDir {
+		t.Fatalf("Get(%q).State.WorkingDir = %q, want finalized snapshot", session.SessionID, got.State.WorkingDir)
+	}
+	if got.State.EnvVars["FINAL_FLAG"] != "set" {
+		t.Fatalf("Get(%q).State.EnvVars = %#v, want finalized snapshot", session.SessionID, got.State.EnvVars)
+	}
+}
+
 type steppingClock struct {
 	Values []time.Time
 	idx    int

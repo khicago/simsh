@@ -19,9 +19,12 @@
       "title": "Add active session execution state and cancel/status contract",
       "status": "done",
       "summary": "Introduce explicit active execution metadata and cancellation/status surfaces while preserving one-active-execution-per-session semantics.",
-      "gate_result": null,
-      "last_gate_commands": [],
-      "last_commit_hash": null,
+      "gate_result": "pass",
+      "last_gate_commands": [
+        "go test ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine",
+        "go test ./..."
+      ],
+      "last_commit_hash": "1c12f16",
       "notes": [
         "Live session state now carries active_execution with execution_id correlation.",
         "HTTP session surface now includes GET session state and cancel-by-expected-execution-id.",

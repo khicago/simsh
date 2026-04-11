@@ -17,9 +17,12 @@
     "round_count": 0
   },
   "gate": {
-    "last_result": null,
-    "last_task_id": null,
-    "last_check_commands": [],
+    "last_result": "pass",
+    "last_task_id": "T-002",
+    "last_check_commands": [
+      "go test ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine",
+      "go test ./..."
+    ],
     "last_log_path": null
   },
   "history": [
