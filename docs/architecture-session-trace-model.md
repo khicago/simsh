@@ -122,6 +122,7 @@ Example shape:
 
 ### Required Categories
 - command identity: command name, argv, pipeline structure when applicable;
+- ordered execution truth: the runtime-ordered command steps that actually executed;
 - policy/profile used: effective policy, effective profile, truncation or downgrade markers;
 - timing: duration and timeout/cancel markers;
 - path effects:
@@ -139,6 +140,14 @@ Example shape:
 - Traces SHOULD distinguish attempted operations from successful operations.
 - Traces SHOULD record direct side effects, not inferred heuristics.
 - Builtins and external commands should project into the same high-level trace categories even if collection mechanisms differ.
+- A parsed pipeline summary MAY remain for compatibility, but runtime-ordered executed steps SHOULD be the machine-consumable truth for "what actually ran".
+
+### External Outcome Truth
+For external commands, the structured contract SHOULD preserve:
+- canonical command target identity when available;
+- stdout/stderr channel separation even on failure;
+- raw termination truth when it differs from the compatibility exit code;
+- provider-side error text separately from command stderr when the failure came from the seam rather than the child process.
 
 ## Relationship to Audit
 - `AuditSink` remains an observability hook for out-of-band pipelines.

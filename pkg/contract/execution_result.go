@@ -24,6 +24,7 @@ type ExecutionTrace struct {
 	Command             string               `json:"command,omitempty"`
 	Argv                []string             `json:"argv,omitempty"`
 	Pipeline            []ExecutionTraceStep `json:"pipeline,omitempty"`
+	Executed            []ExecutionTraceStep `json:"executed,omitempty"`
 	EffectiveProfile    CompatibilityProfile `json:"effective_profile,omitempty"`
 	EffectivePolicy     ExecutionPolicy      `json:"effective_policy"`
 	TimedOut            bool                 `json:"timed_out,omitempty"`
@@ -44,8 +45,15 @@ type ExecutionTrace struct {
 }
 
 type ExecutionTraceStep struct {
-	Command string   `json:"command"`
-	Argv    []string `json:"argv,omitempty"`
+	Command         string `json:"command"`
+	Argv            []string `json:"argv,omitempty"`
+	Namespace       string `json:"namespace,omitempty"`
+	ResolvedPath    string `json:"resolved_path,omitempty"`
+	Executed        bool   `json:"executed,omitempty"`
+	ExitCode        *int   `json:"exit_code,omitempty"`
+	RawExitCode     *int   `json:"raw_exit_code,omitempty"`
+	ProviderError   string `json:"provider_error,omitempty"`
+	TerminationKind string `json:"termination_kind,omitempty"`
 }
 
 func (r ExecutionResult) FlattenOutput() string {

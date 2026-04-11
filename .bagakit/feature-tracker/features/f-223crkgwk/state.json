@@ -10,7 +10,7 @@
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
-  "current_task_id": null,
+  "current_task_id": "T-003",
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
@@ -45,6 +45,10 @@
     {
       "action": "task_finished",
       "detail": "T-002 -> done"
+    },
+    {
+      "action": "task_started",
+      "detail": "T-003"
     }
   ]
 }

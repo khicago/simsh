@@ -237,11 +237,7 @@ func (c *executionTraceCollector) WrapOps(ops contract.Ops) contract.Ops {
 			if strings.HasPrefix(strings.TrimSpace(req.RawPath), "/") {
 				c.recordRequested(req.RawPath)
 			}
-			result, err := orig(ctx, req)
-			if err == nil {
-				c.recordExternalOutput(len(result.Stdout), len(result.Stderr))
-			}
-			return result, err
+			return orig(ctx, req)
 		}
 	}
 
@@ -260,8 +256,31 @@ func (c *executionTraceCollector) Snapshot() contract.ExecutionTrace {
 		trace.Pipeline = make([]contract.ExecutionTraceStep, 0, len(c.trace.Pipeline))
 		for _, step := range c.trace.Pipeline {
 			trace.Pipeline = append(trace.Pipeline, contract.ExecutionTraceStep{
-				Command: step.Command,
-				Argv:    append([]string(nil), step.Argv...),
+				Command:         step.Command,
+				Argv:            append([]string(nil), step.Argv...),
+				Namespace:       step.Namespace,
+				ResolvedPath:    step.ResolvedPath,
+				Executed:        step.Executed,
+				ExitCode:        step.ExitCode,
+				RawExitCode:     step.RawExitCode,
+				ProviderError:   step.ProviderError,
+				TerminationKind: step.TerminationKind,
+			})
+		}
+	}
+	if len(c.trace.Executed) > 0 {
+		trace.Executed = make([]contract.ExecutionTraceStep, 0, len(c.trace.Executed))
+		for _, step := range c.trace.Executed {
+			trace.Executed = append(trace.Executed, contract.ExecutionTraceStep{
+				Command:         step.Command,
+				Argv:            append([]string(nil), step.Argv...),
+				Namespace:       step.Namespace,
+				ResolvedPath:    step.ResolvedPath,
+				Executed:        step.Executed,
+				ExitCode:        step.ExitCode,
+				RawExitCode:     step.RawExitCode,
+				ProviderError:   step.ProviderError,
+				TerminationKind: step.TerminationKind,
 			})
 		}
 	}
@@ -337,6 +356,13 @@ func (c *executionTraceCollector) recordExternalOutput(stdoutBytes int, stderrBy
 	c.trace.ExternalStderrBytes += stderrBytes
 }
 
+func (c *executionTraceCollector) recordExternalOutcome(stdout string, stderr string) {
+	if c == nil {
+		return
+	}
+	c.recordExternalOutput(len(stdout), len(stderr))
+}
+
 func (c *executionTraceCollector) recordPath(target *[]string, pathValue string) {
 	pathValue = strings.TrimSpace(pathValue)
 	if pathValue == "" || pathValue == "/" {
@@ -372,6 +398,15 @@ func populateTraceShape(trace contract.ExecutionTrace, statements []parsedStatem
 		}
 	}
 	return trace
+}
+
+func (c *executionTraceCollector) recordExecutedStep(step contract.ExecutionTraceStep) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.trace.Executed = append(c.trace.Executed, step)
 }
 
 func recordTraceMutation(c *executionTraceCollector, kind contract.MutationKind, pathValue string, bytesWritten int) {

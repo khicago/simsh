@@ -476,6 +476,15 @@ func (e *Engine) runCommand(ctx context.Context, args []string, input string, ha
 				ExitCode: code,
 				Message:  strings.TrimSpace(flattenExecOutput(result)),
 			})
+			if collector := traceCollectorFromContext(ctx); collector != nil {
+				collector.recordExecutedStep(contract.ExecutionTraceStep{
+					Command:   commandName,
+					Argv:      append([]string(nil), args...),
+					Namespace: contract.CommandNamespaceBuiltin,
+					Executed:  true,
+					ExitCode:  intPtr(code),
+				})
+			}
 			return enforceOutputLimit(ctx, result, ops.Policy)
 		}
 	}
@@ -533,21 +542,59 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 		}
 		out := fmt.Sprintf("%s: %v", display, err)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
-		return execOutput{stdout: out, code: contract.ExitCodeGeneral}
+		if collector := traceCollectorFromContext(ctx); collector != nil {
+			collector.recordExternalOutcome("", out)
+		}
+		return execOutput{stderr: out, code: contract.ExitCodeGeneral}
+	}
+	if strings.TrimSpace(result.CanonicalTarget) == "" {
+		result.CanonicalTarget = strings.TrimSpace(request.RawPath)
 	}
 	output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: result.ExitCode}
+	if strings.TrimSpace(result.ProviderError) != "" {
+		if strings.TrimSpace(output.stderr) == "" {
+			output.stderr = result.ProviderError
+		} else {
+			output.stderr = appendOutputText(output.stderr, result.ProviderError)
+		}
+	}
+	if collector := traceCollectorFromContext(ctx); collector != nil {
+		collector.recordExternalOutcome(output.stdout, output.stderr)
+	}
+	if collector := traceCollectorFromContext(ctx); collector != nil {
+		collector.recordExecutedStep(contract.ExecutionTraceStep{
+			Command:         cmd,
+			Argv:            append([]string{cmd}, args...),
+			Namespace:       contract.CommandNamespaceExternal,
+			ResolvedPath:    strings.TrimSpace(result.CanonicalTarget),
+			Executed:        true,
+			ExitCode:        intPtr(result.ExitCode),
+			RawExitCode:     cloneIntPtr(result.RawExitCode),
+			ProviderError:   strings.TrimSpace(result.ProviderError),
+			TerminationKind: strings.TrimSpace(result.TerminationKind),
+		})
+	}
 	if result.ExitCode == 0 {
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandEnd, Command: cmd, Args: append([]string(nil), args...), ExitCode: 0, Message: strings.TrimSpace(flattenExecOutput(output))})
 		return output
-	}
-	if result.ExitCode < 0 {
-		output.code = contract.ExitCodeGeneral
 	}
 	if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
 		output.stderr = fmt.Sprintf("%s: command failed", display)
 	}
 	emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: output.code, Message: strings.TrimSpace(flattenExecOutput(output))})
 	return output
+}
+
+func intPtr(value int) *int {
+	return &value
+}
+
+func cloneIntPtr(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func enforceOutputLimit(ctx context.Context, out execOutput, policy contract.ExecutionPolicy) execOutput {

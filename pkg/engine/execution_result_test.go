@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,6 +34,9 @@ func TestEngineExecuteResultStructuredFields(t *testing.T) {
 	}
 	if result.Trace.Command != "echo" || len(result.Trace.Pipeline) != 1 {
 		t.Fatalf("unexpected command shape: %+v", result.Trace)
+	}
+	if len(result.Trace.Executed) != 1 || result.Trace.Executed[0].Command != "echo" || !result.Trace.Executed[0].Executed {
+		t.Fatalf("unexpected executed trace shape: %+v", result.Trace.Executed)
 	}
 	if result.Trace.EffectiveProfile != contract.ProfileCoreStrict {
 		t.Fatalf("unexpected effective profile: %+v", result.Trace)
@@ -312,6 +316,9 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	if warn.Trace.ExternalStdoutBytes != len("report ok") || warn.Trace.ExternalStderrBytes != len("report warning") {
 		t.Fatalf("unexpected external trace bytes: %+v", warn.Trace)
 	}
+	if len(warn.Trace.Executed) == 0 || warn.Trace.Executed[0].Namespace != contract.CommandNamespaceExternal {
+		t.Fatalf("unexpected executed external trace: %+v", warn.Trace.Executed)
+	}
 
 	fail := eng.ExecuteResult(context.Background(), "report_tool --fail", ops)
 	if fail.ExitCode != 17 {
@@ -325,6 +332,47 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	}
 	if fail.Trace.ExternalStdoutBytes != 0 || fail.Trace.ExternalStderrBytes != len("report failed") {
 		t.Fatalf("unexpected failing external trace bytes: %+v", fail.Trace)
+	}
+	if len(fail.Trace.Executed) == 0 || fail.Trace.Executed[0].ExitCode == nil || *fail.Trace.Executed[0].ExitCode != 17 || fail.Trace.Executed[0].RawExitCode != nil {
+		t.Fatalf("unexpected failing executed external trace: %+v", fail.Trace.Executed)
+	}
+}
+
+func TestEngineExecuteResultTraceExecutedSkipsConditionalBranches(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileCoreStrict
+	ops.Policy = contract.DefaultPolicy()
+	missingPath := strings.Join([]string{"", "missing"}, "/")
+
+	result := eng.ExecuteResult(context.Background(), "cat "+missingPath+" && echo no; echo yes", ops)
+	if len(result.Trace.Pipeline) < 3 {
+		t.Fatalf("unexpected parsed pipeline shape: %+v", result.Trace.Pipeline)
+	}
+	if len(result.Trace.Executed) != 2 {
+		t.Fatalf("executed trace = %+v, want 2 executed steps", result.Trace.Executed)
+	}
+	if result.Trace.Executed[0].Command != "cat" || result.Trace.Executed[1].Command != "echo" {
+		t.Fatalf("executed trace order = %+v", result.Trace.Executed)
+	}
+}
+
+func TestEngineExecuteResultTraceExecutedExcludesExternalProviderFailures(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileCoreStrict
+	ops.Policy = contract.DefaultPolicy()
+
+	result := eng.ExecuteResult(context.Background(), "unknown_external_cmd", ops)
+	if len(result.Trace.Executed) != 0 {
+		t.Fatalf("executed trace = %+v, want no executed external step on provider failure", result.Trace.Executed)
+	}
+	if result.Stderr == "" && result.Stdout == "" {
+		t.Fatalf("result lost provider failure output: %+v", result)
 	}
 }
 

@@ -66,9 +66,13 @@ type ExternalCommandRequest struct {
 
 // ExternalCommandResult is the output of one external command invocation.
 type ExternalCommandResult struct {
-	Stdout   string
-	Stderr   string
-	ExitCode int
+	Stdout           string
+	Stderr           string
+	ExitCode         int
+	RawExitCode      *int
+	CanonicalTarget  string
+	ProviderError    string
+	TerminationKind  string
 }
 
 // BuiltinCommandDoc provides prompt/introspection-friendly command metadata.

@@ -34,12 +34,14 @@
     {
       "id": "T-003",
       "title": "Enrich execution trace and external command outcome contracts",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Add richer ordered trace/event data and strengthen the external seam with more explicit structured execution outcomes.",
       "gate_result": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
-      "notes": []
+      "notes": [
+        "Wave 1 targets runtime-executed trace truth plus structured external outcome preservation without removing the existing aggregate compatibility surface."
+      ]
     },
     {
       "id": "T-004",
