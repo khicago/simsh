@@ -164,6 +164,7 @@ The HTTP layer may expose a thin session-control wrapper over the generic runtim
 - `POST v1/sessions/{session_id}` with lifecycle action segment `cancel` to request interruption of the current active execution.
 
 Cancellation requests SHOULD carry the caller's expected `execution_id`, and the runtime SHOULD reject session-control cancel requests that omit it, so stale or retried cancel attempts cannot blindly interrupt whichever execution happens to occupy the session later.
+If this session-control surface is exposed over HTTP, the default shipped listener SHOULD stay loopback-only unless an embedding layer adds its own authentication and trust boundary.
 
 ## Current Boundary
 The current baseline includes:

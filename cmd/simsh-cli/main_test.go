@@ -37,6 +37,33 @@ func TestParseCLIOptionsServePort(t *testing.T) {
 	}
 }
 
+func TestRunServeDefaultsToLoopbackListen(t *testing.T) {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("os.Getwd() error = %v", err)
+	}
+
+	opts := cliOptions{
+		mode:    modeServe,
+		rootDir: "",
+		policy:  string(contract.WriteModeReadOnly),
+		profile: string(contract.ProfileCoreStrict),
+	}
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+
+	code := runServe(opts, &stdout, &stderr)
+	if code != contract.ExitCodeGeneral {
+		t.Fatalf("runServe(...) code = %d, want %d stderr=%q", code, contract.ExitCodeGeneral, stderr.String())
+	}
+	if !strings.Contains(stdout.String(), "simsh serve listening on 127.0.0.1:18080") {
+		t.Fatalf("stdout = %q, want loopback serve banner", stdout.String())
+	}
+	if !strings.Contains(stdout.String(), "root="+wd) {
+		t.Fatalf("stdout = %q, want cwd root fallback %q", stdout.String(), wd)
+	}
+}
+
 func TestParseCLIOptionsRunDefaults(t *testing.T) {
 	opts, err := parseCLIOptions(nil)
 	if err != nil {

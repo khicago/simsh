@@ -19,7 +19,7 @@ func TestRunUsesRootFallbackPortOverrideAndTestMount(t *testing.T) {
 	var handlerCalls int
 	var serveCalls int
 
-	err := run([]string{"-listen", ":19090", "-P", "19091", "-enable-test-mount"}, launcherDeps{
+	err := run([]string{"-listen", "127.0.0.1:19090", "-P", "19091", "-enable-test-mount"}, launcherDeps{
 		getwd: func() (string, error) { return "/tmp/simshd-root", nil },
 		newHandler: func(cfg httpapi.Config) http.Handler {
 			handlerCalls++
@@ -39,8 +39,8 @@ func TestRunUsesRootFallbackPortOverrideAndTestMount(t *testing.T) {
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("run(...) error = %v, want wrapped sentinel", err)
 	}
-	if gotAddr != ":19091" {
-		t.Fatalf("listen addr = %q, want %q", gotAddr, ":19091")
+	if gotAddr != "127.0.0.1:19091" {
+		t.Fatalf("listen addr = %q, want %q", gotAddr, "127.0.0.1:19091")
 	}
 	if gotConfig.DefaultHostRoot != "/tmp/simshd-root" {
 		t.Fatalf("DefaultHostRoot = %q, want root fallback", gotConfig.DefaultHostRoot)
@@ -56,6 +56,16 @@ func TestRunUsesRootFallbackPortOverrideAndTestMount(t *testing.T) {
 	}
 	if handlerCalls != 1 || serveCalls != 1 {
 		t.Fatalf("handlerCalls=%d serveCalls=%d, want 1 each", handlerCalls, serveCalls)
+	}
+}
+
+func TestParseLaunchConfigDefaultsToLoopbackListen(t *testing.T) {
+	cfg, err := parseLaunchConfig(nil, func() (string, error) { return "/tmp/simshd-root", nil })
+	if err != nil {
+		t.Fatalf("parseLaunchConfig(...) error = %v", err)
+	}
+	if cfg.listenAddr != "127.0.0.1:18080" {
+		t.Fatalf("listen addr = %q, want %q", cfg.listenAddr, "127.0.0.1:18080")
 	}
 }
 

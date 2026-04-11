@@ -141,6 +141,7 @@ Design rule:
 - do not invent product semantics or trust-boundary rules in entry adapters first
 
 CLI/TUI are operator surfaces. HTTP is the integration surface for harnesses and higher-level systems. Both should stay downstream from kernel and adapter contracts.
+For the current shipped surface, the default HTTP listeners stay on loopback because session control exposes live execution metadata meant for local or otherwise trusted callers.
 
 ## Design Rules
 

@@ -239,7 +239,7 @@ func runServe(opts cliOptions, stdout io.Writer, stderr io.Writer) int {
 		if opts.port <= 0 {
 			opts.port = 18080
 		}
-		listenAddr = fmt.Sprintf(":%d", opts.port)
+		listenAddr = fmt.Sprintf("127.0.0.1:%d", opts.port)
 	}
 
 	_, _ = fmt.Fprintf(stdout, "simsh serve listening on %s (root=%s profile=%s policy=%s mounts=%s)\n", listenAddr, rootDir, opts.profile, opts.policy, strings.Join(opts.mounts, ","))

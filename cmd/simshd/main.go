@@ -74,7 +74,7 @@ func parseLaunchConfig(args []string, getwd func() (string, error)) (launchConfi
 	fs := flag.NewFlagSet("simshd", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 
-	listen := fs.String("listen", ":18080", "http listen address")
+	listen := fs.String("listen", "127.0.0.1:18080", "http listen address")
 	port := fs.Int("P", 0, "port override for web runtime service")
 	rootDir := fs.String("root", "", "default root dir for execute")
 	profile := fs.String("profile", string(contract.ProfileCoreStrict), "default profile")
@@ -103,7 +103,7 @@ func parseLaunchConfig(args []string, getwd func() (string, error)) (launchConfi
 
 	listenAddr := strings.TrimSpace(*listen)
 	if *port > 0 {
-		listenAddr = fmt.Sprintf(":%d", *port)
+		listenAddr = fmt.Sprintf("127.0.0.1:%d", *port)
 	}
 
 	return launchConfig{

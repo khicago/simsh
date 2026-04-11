@@ -68,6 +68,7 @@ d ro temp_work_dir - /temp_work
 ### Optional Service Surface
 
 If you need an integration service rather than a local sandbox session, expose the HTTP layer explicitly. It is a supported wrapper over the same kernel, but it is not the primary story of the project.
+The default listen scope is loopback-only because the HTTP session-control surface exposes live execution identity and command information and is intended for local or otherwise trusted callers unless a higher layer adds its own auth boundary.
 
 Start the service:
 
