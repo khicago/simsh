@@ -532,19 +532,28 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 	if err != nil {
 		compatCode := contract.ExitCodeGeneral
 		output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: compatCode}
+		canonicalTarget := strings.TrimSpace(result.CanonicalTarget)
+		if canonicalTarget == "" {
+			canonicalTarget = strings.TrimSpace(request.RawPath)
+		}
+		providerError := strings.TrimSpace(result.ProviderError)
+		if providerError == "" {
+			providerError = err.Error()
+		}
 		if collector := traceCollectorFromContext(ctx); collector != nil {
 			collector.recordExternalOutput(result.Stdout, result.Stderr)
 			collector.recordExternalOutcomeStep(contract.ExecutionTraceStep{
 				Command:       cmd,
 				Argv:          append([]string{cmd}, args...),
 				Namespace:     contract.CommandNamespaceExternal,
-				ResolvedPath:  strings.TrimSpace(request.RawPath),
+				ResolvedPath:  canonicalTarget,
 				Executed:      false,
 				ExitCode:      intPtr(compatCode),
 				RawExitCode:   effectiveRawExitCode(result),
 				StdoutBytes:   intPtr(len(result.Stdout)),
 				StderrBytes:   intPtr(len(result.Stderr)),
-				ProviderError: err.Error(),
+				ProviderError: providerError,
+				TerminationKind: strings.TrimSpace(result.TerminationKind),
 			})
 		}
 		if errors.Is(err, contract.ErrUnsupported) {
@@ -597,15 +606,11 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 	}
 	if collector := traceCollectorFromContext(ctx); collector != nil {
 		collector.recordExecutedStep(contract.ExecutionTraceStep{
-			Command:         cmd,
-			Argv:            append([]string{cmd}, args...),
-			Namespace:       contract.CommandNamespaceExternal,
-			ResolvedPath:    strings.TrimSpace(result.CanonicalTarget),
-			Executed:        true,
-			ExitCode:        intPtr(compatCode),
-			RawExitCode:     effectiveRawExitCode(result),
-			ProviderError:   strings.TrimSpace(result.ProviderError),
-			TerminationKind: strings.TrimSpace(result.TerminationKind),
+			Command:      cmd,
+			Argv:         append([]string{cmd}, args...),
+			Namespace:    contract.CommandNamespaceExternal,
+			ResolvedPath: strings.TrimSpace(result.CanonicalTarget),
+			Executed:     true,
 		})
 	}
 	if result.ExitCode == 0 {

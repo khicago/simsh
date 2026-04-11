@@ -339,8 +339,11 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	if fail.Trace.ExternalStdoutBytes != 0 || fail.Trace.ExternalStderrBytes != len("report failed") {
 		t.Fatalf("unexpected failing external trace bytes: %+v", fail.Trace)
 	}
-	if len(fail.Trace.Executed) == 0 || fail.Trace.Executed[0].ExitCode == nil || *fail.Trace.Executed[0].ExitCode != 17 || fail.Trace.Executed[0].RawExitCode != nil {
+	if len(fail.Trace.Executed) == 0 || fail.Trace.Executed[0].Namespace != contract.CommandNamespaceExternal {
 		t.Fatalf("unexpected failing executed external trace: %+v", fail.Trace.Executed)
+	}
+	if len(fail.Trace.ExternalOutcomes) == 0 || fail.Trace.ExternalOutcomes[0].ExitCode == nil || *fail.Trace.ExternalOutcomes[0].ExitCode != 17 || fail.Trace.ExternalOutcomes[0].RawExitCode != nil {
+		t.Fatalf("unexpected failing external outcome trace: %+v", fail.Trace.ExternalOutcomes)
 	}
 }
 
@@ -379,6 +382,15 @@ func TestEngineExecuteResultTraceExecutedExcludesExternalProviderFailures(t *tes
 	}
 	if result.Stderr == "" && result.Stdout == "" {
 		t.Fatalf("result lost provider failure output: %+v", result)
+	}
+	if len(result.Trace.ExternalOutcomes) != 1 {
+		t.Fatalf("external_outcomes = %+v, want 1 provider failure outcome", result.Trace.ExternalOutcomes)
+	}
+	if result.Trace.ExternalOutcomes[0].ProviderError == "" {
+		t.Fatalf("provider failure outcome lost provider_error: %+v", result.Trace.ExternalOutcomes[0])
+	}
+	if result.Trace.ExternalOutcomes[0].ResolvedPath == "" {
+		t.Fatalf("provider failure outcome lost resolved path: %+v", result.Trace.ExternalOutcomes[0])
 	}
 }
 
