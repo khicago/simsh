@@ -513,6 +513,17 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 	})
 	if ops.RunExternalCommand == nil {
 		out := fmt.Sprintf("%s: Not supported", display)
+		if collector := traceCollectorFromContext(ctx); collector != nil {
+			collector.recordExternalOutcomeStep(contract.ExecutionTraceStep{
+				Command:       cmd,
+				Argv:          append([]string{cmd}, args...),
+				Namespace:     contract.CommandNamespaceExternal,
+				ResolvedPath:  strings.TrimSpace(display),
+				Executed:      false,
+				ExitCode:      intPtr(contract.ExitCodeUnsupported),
+				ProviderError: out,
+			})
+		}
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
 		return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
 	}

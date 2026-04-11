@@ -263,6 +263,57 @@ func TestExecuteHandlerCommandRequired(t *testing.T) {
 	}
 }
 
+func TestExecuteHandlerSessionBoundBlankCommandPreservesSessionID(t *testing.T) {
+	tmp := t.TempDir()
+	h := NewHandler(Config{DefaultHostRoot: tmp, DefaultProfile: "core-strict", DefaultPolicy: "read-only"})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	createResp := postJSON(t, ts.URL+testAPIPath("v1", "sessions"), map[string]any{})
+	defer createResp.Body.Close()
+	if createResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(createResp.Body)
+		t.Fatalf("unexpected create status=%d body=%s", createResp.StatusCode, string(raw))
+	}
+	var created struct {
+		Session struct {
+			SessionID string `json:"session_id"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(createResp.Body).Decode(&created); err != nil {
+		t.Fatalf("decode create failed: %v", err)
+	}
+
+	resp := postJSON(t, ts.URL+testAPIPath("v1", "execute"), map[string]any{
+		"session_id": created.Session.SessionID,
+		"command":    " \n\t ",
+	})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected execute status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	var out struct {
+		ExecutionID string `json:"execution_id"`
+		SessionID   string `json:"session_id"`
+		Output      string `json:"output"`
+		Stdout      string `json:"stdout"`
+		ExitCode    int    `json:"exit_code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode failed: %v", err)
+	}
+	if out.SessionID != created.Session.SessionID {
+		t.Fatalf("session-bound blank command SessionID = %q, want %q", out.SessionID, created.Session.SessionID)
+	}
+	if out.ExecutionID == "" {
+		t.Fatalf("expected execution_id, got %+v", out)
+	}
+	if out.ExitCode != contract.ExitCodeUsage || out.Output != "execute: command is required" || out.Stdout != out.Output {
+		t.Fatalf("unexpected session-bound usage payload: %+v", out)
+	}
+}
+
 func TestExecuteHandlerPolicyValidation(t *testing.T) {
 	tmp := t.TempDir()
 	h := NewHandler(Config{DefaultHostRoot: tmp})

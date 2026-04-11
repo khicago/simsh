@@ -213,14 +213,9 @@ func (m *SessionManager) Cancel(sessionID string, expectedExecutionID string) (c
 }
 
 func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandLine string, requested contract.ExecutionPolicy) (SessionExecution, error) {
+	sessionID = strings.TrimSpace(sessionID)
 	commandLine = strings.TrimSpace(commandLine)
-	if commandLine == "" {
-		return SessionExecution{
-			Result: enginepkg.UsageResult("execute: command is required"),
-		}, nil
-	}
-
-	record, err := m.lookupManaged(strings.TrimSpace(sessionID))
+	record, err := m.lookupManaged(sessionID)
 	if err != nil {
 		return SessionExecution{}, err
 	}
@@ -233,6 +228,15 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	effectivePolicy, err := contract.EffectivePolicyWithinCeiling(requested, record.snapshot.PolicyCeiling)
 	if err != nil {
 		return SessionExecution{}, err
+	}
+	if commandLine == "" {
+		session := record.snapshot.Clone()
+		result := enginepkg.UsageResult("execute: command is required").WithSessionID(session.SessionID)
+		return SessionExecution{
+			Session: session,
+			Runtime: record.runtime,
+			Result:  result,
+		}, nil
 	}
 
 	runtime := record.runtime

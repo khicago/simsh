@@ -417,6 +417,27 @@ func TestEngineExecuteResultTraceExecutedExcludesExternalProviderFailures(t *tes
 	}
 }
 
+func TestEngineExecuteResultRecordsUnsupportedExternalOutcome(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+	ops.RunExternalCommand = nil
+
+	result := eng.ExecuteResult(context.Background(), "report_tool", ops)
+	if result.ExitCode != contract.ExitCodeUnsupported {
+		t.Fatalf("unsupported external exit_code=%d, want %d", result.ExitCode, contract.ExitCodeUnsupported)
+	}
+	if len(result.Trace.ExternalOutcomes) != 1 {
+		t.Fatalf("external_outcomes = %+v, want 1 unsupported external outcome", result.Trace.ExternalOutcomes)
+	}
+	if result.Trace.ExternalOutcomes[0].ExitCode == nil || *result.Trace.ExternalOutcomes[0].ExitCode != contract.ExitCodeUnsupported {
+		t.Fatalf("unsupported external outcome exit_code mismatch: %+v", result.Trace.ExternalOutcomes[0])
+	}
+}
+
 func TestEngineExecuteResultMarksCanceledContext(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)

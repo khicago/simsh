@@ -198,7 +198,7 @@ func NewHandler(cfg Config) http.Handler {
 		}
 
 		command := strings.TrimSpace(req.Command)
-		if command == "" {
+		if command == "" && strings.TrimSpace(req.SessionID) == "" {
 			result := engine.UsageResult("execute: command is required")
 			writeJSON(w, executeResponse{ExecutionResult: result, Output: result.FlattenOutput()})
 			return

@@ -112,15 +112,12 @@ func TestSessionManagerLifecycleAndCheckpointResume(t *testing.T) {
 func TestSessionManagerRejectsBlankIDsAndBlankCommand(t *testing.T) {
 	manager := NewSessionManager(SessionManagerOptions{})
 
-	executed, err := manager.Execute(context.Background(), "   ", "   ", contract.ExecutionPolicy{})
-	if err != nil {
-		t.Fatalf("Execute(blank id, blank command) error = %v", err)
+	executed, err := manager.Execute(context.Background(), "sessionless", "   ", contract.ExecutionPolicy{})
+	if err == nil {
+		t.Fatalf("Execute(sessionless, blank command) unexpectedly succeeded: %+v", executed)
 	}
-	if executed.Result.ExitCode != contract.ExitCodeUsage || executed.Result.Stdout != "execute: command is required" {
-		t.Fatalf("Execute(blank id, blank command) = %+v, want usage result", executed.Result)
-	}
-	if executed.Result.ExecutionID == "" || executed.Result.StartedAt.IsZero() || executed.Result.FinishedAt.IsZero() {
-		t.Fatalf("Execute(blank id, blank command) missing structured result fields: %+v", executed.Result)
+	if !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("Execute(sessionless, blank command) error = %v, want ErrSessionNotFound", err)
 	}
 
 	checks := []struct {
@@ -169,6 +166,32 @@ func TestSessionManagerRejectsBlankIDsAndBlankCommand(t *testing.T) {
 				t.Fatalf("%s(blank id) error = %v, want ErrSessionNotFound", tc.name, err)
 			}
 		})
+	}
+}
+
+func TestSessionManagerBlankCommandPreservesSessionShape(t *testing.T) {
+	manager := NewSessionManager(SessionManagerOptions{NewID: func() string { return "sess_blank_cmd" }})
+	session, err := manager.Create(context.Background(), Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+	})
+	if err != nil {
+		t.Fatalf("Create(...) error = %v", err)
+	}
+
+	executed, err := manager.Execute(context.Background(), session.SessionID, " \n\t ", contract.ExecutionPolicy{})
+	if err != nil {
+		t.Fatalf("Execute(blank command) error = %v", err)
+	}
+	if executed.Result.SessionID != session.SessionID {
+		t.Fatalf("Execute(blank command).Result.SessionID = %q, want %q", executed.Result.SessionID, session.SessionID)
+	}
+	if executed.Session.SessionID != session.SessionID {
+		t.Fatalf("Execute(blank command).Session = %+v, want session %q", executed.Session, session.SessionID)
+	}
+	if executed.Runtime == nil {
+		t.Fatalf("Execute(blank command).Runtime = nil, want live session runtime")
 	}
 }
 

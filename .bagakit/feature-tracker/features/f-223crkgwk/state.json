@@ -53,6 +53,18 @@
     {
       "action": "task_finished",
       "detail": "T-003 -> done"
+    },
+    {
+      "action": "task_reopened",
+      "detail": "T-003 follow-up: session-bound blank-command result shape"
+    },
+    {
+      "action": "task_finished",
+      "detail": "T-003 -> done (final blank-command/external alignment follow-up)"
+    },
+    {
+      "action": "task_finished",
+      "detail": "T-003 -> done (session-bound blank-command follow-up)"
     }
   ]
 }
