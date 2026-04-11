@@ -17,14 +17,15 @@
     {
       "id": "T-002",
       "title": "Add active session execution state and cancel/status contract",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Introduce explicit active execution metadata and cancellation/status surfaces while preserving one-active-execution-per-session semantics.",
       "gate_result": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
       "notes": [
         "Live session state now carries active_execution with execution_id correlation.",
-        "HTTP session surface now includes GET session state and cancel-by-expected-execution-id."
+        "HTTP session surface now includes GET session state and cancel-by-expected-execution-id.",
+        "Implementation complete after teardown/required-execution-id follow-up hardening."
       ]
     },
     {
