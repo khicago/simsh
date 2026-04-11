@@ -36,36 +36,18 @@ func TestDefaultBuiltinRegistrationsDeclareCanonicalOwnership(t *testing.T) {
 		if spec.Name != registration.Name {
 			t.Fatalf("default builtin registration %q built spec %q", registration.Name, spec.Name)
 		}
-		for _, shadow := range registration.ShadowSources {
-			if !strings.HasPrefix(shadow, "pkg/builtin/commands/") {
-				t.Fatalf("default builtin registration %q shadow source %q must stay under pkg/builtin/commands", registration.Name, shadow)
-			}
-		}
 	}
 }
 
-func TestDefaultBuiltinRegistrationsTrackShadowCommandPackages(t *testing.T) {
+func TestDefaultBuiltinRegistrationsLeaveNoShadowCommandImplementations(t *testing.T) {
 	commandGlob := filepath.Join("commands", "*", "command.go")
 	commandFiles, err := filepath.Glob(commandGlob)
 	if err != nil {
 		t.Fatalf("glob command packages failed: %v", err)
 	}
-
-	ownership := defaultBuiltinOwnershipByName()
-	shadows := make([]string, 0, len(commandFiles))
-	for _, registration := range ownership {
-		shadows = append(shadows, registration.ShadowSources...)
-	}
-	slices.Sort(shadows)
-
-	want := make([]string, 0, len(commandFiles))
-	for _, path := range commandFiles {
-		want = append(want, filepath.ToSlash(filepath.Join("pkg/builtin", path)))
-	}
-	slices.Sort(want)
-
-	if !slices.Equal(shadows, want) {
-		t.Fatalf("shadow command package manifest mismatch\nshadows=%v\nwant=%v", shadows, want)
+	if len(commandFiles) != 0 {
+		slices.Sort(commandFiles)
+		t.Fatalf("unexpected shadow command implementations remain: %v", commandFiles)
 	}
 }
 
