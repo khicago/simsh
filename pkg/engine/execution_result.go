@@ -12,7 +12,7 @@ import (
 
 var executionCounter uint64
 
-func nextExecutionID() string {
+func NextExecutionID() string {
 	value := atomic.AddUint64(&executionCounter, 1)
 	return fmt.Sprintf("exec_%d", value)
 }
@@ -21,7 +21,7 @@ func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prep
 	startedAt := time.Now().UTC()
 	collector := newExecutionTraceCollector(cmdline, prepared.Ops())
 	result := contract.ExecutionResult{
-		ExecutionID: nextExecutionID(),
+		ExecutionID: NextExecutionID(),
 		StartedAt:   startedAt,
 		Trace:       collector.Snapshot(),
 	}

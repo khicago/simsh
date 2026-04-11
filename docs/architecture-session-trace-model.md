@@ -42,6 +42,7 @@ The embedding platform decides whether a session maps to one user flow, one back
 - `profile`: baseline compatibility profile for the session.
 - `policy_ceiling`: maximum allowed execution policy for the session.
 - `state`: minimal runtime state needed across calls.
+- `active_execution` when a session currently has one in-flight execution.
 
 ### Session State Scope
 Session state SHOULD cover only runtime concerns such as:
@@ -51,11 +52,27 @@ Session state SHOULD cover only runtime concerns such as:
 
 Session state SHOULD NOT embed product objects directly.
 
+### Active Execution Surface
+`active_execution` is an observational runtime field, not checkpoint state.
+
+When present, it describes the one execution currently occupying the session:
+- `execution_id`: stable identifier for correlating the live slot with the eventual `ExecutionResult`.
+- `command_line`: the full session-bound command line currently running.
+- `started_at`: when the execution entered the live slot.
+- `status`: currently `running` or `canceling`.
+- `status_updated_at`: when the current live status last changed.
+
+Design rules:
+- `active_execution` MUST disappear once the execution finishes.
+- `active_execution` MUST NOT become an execution-history list; historical truth stays in returned `ExecutionResult`.
+- `active_execution` MUST remain session-generic and MUST NOT encode product workflow semantics.
+
 ### Lifecycle
 - `create`: initialize a session with baseline profile/policy and adapter hooks.
 - `resume`: reopen a prior session using persisted checkpoint state.
 - `checkpoint`: persist resumable runtime state plus adapter continuation data.
 - `close`: flush terminal state, emit final audit/trace hooks, and release resources.
+- `cancel`: request interruption of the current active execution without closing the session itself.
 
 Requests without a session identifier MAY run as ephemeral one-shot sessions.
 
@@ -135,15 +152,26 @@ Example shape:
 
 ## Snapshot and Resume
 - Session checkpoints SHOULD capture the minimum state needed for deterministic resume.
+- `active_execution` MUST NOT be checkpointed or resumed; it is live process state rather than resumable session context.
 - Adapter-managed state belongs behind explicit adapter hooks, not inside generic core structs.
 - Closing a session SHOULD provide a hook point for adapter-side flushes such as memory snapshots or reindex triggers.
+
+## HTTP Session Control Surface
+The HTTP layer may expose a thin session-control wrapper over the generic runtime contract:
+- `POST v1/sessions`: create a session.
+- `GET v1/sessions/{session_id}`: read the current session snapshot, including `active_execution` when present.
+- `POST v1/sessions/{session_id}` with lifecycle action segment `checkpoint`, `resume`, or `close`.
+- `POST v1/sessions/{session_id}` with lifecycle action segment `cancel` to request interruption of the current active execution.
+
+Cancellation requests SHOULD carry the caller's expected `execution_id`, and the runtime SHOULD reject session-control cancel requests that omit it, so stale or retried cancel attempts cannot blindly interrupt whichever execution happens to occupy the session later.
 
 ## Current Boundary
 The current baseline includes:
 - core session identifiers and lifecycle hooks;
 - structured `ExecutionResult`;
 - trace categories for builtin file operations and external command execution;
-- session-scoped policy narrowing rules.
+- session-scoped policy narrowing rules;
+- one-active-execution-per-session observation and cancel semantics.
 
 It still defers:
 - workspace/multi-agent tenancy;

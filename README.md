@@ -88,6 +88,30 @@ curl -sS http://127.0.0.1:18080/v1/execute \
   }'
 ```
 
+Create a session, start a session-bound execution, inspect its live state, and cancel that exact execution by `execution_id`:
+
+```bash
+BASE_URL="http://127.0.0.1:18080"
+SESSIONS_ROUTE="v1/sessions"
+EXECUTE_ROUTE="v1/execute"
+CANCEL_ACTION="cancel"
+
+SESSION_JSON="$(curl -sS "$BASE_URL/$SESSIONS_ROUTE" -H 'Content-Type: application/json' -d '{}')"
+SESSION_ID="$(printf '%s' "$SESSION_JSON" | jq -r '.session.session_id')"
+
+curl -sS "$BASE_URL/$EXECUTE_ROUTE" \
+  -H 'Content-Type: application/json' \
+  -d "{\"session_id\":\"$SESSION_ID\",\"command\":\"sleep 30\"}" >/tmp/simsh-exec.json &
+EXEC_PID=$!
+
+ACTIVE_EXECUTION_ID="$(curl -sS "$BASE_URL/$SESSIONS_ROUTE/$SESSION_ID" | jq -r '.session.active_execution.execution_id')"
+curl -sS "$BASE_URL/$SESSIONS_ROUTE/$SESSION_ID/$CANCEL_ACTION" \
+  -H 'Content-Type: application/json' \
+  -d "{\"expected_execution_id\":\"$ACTIVE_EXECUTION_ID\"}"
+
+wait "$EXEC_PID"
+```
+
 ## Kernel And Sandbox Model
 
 ```mermaid
@@ -140,7 +164,7 @@ CLI, TUI, and HTTP are intentionally thin wrappers over the same runtime stack. 
 | --- | --- |
 | `cmd/simsh-cli` | local CLI, TUI, and `serve` entrypoint |
 | `cmd/simshd` | dedicated HTTP service |
-| `pkg/service/httpapi` | `/v1/execute` integration surface |
+| `pkg/service/httpapi` | `v1/execute` plus session create/get/control integration surface |
 | `pkg/cmd` | CLI/TUI-facing helpers |
 
 If a semantic change only exists in one entry surface, it is usually in the wrong layer.

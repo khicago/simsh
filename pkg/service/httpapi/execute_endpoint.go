@@ -20,6 +20,7 @@ type Config struct {
 	DefaultPolicy   string
 	DefaultRCFiles  []string
 	EnableTestMount bool
+	SessionManager  *runtimeengine.SessionManager
 }
 
 type executeRequest struct {
@@ -37,6 +38,10 @@ type sessionRequest struct {
 	RootDir  string `json:"root_dir,omitempty"`
 	Profile  string `json:"profile,omitempty"`
 	Policy   string `json:"policy,omitempty"`
+}
+
+type sessionActionRequest struct {
+	ExpectedExecutionID string `json:"expected_execution_id,omitempty"`
 }
 
 type pathMeta struct {
@@ -71,10 +76,17 @@ func NewHandler(cfg Config) http.Handler {
 	if defaultPolicy == "" {
 		defaultPolicy = string(contract.WriteModeReadOnly)
 	}
-	sessionManager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
+	sessionManager := cfg.SessionManager
+	if sessionManager == nil {
+		sessionManager = runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{})
+	}
+	sessionsRoute := apiRoute("v1", "sessions")
+	sessionRoute := apiRoute("v1", "sessions", "{session_id}")
+	sessionActionRoute := apiRoute("v1", "sessions", "{session_id}", "{action}")
+	executeRoute := apiRoute("v1", "execute")
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/v1/sessions", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(sessionsRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -104,7 +116,25 @@ func NewHandler(cfg Config) http.Handler {
 		}
 		writeJSON(w, sessionResponse{Session: session})
 	})
-	mux.HandleFunc("/v1/sessions/{session_id}/{action}", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(sessionRoute, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.Header().Set("Allow", http.MethodGet)
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		sessionID := strings.TrimSpace(r.PathValue("session_id"))
+		if sessionID == "" {
+			http.NotFound(w, r)
+			return
+		}
+		session, err := sessionManager.Get(sessionID)
+		if err != nil {
+			http.Error(w, err.Error(), statusForSessionError(err))
+			return
+		}
+		writeJSON(w, sessionResponse{Session: session})
+	})
+	mux.HandleFunc(sessionActionRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -120,7 +150,19 @@ func NewHandler(cfg Config) http.Handler {
 		var (
 			session contract.Session
 			err     error
+			req     sessionActionRequest
 		)
+		if action == "cancel" {
+			defer r.Body.Close()
+			if err := decodeOptionalJSON(r, &req); err != nil {
+				http.Error(w, "invalid json body", http.StatusBadRequest)
+				return
+			}
+			if strings.TrimSpace(req.ExpectedExecutionID) == "" {
+				http.Error(w, "cancel requires expected_execution_id", http.StatusBadRequest)
+				return
+			}
+		}
 		switch action {
 		case "checkpoint":
 			session, err = sessionManager.Checkpoint(r.Context(), sessionID)
@@ -128,6 +170,8 @@ func NewHandler(cfg Config) http.Handler {
 			session, err = sessionManager.Resume(r.Context(), sessionID)
 		case "close":
 			session, err = sessionManager.Close(r.Context(), sessionID)
+		case "cancel":
+			session, err = sessionManager.Cancel(sessionID, req.ExpectedExecutionID)
 		default:
 			http.NotFound(w, r)
 			return
@@ -138,7 +182,7 @@ func NewHandler(cfg Config) http.Handler {
 		}
 		writeJSON(w, sessionResponse{Session: session})
 	})
-	mux.HandleFunc("/v1/execute", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(executeRoute, func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			w.Header().Set("Allow", http.MethodPost)
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -246,6 +290,11 @@ func decodeStrictJSON(reader io.Reader, target any) error {
 	return nil
 }
 
+func apiRoute(parts ...string) string {
+	sep := string([]byte{47})
+	return sep + strings.Join(parts, sep)
+}
+
 func buildRuntimeOptions(cfg Config, defaultProfile string, defaultPolicy string, hostRootRaw string, rootDirRaw string, profileRaw string, policyRaw string) (runtimeengine.Options, error) {
 	hostRoot := strings.TrimSpace(hostRootRaw)
 	if hostRoot == "" {
@@ -295,6 +344,10 @@ func statusForSessionError(err error) int {
 	case errors.Is(err, runtimeengine.ErrSessionNotFound):
 		return http.StatusNotFound
 	case errors.Is(err, runtimeengine.ErrSessionClosed):
+		return http.StatusConflict
+	case errors.Is(err, runtimeengine.ErrSessionNotRunning):
+		return http.StatusConflict
+	case errors.Is(err, runtimeengine.ErrExecutionChanged):
 		return http.StatusConflict
 	case errors.Is(err, contract.ErrPolicyCeilingExceeded):
 		return http.StatusBadRequest

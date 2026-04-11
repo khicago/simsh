@@ -10,16 +10,20 @@ import (
 	"time"
 
 	"github.com/khicago/simsh/pkg/contract"
+	enginepkg "github.com/khicago/simsh/pkg/engine"
 )
 
 var (
-	ErrSessionNotFound = errors.New("runtime session not found")
-	ErrSessionClosed   = errors.New("runtime session is closed")
+	ErrSessionNotFound   = errors.New("runtime session not found")
+	ErrSessionClosed     = errors.New("runtime session is closed")
+	ErrSessionNotRunning = errors.New("runtime session has no active execution")
+	ErrExecutionChanged  = errors.New("runtime session active execution changed")
 )
 
 type SessionManagerOptions struct {
-	Now   func() time.Time
-	NewID func() string
+	Now            func() time.Time
+	NewID          func() string
+	NewExecutionID func() string
 }
 
 type SessionExecution struct {
@@ -29,20 +33,28 @@ type SessionExecution struct {
 }
 
 type SessionManager struct {
-	mu       sync.RWMutex
-	sessions map[string]*managedSession
-	now      func() time.Time
-	newID    func() string
+	mu             sync.RWMutex
+	sessions       map[string]*managedSession
+	now            func() time.Time
+	newID          func() string
+	newExecutionID func() string
 }
 
 type managedSession struct {
-	snapshot      contract.Session
-	checkpoint    contract.Session
-	base          Options
-	runtime       *Stack
-	active        bool
-	adapterMounts []contract.VirtualMount
-	executeMu     sync.Mutex
+	snapshot        contract.Session
+	checkpoint      contract.Session
+	base            Options
+	runtime         *Stack
+	active          bool
+	adapterMounts   []contract.VirtualMount
+	executeMu       sync.Mutex
+	activeExecution *activeExecutionControl
+}
+
+type activeExecutionControl struct {
+	state  contract.SessionExecutionState
+	cancel context.CancelFunc
+	done   chan struct{}
 }
 
 var sessionCounter uint64
@@ -59,10 +71,15 @@ func NewSessionManager(opts SessionManagerOptions) *SessionManager {
 			return fmt.Sprintf("sess_%d", value)
 		}
 	}
+	executionIDFn := opts.NewExecutionID
+	if executionIDFn == nil {
+		executionIDFn = enginepkg.NextExecutionID
+	}
 	return &SessionManager{
-		sessions: map[string]*managedSession{},
-		now:      nowFn,
-		newID:    idFn,
+		sessions:       map[string]*managedSession{},
+		now:            nowFn,
+		newID:          idFn,
+		newExecutionID: executionIDFn,
 	}
 }
 
@@ -121,6 +138,58 @@ func (m *SessionManager) Get(sessionID string) (contract.Session, error) {
 	return record.snapshot.Clone(), nil
 }
 
+func (m *SessionManager) Cancel(sessionID string, expectedExecutionID string) (contract.Session, error) {
+	if m == nil {
+		return contract.Session{}, fmt.Errorf("session manager is not initialized")
+	}
+
+	var cancel context.CancelFunc
+
+	m.mu.Lock()
+	sessionID = strings.TrimSpace(sessionID)
+	current, ok := m.sessions[sessionID]
+	if !ok {
+		m.mu.Unlock()
+		return contract.Session{}, ErrSessionNotFound
+	}
+	if !current.active || current.runtime == nil {
+		m.mu.Unlock()
+		return contract.Session{}, ErrSessionClosed
+	}
+	if current.activeExecution == nil || current.snapshot.ActiveExecution == nil {
+		m.mu.Unlock()
+		return contract.Session{}, ErrSessionNotRunning
+	}
+	if executionFinished(current.activeExecution) {
+		m.mu.Unlock()
+		return contract.Session{}, ErrSessionNotRunning
+	}
+	expectedExecutionID = strings.TrimSpace(expectedExecutionID)
+	if expectedExecutionID != "" && current.snapshot.ActiveExecution.ExecutionID != expectedExecutionID {
+		m.mu.Unlock()
+		return contract.Session{}, ErrExecutionChanged
+	}
+
+	updatedAt := m.now()
+	activeExecution := cloneActiveExecution(current.snapshot.ActiveExecution)
+	if activeExecution.Status == contract.SessionExecutionStatusCanceling {
+		snapshot := current.snapshot.Clone()
+		m.mu.Unlock()
+		return snapshot, nil
+	}
+	activeExecution.Status = contract.SessionExecutionStatusCanceling
+	activeExecution.StatusUpdatedAt = updatedAt
+	current.activeExecution.state = activeExecution
+	current.snapshot.ActiveExecution = &activeExecution
+	current.snapshot.UpdatedAt = updatedAt
+	snapshot := current.snapshot.Clone()
+	cancel = current.activeExecution.cancel
+	m.mu.Unlock()
+
+	cancel()
+	return snapshot, nil
+}
+
 func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandLine string, requested contract.ExecutionPolicy) (SessionExecution, error) {
 	commandLine = strings.TrimSpace(commandLine)
 	if commandLine == "" {
@@ -155,16 +224,39 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 		}
 	}
 
-	result := runtime.ExecuteResult(ctx, commandLine).WithSessionID(record.snapshot.SessionID)
+	execCtx, cancel := context.WithCancel(ctx)
+	executionID := m.newExecutionID()
+	startedAt := m.now()
+	activeExecution := newActiveExecutionControl(executionID, commandLine, startedAt, cancel)
+
+	m.mu.Lock()
+	current, ok := m.sessions[record.snapshot.SessionID]
+	if !ok {
+		m.mu.Unlock()
+		cancel()
+		return SessionExecution{}, ErrSessionNotFound
+	}
+	current.activeExecution = activeExecution
+	current.snapshot.ActiveExecution = cloneActiveExecutionPtr(&activeExecution.state)
+	current.snapshot.UpdatedAt = startedAt
+	m.mu.Unlock()
+
+	result := runtime.ExecuteResult(execCtx, commandLine).WithSessionID(record.snapshot.SessionID)
+	result.ExecutionID = executionID
+	close(activeExecution.done)
+	cancel()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	current, ok := m.sessions[record.snapshot.SessionID]
+	current, ok = m.sessions[record.snapshot.SessionID]
 	if !ok {
 		return SessionExecution{}, ErrSessionNotFound
 	}
+	current.activeExecution = nil
+	current.snapshot.ActiveExecution = nil
 	nextSession := current.snapshot.Clone()
 	nextSession.UpdatedAt = m.now()
+	nextSession.ActiveExecution = nil
 	nextSession.State = mergeSessionState(nextSession.State, runtime)
 	if len(current.base.Adapters) > 0 {
 		var adapterErr error
@@ -281,6 +373,8 @@ func (m *SessionManager) Close(ctx context.Context, sessionID string) (contract.
 	record.checkpoint = record.snapshot.Clone()
 	record.runtime = nil
 	record.active = false
+	record.activeExecution = nil
+	record.snapshot.ActiveExecution = nil
 	return record.snapshot.Clone(), nil
 }
 
@@ -381,4 +475,49 @@ func samePolicy(left contract.ExecutionPolicy, right contract.ExecutionPolicy) b
 		left.MaxPipelineDepth == right.MaxPipelineDepth &&
 		left.MaxOutputBytes == right.MaxOutputBytes &&
 		left.Timeout == right.Timeout
+}
+
+func newActiveExecutionState(executionID string, commandLine string, now time.Time, status contract.SessionExecutionStatus) *contract.SessionExecutionState {
+	return &contract.SessionExecutionState{
+		ExecutionID:     strings.TrimSpace(executionID),
+		CommandLine:     strings.TrimSpace(commandLine),
+		StartedAt:       now,
+		Status:          status,
+		StatusUpdatedAt: now,
+	}
+}
+
+func cloneActiveExecution(active *contract.SessionExecutionState) contract.SessionExecutionState {
+	if active == nil {
+		return contract.SessionExecutionState{}
+	}
+	return *active
+}
+
+func cloneActiveExecutionPtr(active *contract.SessionExecutionState) *contract.SessionExecutionState {
+	if active == nil {
+		return nil
+	}
+	cloned := *active
+	return &cloned
+}
+
+func newActiveExecutionControl(executionID string, commandLine string, startedAt time.Time, cancel context.CancelFunc) *activeExecutionControl {
+	return &activeExecutionControl{
+		state:  *newActiveExecutionState(executionID, commandLine, startedAt, contract.SessionExecutionStatusRunning),
+		cancel: cancel,
+		done:   make(chan struct{}),
+	}
+}
+
+func executionFinished(active *activeExecutionControl) bool {
+	if active == nil {
+		return true
+	}
+	select {
+	case <-active.done:
+		return true
+	default:
+		return false
+	}
 }

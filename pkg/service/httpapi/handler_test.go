@@ -14,9 +14,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/khicago/simsh/pkg/contract"
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
+	"github.com/khicago/simsh/pkg/fs"
 )
 
 func TestExecuteHandler(t *testing.T) {
@@ -562,6 +564,11 @@ func TestStatusForSessionError(t *testing.T) {
 			want: http.StatusConflict,
 		},
 		{
+			name: "session not running",
+			err:  fmt.Errorf("wrapped: %w", runtimeengine.ErrSessionNotRunning),
+			want: http.StatusConflict,
+		},
+		{
 			name: "policy ceiling",
 			err:  fmt.Errorf("wrapped: %w", contract.ErrPolicyCeilingExceeded),
 			want: http.StatusBadRequest,
@@ -619,6 +626,333 @@ func TestDescribePathMetaViaLSMountedPath(t *testing.T) {
 	if row.Mode == "" {
 		t.Fatalf("describePathMetaViaLS(...).Mode empty: %+v", row)
 	}
+}
+
+func TestSessionHandlerGetAndCancelActiveExecution(t *testing.T) {
+	clock := newHTTPTestClock(
+		time.Date(2026, 5, 20, 10, 0, 0, 0, time.UTC),
+		time.Date(2026, 5, 20, 10, 0, 1, 0, time.UTC),
+		time.Date(2026, 5, 20, 10, 0, 2, 0, time.UTC),
+	)
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{
+		Now:            clock.Now,
+		NewID:          func() string { return "sess_http_cancel" },
+		NewExecutionID: func() string { return "exec_http_cancel" },
+	})
+
+	runStarted := make(chan struct{})
+	runReleased := make(chan struct{})
+	h := NewHandler(Config{
+		DefaultHostRoot: t.TempDir(),
+		DefaultProfile:  "core-strict",
+		DefaultPolicy:   "read-only",
+		SessionManager:  manager,
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		ExternalCallbacks: fs.ExternalCallbacks{
+			ListExternalCommands: func(context.Context) ([]contract.ExternalCommand, error) {
+				return []contract.ExternalCommand{{Name: "blocker", Summary: "blocks until canceled"}}, nil
+			},
+			RunExternalCommand: func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				if req.Command != "blocker" {
+					return contract.ExternalCommandResult{}, contract.ErrUnsupported
+				}
+				close(runStarted)
+				<-ctx.Done()
+				close(runReleased)
+				return contract.ExternalCommandResult{}, ctx.Err()
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create(...) error = %v", err)
+	}
+
+	executeDone := make(chan struct {
+		Result contract.ExecutionResult
+		Err    error
+	}, 1)
+	go func() {
+		executed, execErr := manager.Execute(context.Background(), session.SessionID, "blocker", contract.ExecutionPolicy{})
+		executeDone <- struct {
+			Result contract.ExecutionResult
+			Err    error
+		}{Result: executed.Result, Err: execErr}
+	}()
+
+	select {
+	case <-runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("session execution did not start")
+	}
+
+	getResp, err := http.Get(ts.URL + testAPIPath("v1", "sessions", session.SessionID))
+	if err != nil {
+		t.Fatalf("GET session failed: %v", err)
+	}
+	defer getResp.Body.Close()
+	if getResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(getResp.Body)
+		t.Fatalf("unexpected get status=%d body=%s", getResp.StatusCode, string(raw))
+	}
+	var got struct {
+		Session struct {
+			SessionID       string `json:"session_id"`
+			ActiveExecution *struct {
+				ExecutionID     string `json:"execution_id"`
+				CommandLine     string `json:"command_line"`
+				Status          string `json:"status"`
+				StatusUpdatedAt string `json:"status_updated_at"`
+			} `json:"active_execution"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(getResp.Body).Decode(&got); err != nil {
+		t.Fatalf("decode get failed: %v", err)
+	}
+	if got.Session.SessionID != session.SessionID {
+		t.Fatalf("GET session_id = %q, want %q", got.Session.SessionID, session.SessionID)
+	}
+	if got.Session.ActiveExecution == nil {
+		t.Fatalf("GET active_execution = nil, want running state")
+	}
+	if got.Session.ActiveExecution.ExecutionID == "" {
+		t.Fatalf("GET execution_id empty: %+v", got.Session.ActiveExecution)
+	}
+	if got.Session.ActiveExecution.CommandLine != "blocker" || got.Session.ActiveExecution.Status != string(contract.SessionExecutionStatusRunning) {
+		t.Fatalf("GET active_execution = %+v, want blocker/running", got.Session.ActiveExecution)
+	}
+	if got.Session.ActiveExecution.StatusUpdatedAt == "" {
+		t.Fatalf("GET status_updated_at empty: %+v", got.Session.ActiveExecution)
+	}
+
+	cancelResp := postJSON(t, ts.URL+testAPIPath("v1", "sessions", session.SessionID, "cancel"), map[string]any{
+		"expected_execution_id": got.Session.ActiveExecution.ExecutionID,
+	})
+	defer cancelResp.Body.Close()
+	if cancelResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(cancelResp.Body)
+		t.Fatalf("unexpected cancel status=%d body=%s", cancelResp.StatusCode, string(raw))
+	}
+	var canceled struct {
+		Session struct {
+			ActiveExecution *struct {
+				ExecutionID     string `json:"execution_id"`
+				Status          string `json:"status"`
+				StatusUpdatedAt string `json:"status_updated_at"`
+			} `json:"active_execution"`
+		} `json:"session"`
+	}
+	if err := json.NewDecoder(cancelResp.Body).Decode(&canceled); err != nil {
+		t.Fatalf("decode cancel failed: %v", err)
+	}
+	if canceled.Session.ActiveExecution == nil || canceled.Session.ActiveExecution.Status != string(contract.SessionExecutionStatusCanceling) {
+		t.Fatalf("cancel response active_execution = %+v, want canceling", canceled.Session.ActiveExecution)
+	}
+	if canceled.Session.ActiveExecution.ExecutionID != got.Session.ActiveExecution.ExecutionID {
+		t.Fatalf("cancel execution_id = %q, want %q", canceled.Session.ActiveExecution.ExecutionID, got.Session.ActiveExecution.ExecutionID)
+	}
+	if canceled.Session.ActiveExecution.StatusUpdatedAt == "" {
+		t.Fatalf("cancel status_updated_at empty: %+v", canceled.Session.ActiveExecution)
+	}
+
+	select {
+	case <-runReleased:
+	case <-time.After(time.Second):
+		t.Fatal("session execution was not canceled through HTTP")
+	}
+
+	executed := <-executeDone
+	if executed.Err != nil {
+		t.Fatalf("Execute(...) error = %v, want nil", executed.Err)
+	}
+	if !executed.Result.Trace.Canceled {
+		t.Fatalf("canceled execute trace = %+v, want canceled=true", executed.Result.Trace)
+	}
+
+	idleCancelResp := postJSON(t, ts.URL+testAPIPath("v1", "sessions", session.SessionID, "cancel"), map[string]any{
+		"expected_execution_id": got.Session.ActiveExecution.ExecutionID,
+	})
+	defer idleCancelResp.Body.Close()
+	if idleCancelResp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(idleCancelResp.Body)
+		t.Fatalf("unexpected idle cancel status=%d body=%s", idleCancelResp.StatusCode, string(raw))
+	}
+}
+
+func TestSessionHandlerCancelRejectsChangedExecution(t *testing.T) {
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{
+		Now:            func() time.Time { return time.Date(2026, 5, 20, 12, 0, 0, 0, time.UTC) },
+		NewID:          func() string { return "sess_http_changed" },
+		NewExecutionID: func() string { return "exec_http_changed" },
+	})
+
+	runStarted := make(chan struct{})
+	runReleased := make(chan struct{})
+	h := NewHandler(Config{
+		DefaultHostRoot: t.TempDir(),
+		DefaultProfile:  "core-strict",
+		DefaultPolicy:   "read-only",
+		SessionManager:  manager,
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		ExternalCallbacks: fs.ExternalCallbacks{
+			ListExternalCommands: func(context.Context) ([]contract.ExternalCommand, error) {
+				return []contract.ExternalCommand{{Name: "blocker", Summary: "blocks until canceled"}}, nil
+			},
+			RunExternalCommand: func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				close(runStarted)
+				<-ctx.Done()
+				close(runReleased)
+				return contract.ExternalCommandResult{}, ctx.Err()
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create(...) error = %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, execErr := manager.Execute(context.Background(), session.SessionID, "blocker", contract.ExecutionPolicy{})
+		errCh <- execErr
+	}()
+	select {
+	case <-runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("session execution did not start")
+	}
+
+	mismatchResp := postJSON(t, ts.URL+testAPIPath("v1", "sessions", session.SessionID, "cancel"), map[string]any{
+		"expected_execution_id": "exec_other",
+	})
+	defer mismatchResp.Body.Close()
+	if mismatchResp.StatusCode != http.StatusConflict {
+		raw, _ := io.ReadAll(mismatchResp.Body)
+		t.Fatalf("unexpected mismatch cancel status=%d body=%s", mismatchResp.StatusCode, string(raw))
+	}
+
+	cancelResp := postJSON(t, ts.URL+testAPIPath("v1", "sessions", session.SessionID, "cancel"), map[string]any{
+		"expected_execution_id": "exec_http_changed",
+	})
+	defer cancelResp.Body.Close()
+	if cancelResp.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(cancelResp.Body)
+		t.Fatalf("unexpected cancel status=%d body=%s", cancelResp.StatusCode, string(raw))
+	}
+	select {
+	case <-runReleased:
+	case <-time.After(time.Second):
+		t.Fatal("session execution was not canceled")
+	}
+	if execErr := <-errCh; execErr != nil {
+		t.Fatalf("Execute(...) error = %v, want nil", execErr)
+	}
+}
+
+func TestSessionHandlerCancelRequiresExpectedExecutionID(t *testing.T) {
+	manager := runtimeengine.NewSessionManager(runtimeengine.SessionManagerOptions{
+		Now:            func() time.Time { return time.Date(2026, 5, 20, 13, 0, 0, 0, time.UTC) },
+		NewID:          func() string { return "sess_http_require_exec" },
+		NewExecutionID: func() string { return "exec_http_require_exec" },
+	})
+
+	runStarted := make(chan struct{})
+	runReleased := make(chan struct{})
+	h := NewHandler(Config{
+		DefaultHostRoot: t.TempDir(),
+		DefaultProfile:  "core-strict",
+		DefaultPolicy:   "read-only",
+		SessionManager:  manager,
+	})
+	ts := httptest.NewServer(h)
+	defer ts.Close()
+
+	session, err := manager.Create(context.Background(), runtimeengine.Options{
+		HostRoot: t.TempDir(),
+		Profile:  contract.ProfileCoreStrict,
+		Policy:   contract.DefaultPolicy(),
+		ExternalCallbacks: fs.ExternalCallbacks{
+			ListExternalCommands: func(context.Context) ([]contract.ExternalCommand, error) {
+				return []contract.ExternalCommand{{Name: "blocker", Summary: "blocks until canceled"}}, nil
+			},
+			RunExternalCommand: func(ctx context.Context, req contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				close(runStarted)
+				<-ctx.Done()
+				close(runReleased)
+				return contract.ExternalCommandResult{}, ctx.Err()
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create(...) error = %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		_, execErr := manager.Execute(context.Background(), session.SessionID, "blocker", contract.ExecutionPolicy{})
+		errCh <- execErr
+	}()
+	select {
+	case <-runStarted:
+	case <-time.After(time.Second):
+		t.Fatal("session execution did not start")
+	}
+
+	resp := postJSON(t, ts.URL+testAPIPath("v1", "sessions", session.SessionID, "cancel"), map[string]any{})
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("unexpected cancel status=%d body=%s", resp.StatusCode, string(raw))
+	}
+
+	if _, err := manager.Cancel(session.SessionID, "exec_http_require_exec"); err != nil {
+		t.Fatalf("manager.Cancel(...) error = %v", err)
+	}
+	select {
+	case <-runReleased:
+	case <-time.After(time.Second):
+		t.Fatal("session execution was not canceled")
+	}
+	if execErr := <-errCh; execErr != nil {
+		t.Fatalf("Execute(...) error = %v, want nil", execErr)
+	}
+}
+
+type httpTestClock struct {
+	values []time.Time
+	idx    int
+}
+
+func newHTTPTestClock(values ...time.Time) *httpTestClock {
+	return &httpTestClock{values: append([]time.Time(nil), values...)}
+}
+
+func (c *httpTestClock) Now() time.Time {
+	if len(c.values) == 0 {
+		return time.Time{}
+	}
+	value := c.values[c.idx]
+	if c.idx < len(c.values)-1 {
+		c.idx++
+	}
+	return value
+}
+
+func testAPIPath(parts ...string) string {
+	sep := string([]byte{47})
+	return sep + strings.Join(parts, sep)
 }
 
 func TestDescribePathMetaDefaults(t *testing.T) {

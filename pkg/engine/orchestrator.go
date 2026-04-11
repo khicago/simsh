@@ -124,7 +124,7 @@ func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract
 		prepared, err := e.PrepareOps(ctx, ops)
 		if err != nil {
 			return contract.ExecutionResult{
-				ExecutionID: nextExecutionID(),
+				ExecutionID: NextExecutionID(),
 				ExitCode:    contract.ExitCodeGeneral,
 				Stdout:      fmt.Sprintf("execute: %v", err),
 				StartedAt:   time.Now().UTC(),
@@ -138,7 +138,7 @@ func (e *Engine) ExecuteResult(ctx context.Context, cmdline string, ops contract
 	prepared, err := e.PrepareOps(ctx, ops)
 	if err != nil {
 		return contract.ExecutionResult{
-			ExecutionID: nextExecutionID(),
+			ExecutionID: NextExecutionID(),
 			ExitCode:    contract.ExitCodeGeneral,
 			Stdout:      fmt.Sprintf("execute: %v", err),
 			StartedAt:   time.Now().UTC(),

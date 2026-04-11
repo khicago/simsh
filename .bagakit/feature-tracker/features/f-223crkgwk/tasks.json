@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "feat_id": "f-223crkgwk",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Finalize runtime-proof evolution proposal and staged execution lanes",
+      "status": "done",
+      "summary": "Turn the placeholder feat into an execution-grade proposal with staged runtime-contract, trace, mount, and proof-surface lanes.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": [
+        "Execution lanes and proposal were established before T-002 implementation began."
+      ]
+    },
+    {
+      "id": "T-002",
+      "title": "Add active session execution state and cancel/status contract",
+      "status": "in_progress",
+      "summary": "Introduce explicit active execution metadata and cancellation/status surfaces while preserving one-active-execution-per-session semantics.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": [
+        "Live session state now carries active_execution with execution_id correlation.",
+        "HTTP session surface now includes GET session state and cancel-by-expected-execution-id."
+      ]
+    },
+    {
+      "id": "T-003",
+      "title": "Enrich execution trace and external command outcome contracts",
+      "status": "todo",
+      "summary": "Add richer ordered trace/event data and strengthen the external seam with more explicit structured execution outcomes.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-004",
+      "title": "Make mount execution limits and control surfaces more operational",
+      "status": "todo",
+      "summary": "Expose and enforce more of the documented mount contract around budgets, refresh/status, and execution-time scope control.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-005",
+      "title": "Strengthen benchmark manifests, auditability, and proof surfaces",
+      "status": "todo",
+      "summary": "Improve benchmark/release evidence with stronger manifests, regression gates, and reproducibility breadcrumbs.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    }
+  ]
+}

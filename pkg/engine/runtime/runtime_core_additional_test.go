@@ -131,6 +131,9 @@ func TestSessionManagerDefaultFactoriesAndNilCreate(t *testing.T) {
 	if _, err := nilManager.Create(context.Background(), Options{}); err == nil {
 		t.Fatal("(*SessionManager)(nil).Create(...) unexpectedly succeeded")
 	}
+	if _, err := nilManager.Cancel("sess_nil", "exec_nil"); err == nil {
+		t.Fatal("(*SessionManager)(nil).Cancel(...) unexpectedly succeeded")
+	}
 
 	manager := NewSessionManager(SessionManagerOptions{})
 	session, err := manager.Create(context.Background(), Options{HostRoot: t.TempDir(), Policy: contract.DefaultPolicy()})

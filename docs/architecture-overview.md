@@ -132,7 +132,7 @@ Entry surfaces are how external callers reach the runtime. They are not the arch
 
 Entry surfaces:
 - `pkg/cmd`: runtime entry helpers for CLI/TUI use
-- `pkg/service/httpapi`: HTTP execute endpoint
+- `pkg/service/httpapi`: HTTP execute plus session create/get/control endpoints
 - `cmd/simsh-cli`: local runner (`CLI + TUI + serve`)
 - `cmd/simshd`: dedicated HTTP service
 
