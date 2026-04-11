@@ -40,14 +40,22 @@ func TestDefaultBuiltinRegistrationsDeclareCanonicalOwnership(t *testing.T) {
 }
 
 func TestDefaultBuiltinRegistrationsLeaveNoShadowCommandImplementations(t *testing.T) {
-	commandGlob := filepath.Join("commands", "*", "command.go")
+	commandGlob := filepath.Join("commands", "*", "*.go")
 	commandFiles, err := filepath.Glob(commandGlob)
 	if err != nil {
 		t.Fatalf("glob command packages failed: %v", err)
 	}
-	if len(commandFiles) != 0 {
-		slices.Sort(commandFiles)
-		t.Fatalf("unexpected shadow command implementations remain: %v", commandFiles)
+	remaining := make([]string, 0, len(commandFiles))
+	for _, path := range commandFiles {
+		base := filepath.Base(path)
+		if strings.HasSuffix(base, "_test.go") {
+			continue
+		}
+		remaining = append(remaining, path)
+	}
+	if len(remaining) != 0 {
+		slices.Sort(remaining)
+		t.Fatalf("unexpected shadow command implementations remain: %v", remaining)
 	}
 }
 
