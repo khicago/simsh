@@ -123,6 +123,7 @@ Example shape:
 ### Required Categories
 - command identity: command name, argv, pipeline structure when applicable;
 - ordered execution truth: the runtime-ordered command steps that actually executed;
+- external outcome truth: structured records for external command outcomes, including seam/provider failures that may not count as executed child-process steps;
 - policy/profile used: effective policy, effective profile, truncation or downgrade markers;
 - timing: duration and timeout/cancel markers;
 - path effects:
@@ -148,6 +149,7 @@ For external commands, the structured contract SHOULD preserve:
 - stdout/stderr channel separation even on failure;
 - raw termination truth when it differs from the compatibility exit code;
 - provider-side error text separately from command stderr when the failure came from the seam rather than the child process.
+- provider-side seam failures MAY appear in structured external outcome records without appearing in the runtime-executed step list.
 
 ## Relationship to Audit
 - `AuditSink` remains an observability hook for out-of-band pipelines.

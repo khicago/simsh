@@ -530,36 +530,70 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 	}
 	result, err := ops.RunExternalCommand(ctx, request)
 	if err != nil {
+		compatCode := contract.ExitCodeGeneral
+		output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: compatCode}
+		if collector := traceCollectorFromContext(ctx); collector != nil {
+			collector.recordExternalOutput(result.Stdout, result.Stderr)
+			collector.recordExternalOutcomeStep(contract.ExecutionTraceStep{
+				Command:       cmd,
+				Argv:          append([]string{cmd}, args...),
+				Namespace:     contract.CommandNamespaceExternal,
+				ResolvedPath:  strings.TrimSpace(request.RawPath),
+				Executed:      false,
+				ExitCode:      intPtr(compatCode),
+				RawExitCode:   effectiveRawExitCode(result),
+				StdoutBytes:   intPtr(len(result.Stdout)),
+				StderrBytes:   intPtr(len(result.Stderr)),
+				ProviderError: err.Error(),
+			})
+		}
 		if errors.Is(err, contract.ErrUnsupported) {
 			if ref.PathLike || ref.Namespace == contract.CommandNamespaceExternal {
 				out := fmt.Sprintf("%s: not found", display)
 				emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
-				return execOutput{stdout: out, code: contract.ExitCodeGeneral}
+				if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
+					output.stdout = out
+				}
+				return output
 			}
 			out := fmt.Sprintf("%s: Not supported", display)
 			emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
-			return execOutput{stdout: out, code: contract.ExitCodeUnsupported}
+			output.code = contract.ExitCodeUnsupported
+			if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
+				output.stdout = out
+			}
+			return output
 		}
 		out := fmt.Sprintf("%s: %v", display, err)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
-		if collector := traceCollectorFromContext(ctx); collector != nil {
-			collector.recordExternalOutcome("", out)
+		if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
+			output.stderr = out
 		}
-		return execOutput{stderr: out, code: contract.ExitCodeGeneral}
+		return output
+	}
+	compatCode := result.ExitCode
+	if compatCode < 0 {
+		compatCode = contract.ExitCodeGeneral
 	}
 	if strings.TrimSpace(result.CanonicalTarget) == "" {
 		result.CanonicalTarget = strings.TrimSpace(request.RawPath)
 	}
-	output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: result.ExitCode}
-	if strings.TrimSpace(result.ProviderError) != "" {
-		if strings.TrimSpace(output.stderr) == "" {
-			output.stderr = result.ProviderError
-		} else {
-			output.stderr = appendOutputText(output.stderr, result.ProviderError)
-		}
-	}
+	output := execOutput{stdout: result.Stdout, stderr: result.Stderr, code: compatCode}
 	if collector := traceCollectorFromContext(ctx); collector != nil {
-		collector.recordExternalOutcome(output.stdout, output.stderr)
+		collector.recordExternalOutput(result.Stdout, result.Stderr)
+		collector.recordExternalOutcomeStep(contract.ExecutionTraceStep{
+			Command:         cmd,
+			Argv:            append([]string{cmd}, args...),
+			Namespace:       contract.CommandNamespaceExternal,
+			ResolvedPath:    strings.TrimSpace(result.CanonicalTarget),
+			Executed:        true,
+			ExitCode:        intPtr(compatCode),
+			RawExitCode:     effectiveRawExitCode(result),
+			StdoutBytes:     intPtr(len(result.Stdout)),
+			StderrBytes:     intPtr(len(result.Stderr)),
+			ProviderError:   strings.TrimSpace(result.ProviderError),
+			TerminationKind: strings.TrimSpace(result.TerminationKind),
+		})
 	}
 	if collector := traceCollectorFromContext(ctx); collector != nil {
 		collector.recordExecutedStep(contract.ExecutionTraceStep{
@@ -568,8 +602,8 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 			Namespace:       contract.CommandNamespaceExternal,
 			ResolvedPath:    strings.TrimSpace(result.CanonicalTarget),
 			Executed:        true,
-			ExitCode:        intPtr(result.ExitCode),
-			RawExitCode:     cloneIntPtr(result.RawExitCode),
+			ExitCode:        intPtr(compatCode),
+			RawExitCode:     effectiveRawExitCode(result),
 			ProviderError:   strings.TrimSpace(result.ProviderError),
 			TerminationKind: strings.TrimSpace(result.TerminationKind),
 		})
@@ -595,6 +629,16 @@ func cloneIntPtr(value *int) *int {
 	}
 	cloned := *value
 	return &cloned
+}
+
+func effectiveRawExitCode(result contract.ExternalCommandResult) *int {
+	if result.RawExitCode != nil {
+		return cloneIntPtr(result.RawExitCode)
+	}
+	if result.ExitCode < 0 {
+		return intPtr(result.ExitCode)
+	}
+	return nil
 }
 
 func enforceOutputLimit(ctx context.Context, out execOutput, policy contract.ExecutionPolicy) execOutput {

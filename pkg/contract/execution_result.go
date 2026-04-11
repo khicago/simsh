@@ -25,6 +25,7 @@ type ExecutionTrace struct {
 	Argv                []string             `json:"argv,omitempty"`
 	Pipeline            []ExecutionTraceStep `json:"pipeline,omitempty"`
 	Executed            []ExecutionTraceStep `json:"executed,omitempty"`
+	ExternalOutcomes    []ExecutionTraceStep `json:"external_outcomes,omitempty"`
 	EffectiveProfile    CompatibilityProfile `json:"effective_profile,omitempty"`
 	EffectivePolicy     ExecutionPolicy      `json:"effective_policy"`
 	TimedOut            bool                 `json:"timed_out,omitempty"`
@@ -52,6 +53,8 @@ type ExecutionTraceStep struct {
 	Executed        bool   `json:"executed,omitempty"`
 	ExitCode        *int   `json:"exit_code,omitempty"`
 	RawExitCode     *int   `json:"raw_exit_code,omitempty"`
+	StdoutBytes     *int   `json:"stdout_bytes,omitempty"`
+	StderrBytes     *int   `json:"stderr_bytes,omitempty"`
 	ProviderError   string `json:"provider_error,omitempty"`
 	TerminationKind string `json:"termination_kind,omitempty"`
 }

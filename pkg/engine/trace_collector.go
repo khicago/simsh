@@ -271,17 +271,13 @@ func (c *executionTraceCollector) Snapshot() contract.ExecutionTrace {
 	if len(c.trace.Executed) > 0 {
 		trace.Executed = make([]contract.ExecutionTraceStep, 0, len(c.trace.Executed))
 		for _, step := range c.trace.Executed {
-			trace.Executed = append(trace.Executed, contract.ExecutionTraceStep{
-				Command:         step.Command,
-				Argv:            append([]string(nil), step.Argv...),
-				Namespace:       step.Namespace,
-				ResolvedPath:    step.ResolvedPath,
-				Executed:        step.Executed,
-				ExitCode:        step.ExitCode,
-				RawExitCode:     step.RawExitCode,
-				ProviderError:   step.ProviderError,
-				TerminationKind: step.TerminationKind,
-			})
+			trace.Executed = append(trace.Executed, cloneExecutionTraceStep(step))
+		}
+	}
+	if len(c.trace.ExternalOutcomes) > 0 {
+		trace.ExternalOutcomes = make([]contract.ExecutionTraceStep, 0, len(c.trace.ExternalOutcomes))
+		for _, step := range c.trace.ExternalOutcomes {
+			trace.ExternalOutcomes = append(trace.ExternalOutcomes, cloneExecutionTraceStep(step))
 		}
 	}
 	trace.RequestedPaths = append([]string(nil), c.trace.RequestedPaths...)
@@ -349,18 +345,18 @@ func (c *executionTraceCollector) recordDenied(pathValue string) {
 	c.recordPath(&c.trace.DeniedPaths, pathValue)
 }
 
-func (c *executionTraceCollector) recordExternalOutput(stdoutBytes int, stderrBytes int) {
+func (c *executionTraceCollector) recordExternalBytes(stdoutBytes int, stderrBytes int) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.trace.ExternalStdoutBytes += stdoutBytes
 	c.trace.ExternalStderrBytes += stderrBytes
 }
 
-func (c *executionTraceCollector) recordExternalOutcome(stdout string, stderr string) {
+func (c *executionTraceCollector) recordExternalOutput(stdout string, stderr string) {
 	if c == nil {
 		return
 	}
-	c.recordExternalOutput(len(stdout), len(stderr))
+	c.recordExternalBytes(len(stdout), len(stderr))
 }
 
 func (c *executionTraceCollector) recordPath(target *[]string, pathValue string) {
@@ -407,6 +403,31 @@ func (c *executionTraceCollector) recordExecutedStep(step contract.ExecutionTrac
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.trace.Executed = append(c.trace.Executed, step)
+}
+
+func (c *executionTraceCollector) recordExternalOutcomeStep(step contract.ExecutionTraceStep) {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.trace.ExternalOutcomes = append(c.trace.ExternalOutcomes, step)
+}
+
+func cloneExecutionTraceStep(step contract.ExecutionTraceStep) contract.ExecutionTraceStep {
+	return contract.ExecutionTraceStep{
+		Command:         step.Command,
+		Argv:            append([]string(nil), step.Argv...),
+		Namespace:       step.Namespace,
+		ResolvedPath:    step.ResolvedPath,
+		Executed:        step.Executed,
+		ExitCode:        cloneIntPtr(step.ExitCode),
+		RawExitCode:     cloneIntPtr(step.RawExitCode),
+		StdoutBytes:     cloneIntPtr(step.StdoutBytes),
+		StderrBytes:     cloneIntPtr(step.StderrBytes),
+		ProviderError:   step.ProviderError,
+		TerminationKind: step.TerminationKind,
+	}
 }
 
 func recordTraceMutation(c *executionTraceCollector, kind contract.MutationKind, pathValue string, bytesWritten int) {
