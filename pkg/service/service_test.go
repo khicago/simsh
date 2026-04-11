@@ -66,6 +66,9 @@ func TestExecutorServiceExecuteCommandRequiredFastPath(t *testing.T) {
 	if resp.ExitCode != contract.ExitCodeUsage {
 		t.Fatalf("Execute(...).ExitCode = %d, want %d", resp.ExitCode, contract.ExitCodeUsage)
 	}
+	if resp.ExecutionID == "" || resp.StartedAt.IsZero() || resp.FinishedAt.IsZero() {
+		t.Fatalf("Execute(...) blank-command result missing structured fields: %+v", resp.ExecutionResult)
+	}
 	if resp.Output != "execute: command is required" {
 		t.Fatalf("Execute(...).Output = %q, want %q", resp.Output, "execute: command is required")
 	}

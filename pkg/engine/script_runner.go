@@ -128,13 +128,13 @@ func (e *Engine) executePipeline(ctx context.Context, pipeline parsedPipeline, o
 		current = out
 		hasInput = true
 
-		if ops.Policy.MaxOutputBytes > 0 && len(current) > ops.Policy.MaxOutputBytes {
+		if ops.Policy.MaxOutputBytes > 0 && len(flattenExecOutput(execOutput{stdout: current, stderr: pipelineStderr})) > ops.Policy.MaxOutputBytes {
 			markTraceOutputTruncated(ctx)
-			return execOutput{
-				stdout: fmt.Sprintf("execute: pipeline intermediate result exceeds limit (%d bytes)", ops.Policy.MaxOutputBytes),
+			return truncateExecOutput(execOutput{
+				stdout: current,
 				stderr: pipelineStderr,
 				code:   contract.ExitCodeGeneral,
-			}
+			}, ops.Policy.MaxOutputBytes)
 		}
 	}
 	return execOutput{stdout: current, stderr: pipelineStderr, code: 0}

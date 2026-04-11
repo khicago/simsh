@@ -98,6 +98,7 @@ Requests without a session identifier MAY run as ephemeral one-shot sessions.
 ### Notes
 - CLI rendering may stay human-friendly by default, but HTTP and embedding APIs SHOULD expose the structured form directly.
 - Backward-compatible text shims MAY flatten `stdout` for legacy surfaces, but the structured result becomes the source of truth.
+- Current wrappers may still include a flattened `output` mirror for compatibility, but that field SHOULD be treated as a legacy convenience view derived from `ExecutionResult`, not as an independent source of truth.
 
 Example shape:
 

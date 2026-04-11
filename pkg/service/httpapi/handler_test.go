@@ -244,6 +244,7 @@ func TestExecuteHandlerCommandRequired(t *testing.T) {
 	}
 
 	var out struct {
+		ExecutionID string `json:"execution_id"`
 		Output   string `json:"output"`
 		Stdout   string `json:"stdout"`
 		ExitCode int    `json:"exit_code"`
@@ -253,6 +254,9 @@ func TestExecuteHandlerCommandRequired(t *testing.T) {
 	}
 	if out.ExitCode != contract.ExitCodeUsage {
 		t.Fatalf("unexpected exit code %d, want %d", out.ExitCode, contract.ExitCodeUsage)
+	}
+	if out.ExecutionID == "" {
+		t.Fatalf("expected execution_id for blank-command result, got %+v", out)
 	}
 	if out.Output != "execute: command is required" || out.Stdout != out.Output {
 		t.Fatalf("unexpected usage payload: %+v", out)

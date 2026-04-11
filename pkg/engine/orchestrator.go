@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/khicago/simsh/pkg/contract"
@@ -647,7 +648,7 @@ func effectiveRawExitCode(result contract.ExternalCommandResult) *int {
 }
 
 func enforceOutputLimit(ctx context.Context, out execOutput, policy contract.ExecutionPolicy) execOutput {
-	if policy.MaxOutputBytes > 0 && len(flattenExecOutput(out)) > policy.MaxOutputBytes {
+	if policy.MaxOutputBytes > 0 && outputSize(out) > policy.MaxOutputBytes {
 		markTraceOutputTruncated(ctx)
 		return truncateExecOutput(out, policy.MaxOutputBytes)
 	}
@@ -658,24 +659,37 @@ func truncateExecOutput(out execOutput, limit int) execOutput {
 	if limit <= 0 {
 		return out
 	}
-	flat := flattenExecOutput(out)
-	if len(flat) <= limit {
+	if outputSize(out) <= limit {
 		return out
 	}
-	truncated := flat[:limit]
-	switch {
-	case out.stdout == "":
-		out.stderr = truncated
-	case out.stderr == "":
-		out.stdout = truncated
-	default:
-		out.stdout = truncated
-		out.stderr = ""
+	out.stdout = truncateUTF8String(out.stdout, limit)
+	remaining := limit - len(out.stdout)
+	if remaining < 0 {
+		remaining = 0
 	}
+	out.stderr = truncateUTF8String(out.stderr, remaining)
 	if out.code == 0 {
 		out.code = contract.ExitCodeGeneral
 	}
 	return out
+}
+
+func outputSize(out execOutput) int {
+	return len(out.stdout) + len(out.stderr)
+}
+
+func truncateUTF8String(value string, limit int) string {
+	if limit <= 0 || value == "" {
+		return ""
+	}
+	if len(value) <= limit {
+		return value
+	}
+	truncated := value[:limit]
+	for !utf8.ValidString(truncated) && len(truncated) > 0 {
+		truncated = truncated[:len(truncated)-1]
+	}
+	return truncated
 }
 
 func flattenExecOutput(out execOutput) string {

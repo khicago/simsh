@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/khicago/simsh/pkg/builtin"
 	"github.com/khicago/simsh/pkg/contract"
@@ -188,6 +189,25 @@ func TestEngineExecuteResultTraceDeniedAndOutputLimit(t *testing.T) {
 	}
 	if truncated.ExitCode != contract.ExitCodeGeneral {
 		t.Fatalf("unexpected truncated exit_code=%d, want %d", truncated.ExitCode, contract.ExitCodeGeneral)
+	}
+	if !utf8.ValidString(truncated.Stdout) || !utf8.ValidString(truncated.Stderr) {
+		t.Fatalf("truncated output must stay valid UTF-8: %+v", truncated)
+	}
+
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.ExecutionPolicy{WriteMode: contract.WriteModeReadOnly, MaxOutputBytes: 4}
+	pipelineTruncated := eng.ExecuteResult(context.Background(), "echo hello | cat", ops)
+	if !pipelineTruncated.Trace.OutputTruncated {
+		t.Fatalf("expected pipeline output_truncated trace flag: %+v", pipelineTruncated.Trace)
+	}
+	if pipelineTruncated.Stdout == "" {
+		t.Fatalf("expected truncated pipeline stdout to preserve partial content: %+v", pipelineTruncated)
+	}
+	if pipelineTruncated.ExitCode != contract.ExitCodeGeneral {
+		t.Fatalf("unexpected pipeline truncated exit_code=%d, want %d", pipelineTruncated.ExitCode, contract.ExitCodeGeneral)
+	}
+	if pipelineTruncated.Stdout == "" && pipelineTruncated.Stderr == "" {
+		t.Fatalf("expected pipeline truncation to preserve partial channel truth: %+v", pipelineTruncated)
 	}
 }
 

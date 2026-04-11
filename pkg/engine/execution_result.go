@@ -68,3 +68,15 @@ func (e *Engine) ExecutePreparedResult(ctx context.Context, cmdline string, prep
 	}
 	return result
 }
+
+func UsageResult(message string) contract.ExecutionResult {
+	now := time.Now().UTC()
+	return contract.ExecutionResult{
+		ExecutionID: NextExecutionID(),
+		ExitCode:    contract.ExitCodeUsage,
+		Stdout:      message,
+		StartedAt:   now,
+		FinishedAt:  now,
+		Trace:       contract.ExecutionTrace{},
+	}
+}

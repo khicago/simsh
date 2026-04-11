@@ -37,7 +37,7 @@ func (s *ExecutorService) Execute(ctx context.Context, req ExecuteRequest) (Exec
 	}
 	command := strings.TrimSpace(req.Command)
 	if command == "" {
-		result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
+		result := engine.UsageResult("execute: command is required")
 		return ExecuteResponse{ExecutionResult: result, Output: result.FlattenOutput()}, nil
 	}
 	ops, err := s.OpsFactory(ctx, req)

@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/khicago/simsh/pkg/contract"
+	"github.com/khicago/simsh/pkg/engine"
 	runtimeengine "github.com/khicago/simsh/pkg/engine/runtime"
 )
 
@@ -198,7 +199,7 @@ func NewHandler(cfg Config) http.Handler {
 
 		command := strings.TrimSpace(req.Command)
 		if command == "" {
-			result := contract.ExecutionResult{ExitCode: contract.ExitCodeUsage, Stdout: "execute: command is required"}
+			result := engine.UsageResult("execute: command is required")
 			writeJSON(w, executeResponse{ExecutionResult: result, Output: result.FlattenOutput()})
 			return
 		}
