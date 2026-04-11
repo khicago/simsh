@@ -34,13 +34,18 @@
     {
       "id": "T-003",
       "title": "Enrich execution trace and external command outcome contracts",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Add richer ordered trace/event data and strengthen the external seam with more explicit structured execution outcomes.",
-      "gate_result": null,
-      "last_gate_commands": [],
-      "last_commit_hash": null,
+      "gate_result": "pass",
+      "last_gate_commands": [
+        "go test ./pkg/contract ./pkg/engine ./pkg/engine/runtime ./pkg/service ./pkg/service/httpapi -count=1",
+        "go test ./cmd/simsh-cli ./cmd/simshd ./pkg/adapter/... ./pkg/builtin ./pkg/cmd ./pkg/fs ./pkg/mount ./pkg/sh -count=1"
+      ],
+      "last_commit_hash": "3f8bed3",
       "notes": [
-        "Wave 1 targets runtime-executed trace truth plus structured external outcome preservation without removing the existing aggregate compatibility surface."
+        "Wave 1 targets runtime-executed trace truth plus structured external outcome preservation without removing the existing aggregate compatibility surface.",
+        "Wave 2 unified truncation truth, preserved provider failure structure, and kept compatibility flatten mirrors explicit.",
+        "Current closeout scope reached: no remaining high-value correctness gaps in result/trace/external contracts."
       ]
     },
     {
