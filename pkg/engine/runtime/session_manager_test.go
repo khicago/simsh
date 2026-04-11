@@ -119,6 +119,9 @@ func TestSessionManagerRejectsBlankIDsAndBlankCommand(t *testing.T) {
 	if executed.Result.ExitCode != contract.ExitCodeUsage || executed.Result.Stdout != "execute: command is required" {
 		t.Fatalf("Execute(blank id, blank command) = %+v, want usage result", executed.Result)
 	}
+	if executed.Result.ExecutionID == "" || executed.Result.StartedAt.IsZero() || executed.Result.FinishedAt.IsZero() {
+		t.Fatalf("Execute(blank id, blank command) missing structured result fields: %+v", executed.Result)
+	}
 
 	checks := []struct {
 		name string

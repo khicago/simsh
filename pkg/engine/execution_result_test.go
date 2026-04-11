@@ -409,6 +409,9 @@ func TestEngineExecuteResultTraceExecutedExcludesExternalProviderFailures(t *tes
 	if result.Trace.ExternalOutcomes[0].ProviderError == "" {
 		t.Fatalf("provider failure outcome lost provider_error: %+v", result.Trace.ExternalOutcomes[0])
 	}
+	if result.Trace.ExternalOutcomes[0].ExitCode == nil || *result.Trace.ExternalOutcomes[0].ExitCode != contract.ExitCodeUnsupported {
+		t.Fatalf("provider failure outcome lost compatibility exit code alignment: %+v", result.Trace.ExternalOutcomes[0])
+	}
 	if result.Trace.ExternalOutcomes[0].ResolvedPath == "" {
 		t.Fatalf("provider failure outcome lost resolved path: %+v", result.Trace.ExternalOutcomes[0])
 	}

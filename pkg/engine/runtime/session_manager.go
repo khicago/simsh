@@ -216,10 +216,7 @@ func (m *SessionManager) Execute(ctx context.Context, sessionID string, commandL
 	commandLine = strings.TrimSpace(commandLine)
 	if commandLine == "" {
 		return SessionExecution{
-			Result: contract.ExecutionResult{
-				ExitCode: contract.ExitCodeUsage,
-				Stdout:   "execute: command is required",
-			},
+			Result: enginepkg.UsageResult("execute: command is required"),
 		}, nil
 	}
 

@@ -561,6 +561,10 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 			if ref.PathLike || ref.Namespace == contract.CommandNamespaceExternal {
 				out := fmt.Sprintf("%s: not found", display)
 				emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
+				if collector := traceCollectorFromContext(ctx); collector != nil && len(collector.trace.ExternalOutcomes) > 0 {
+					last := &collector.trace.ExternalOutcomes[len(collector.trace.ExternalOutcomes)-1]
+					last.ExitCode = intPtr(contract.ExitCodeGeneral)
+				}
 				if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
 					output.stdout = out
 				}
@@ -569,6 +573,10 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 			out := fmt.Sprintf("%s: Not supported", display)
 			emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeUnsupported, Message: out})
 			output.code = contract.ExitCodeUnsupported
+			if collector := traceCollectorFromContext(ctx); collector != nil && len(collector.trace.ExternalOutcomes) > 0 {
+				last := &collector.trace.ExternalOutcomes[len(collector.trace.ExternalOutcomes)-1]
+				last.ExitCode = intPtr(contract.ExitCodeUnsupported)
+			}
 			if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {
 				output.stdout = out
 			}
