@@ -489,13 +489,14 @@ func normalizeRefreshRequest(mount VirtualMount, req RefreshRequest) (RefreshReq
 }
 
 func normalizeRefreshResult(mount VirtualMount, req RefreshRequest, result RefreshResult) (RefreshResult, error) {
+	profile := NormalizeMountProfile(mount.Profile())
 	result.EffectiveTargets = normalizeMountPaths(result.EffectiveTargets)
 	result.RefreshedTargets = normalizeMountPaths(result.RefreshedTargets)
 	result.RefusedTargets = normalizeMountPaths(result.RefusedTargets)
 	if len(result.EffectiveTargets) == 0 {
 		result.EffectiveTargets = append([]string(nil), req.Targets...)
 	}
-	if req.RequireNarrow {
+	if req.RequireNarrow || profile.LatencyClass == MountLatencyRemoteHigh {
 		if err := checkNarrowRefreshResultTargets(mount, "effective", result.EffectiveTargets); err != nil {
 			return RefreshResult{}, err
 		}

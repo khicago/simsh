@@ -332,6 +332,30 @@ func TestRefreshMountRequireNarrowRejectsBroadenedEffectiveTargets(t *testing.T)
 	}
 }
 
+func TestRefreshMountRemoteHighRejectsBroadenedEffectiveTargets(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteHigh,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot()},
+			RefreshedTargets: []string{mountRefreshTestRoot()},
+		},
+	}
+	target := mount.point + "/" + "data.json"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets: []string{target},
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "broadened effective target") {
+		t.Fatalf("RefreshMount(...) error = %v, want remote_high_latency broaden refusal", err)
+	}
+}
+
 func TestRefreshMountRequireNarrowRejectsBroadenedReportedTargets(t *testing.T) {
 	mount := &dispatchRefreshMount{
 		dispatchTestMount: newDispatchTestMount(MountProfile{
