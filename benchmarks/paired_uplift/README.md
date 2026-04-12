@@ -51,6 +51,12 @@ Checked-in outputs:
 - `reports/paired-baseline-20260406.failures.json`
   - machine-readable failure taxonomy derived from the same snapshot
 
+Repo-level evidence breadcrumb:
+
+- `../evidence_manifest.json`
+  - the checked-in proof-surface SSOT that indexes this harness together with
+    the native baseline and Terminal-Bench comparison artifacts
+
 ## Run It
 
 Generate a fresh paired snapshot plus downstream reports with:

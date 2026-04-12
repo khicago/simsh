@@ -56,6 +56,9 @@ The benchmark stack should now be read in this order:
 The paired uplift layer must stay downstream from the first three.
 It may reuse their identities, categories, summaries, and truth-surface language.
 It must not rewrite their semantics.
+The repo-level checked-in breadcrumb for those proof artifacts is
+`benchmarks/evidence_manifest.json`; it indexes the current evidence set and
+canonical refresh entrypoints without creating a second benchmark harness.
 
 ## Core Invariant
 

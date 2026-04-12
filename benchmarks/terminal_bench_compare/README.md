@@ -41,6 +41,11 @@ Current checked-in outputs:
 - `reports/prototype-baseline-20260404.json`
 - `reports/prototype-baseline-20260404.md`
 
+Repo-level evidence breadcrumb:
+- `../evidence_manifest.json`
+  - the checked-in proof-surface SSOT that indexes this prototype together with
+    the native baseline and paired uplift artifacts
+
 Regenerate with:
 
 ```bash

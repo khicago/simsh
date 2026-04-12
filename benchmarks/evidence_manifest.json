@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "benchmark_refresh_command": "make benchmark-refresh",
+  "paired_uplift_refresh_command": "make benchmark-uplift",
+  "native_baseline": {
+    "report_path": "benchmarks/simsh_native_reference/reports/baseline-20260404.json",
+    "volatile_fields": [
+      "generated_at",
+      "scenarios[*].duration_ms"
+    ]
+  },
+  "terminal_bench_prototype": {
+    "scope_path": "benchmarks/terminal_bench_compare/prototype_scope.json",
+    "artifact_json_path": "benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.json",
+    "artifact_md_path": "benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.md",
+    "source_report_path_field": "source.report_path"
+  },
+  "paired_uplift": {
+    "task_manifest_path": "benchmarks/paired_uplift/task_set.json",
+    "raw_snapshot_path": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json",
+    "artifact_json_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.json",
+    "artifact_md_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.md",
+    "failure_taxonomy_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.failures.json",
+    "source_snapshot_path_field": "source_snapshot_path",
+    "task_manifest_path_field": "task_manifest_path"
+  },
+  "notes": [
+    "This manifest is the checked-in proof-surface SSOT for benchmark evidence paths and canonical refresh entrypoints.",
+    "Refresh commands regenerate freshness snapshots first, then deterministic downstream artifacts."
+  ]
+}
