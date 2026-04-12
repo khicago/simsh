@@ -1,6 +1,9 @@
 package contract
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 type MountTruthModel string
 
@@ -199,9 +202,24 @@ type RefreshResult struct {
 	RefreshedPaths []string `json:"refreshed_paths,omitempty"`
 }
 
+type MountRuntimeStatus struct {
+	Freshness       string `json:"freshness,omitempty"`
+	Materialization string `json:"materialization,omitempty"`
+	Detail          string `json:"detail,omitempty"`
+	StatusError     string `json:"status_error,omitempty"`
+}
+
 type MountStats struct {
 	RequestCounts map[string]int64 `json:"request_counts,omitempty"`
 	ErrorCounts   map[string]int64 `json:"error_counts,omitempty"`
+}
+
+func NormalizeMountRuntimeStatus(status MountRuntimeStatus) MountRuntimeStatus {
+	status.Freshness = strings.TrimSpace(status.Freshness)
+	status.Materialization = strings.TrimSpace(status.Materialization)
+	status.Detail = strings.TrimSpace(status.Detail)
+	status.StatusError = strings.TrimSpace(status.StatusError)
+	return status
 }
 
 // VirtualMount exposes a path subtree managed outside the primary filesystem.
@@ -237,6 +255,10 @@ type Mutator interface {
 
 type Refresher interface {
 	Refresh(ctx context.Context, req RefreshRequest) (RefreshResult, error)
+}
+
+type MountStatusProvider interface {
+	MountStatus(ctx context.Context) (MountRuntimeStatus, error)
 }
 
 type StatsProvider interface {

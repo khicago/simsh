@@ -347,6 +347,12 @@ Optional but recommended:
 - Rollback note:
   - If a richer lifecycle becomes too noisy, keep canonical state names plus refresh hooks and simplify the rendered summaries instead of reverting to opaque free-form labels.
 
+Current `f-223crkgwk / T-004` alignment:
+- wave 1A made declared mount scope and batch budgets executable;
+- wave 1B added read-only mount introspection;
+- wave 1C should add a narrow runtime-status evidence surface, rather than inferring freshness/materialization by scanning mounted trees;
+- explicit refresh control remains a follow-up only after refresh scope/budget semantics are promoted into a generic runtime contract.
+
 ### K-013: Audit and refine the adapter-side freshness and managed-memory contract
 - Status: done
 - Why now: Once freshness becomes a real lifecycle, the highest-value review is to verify that the implementation still stays adapter-local, evidence-complete, and aligned with the documented `/memory` contract before another feature wave builds on top of it.

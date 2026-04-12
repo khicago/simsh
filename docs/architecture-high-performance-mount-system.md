@@ -346,6 +346,25 @@ type Refresher interface {
 
 Do not make ordinary reads double as hidden refresh triggers.
 
+If a mount wants callers to reason about refresh need, stale state, or current
+materialization without triggering that refresh, it SHOULD expose a separate
+read-only runtime status surface.
+
+Recommended capability:
+
+```go
+type MountStatusProvider interface {
+    MountStatus(ctx context.Context) (MountRuntimeStatus, error)
+}
+```
+
+This status surface is evidence, not a second mutation channel. It should make
+runtime freshness/materialization truth explicit when the adapter can provide
+it, but it should not force the runtime to infer stale sets by scanning the
+mounted tree. Status lookup failures should also remain separate from
+freshness/materialization truth rather than being coerced into synthetic mount
+states.
+
 ### Observability
 
 For any non-trivial mount, performance and stability metadata should be queryable without scraping logs.

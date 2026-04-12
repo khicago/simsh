@@ -18,26 +18,29 @@ const (
 )
 
 type mountStatusRow struct {
-	MountPoint          string                  `json:"mount_point"`
-	TruthModel          contract.MountTruthModel `json:"truth_model,omitempty"`
+	MountPoint          string                            `json:"mount_point"`
+	TruthModel          contract.MountTruthModel          `json:"truth_model,omitempty"`
 	MaterializationMode contract.MountMaterializationMode `json:"materialization_mode,omitempty"`
-	WriteSemantics      contract.MountWriteSemantics `json:"write_semantics,omitempty"`
-	LatencyClass        contract.MountLatencyClass `json:"latency_class,omitempty"`
-	SupportedCLIClasses []contract.MountCLIClass `json:"supported_cli_classes,omitempty"`
-	Consistency         contract.MountConsistency `json:"consistency"`
-	SLO                 contract.MountSLO `json:"slo"`
-	HasRefresher        bool `json:"has_refresher"`
-	HasStats            bool `json:"has_stats"`
+	WriteSemantics      contract.MountWriteSemantics      `json:"write_semantics,omitempty"`
+	LatencyClass        contract.MountLatencyClass        `json:"latency_class,omitempty"`
+	SupportedCLIClasses []contract.MountCLIClass         `json:"supported_cli_classes,omitempty"`
+	Consistency         contract.MountConsistency         `json:"consistency"`
+	SLO                 contract.MountSLO                 `json:"slo"`
+	HasRefresher        bool                              `json:"has_refresher"`
+	HasStatus           bool                              `json:"has_status"`
+	HasStats            bool                              `json:"has_stats"`
+	RuntimeStatus       contract.MountRuntimeStatus       `json:"runtime_status,omitempty"`
 }
 
 func specMounts() engine.CommandSpec {
 	return engine.CommandSpec{
 		Name:    CommandMounts,
-		Summary: "show active mount points, profiles, and declared contract capabilities",
+		Summary: "show active mount points, profiles, and optional runtime status evidence",
 		Manual:  "mounts [--fmt text|json]",
 		Tips: []string{
 			"mounts shows the active virtual mount contract surface visible to the runtime.",
-			"Use --fmt json for machine-readable mount point/profile/SLO data.",
+			"runtime_status is optional evidence from mounts that expose a read-only status capability.",
+			"Use --fmt json for machine-readable mount point/profile/status data.",
 		},
 		DefaultOutput:    "mount contract summary rows",
 		StructuredOutput: "mount contract records",
@@ -75,7 +78,7 @@ func runMounts(runtime engine.CommandRuntime, args []string) (string, int) {
 		}
 	}
 
-	rows := collectMountStatusRows(runtime.Ops.VirtualMounts)
+	rows := collectMountStatusRows(runtime)
 	if format == mountsFormatJSON {
 		raw, err := json.MarshalIndent(struct {
 			Mounts []mountStatusRow `json:"mounts"`
@@ -90,9 +93,19 @@ func runMounts(runtime engine.CommandRuntime, args []string) (string, int) {
 	}
 	lines := make([]string, 0, len(rows)+1)
 	for _, row := range rows {
-		lines = append(lines, fmt.Sprintf("%s %s %s %s refresh=%t stats=%t", row.MountPoint, row.TruthModel, row.MaterializationMode, row.LatencyClass, row.HasRefresher, row.HasStats))
+		line := fmt.Sprintf("%s %s %s %s refresh=%t status=%t stats=%t", row.MountPoint, row.TruthModel, row.MaterializationMode, row.LatencyClass, row.HasRefresher, row.HasStatus, row.HasStats)
+		if row.RuntimeStatus.Freshness != "" {
+			line += " freshness=" + row.RuntimeStatus.Freshness
+		}
+		if row.RuntimeStatus.Materialization != "" {
+			line += " materialization=" + row.RuntimeStatus.Materialization
+		}
+		if row.RuntimeStatus.StatusError != "" {
+			line += " status_error=" + row.RuntimeStatus.StatusError
+		}
+		lines = append(lines, line)
 	}
-	lines = append(lines, "# columns: mount_point truth materialization latency refresh stats")
+	lines = append(lines, "# columns: mount_point truth materialization latency refresh status stats [freshness materialization status_error]")
 	return strings.Join(lines, "\n"), 0
 }
 
@@ -107,9 +120,9 @@ func parseMountsFormat(raw string) (mountsFormat, bool) {
 	}
 }
 
-func collectMountStatusRows(mounts []contract.VirtualMount) []mountStatusRow {
-	rows := make([]mountStatusRow, 0, len(mounts))
-	for _, mount := range mounts {
+func collectMountStatusRows(runtime engine.CommandRuntime) []mountStatusRow {
+	rows := make([]mountStatusRow, 0, len(runtime.Ops.VirtualMounts))
+	for _, mount := range runtime.Ops.VirtualMounts {
 		if mount == nil {
 			continue
 		}
@@ -124,7 +137,9 @@ func collectMountStatusRows(mounts []contract.VirtualMount) []mountStatusRow {
 			Consistency:         profile.Consistency,
 			SLO:                 profile.SLO,
 			HasRefresher:        hasRefresherCapability(mount),
+			HasStatus:           hasMountStatusCapability(mount),
 			HasStats:            hasStatsCapability(mount),
+			RuntimeStatus:       readMountRuntimeStatus(runtime, mount),
 		}
 		rows = append(rows, row)
 	}
@@ -132,8 +147,25 @@ func collectMountStatusRows(mounts []contract.VirtualMount) []mountStatusRow {
 	return rows
 }
 
+func readMountRuntimeStatus(runtime engine.CommandRuntime, mount contract.VirtualMount) contract.MountRuntimeStatus {
+	provider, ok := mount.(contract.MountStatusProvider)
+	if !ok {
+		return contract.MountRuntimeStatus{}
+	}
+	status, err := provider.MountStatus(runtime.Ctx)
+	if err != nil {
+		return contract.MountRuntimeStatus{StatusError: strings.TrimSpace(err.Error())}
+	}
+	return contract.NormalizeMountRuntimeStatus(status)
+}
+
 func hasRefresherCapability(mount contract.VirtualMount) bool {
 	_, ok := mount.(contract.Refresher)
+	return ok
+}
+
+func hasMountStatusCapability(mount contract.VirtualMount) bool {
+	_, ok := mount.(contract.MountStatusProvider)
 	return ok
 }
 

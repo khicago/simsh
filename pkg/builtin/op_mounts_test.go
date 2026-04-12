@@ -14,21 +14,34 @@ type builtinStatusMount struct {
 	profile contract.MountProfile
 }
 
-func (m builtinStatusMount) MountPoint() string { return m.point }
-func (m builtinStatusMount) Profile() contract.MountProfile { return m.profile }
+func (m builtinStatusMount) MountPoint() string                   { return m.point }
+func (m builtinStatusMount) Profile() contract.MountProfile       { return m.profile }
 func (m builtinStatusMount) Exists(context.Context) (bool, error) { return true, nil }
-func (m builtinStatusMount) StatPath(context.Context, string) (contract.MountEntry, error) { return contract.MountEntry{}, nil }
+func (m builtinStatusMount) StatPath(context.Context, string) (contract.MountEntry, error) {
+	return contract.MountEntry{}, nil
+}
 func (m builtinStatusMount) ReadContent(context.Context, string) (string, error) { return "", nil }
 
-type builtinStatusRefreshMount struct{ builtinStatusMount }
+type builtinRefreshMount struct {
+	builtinStatusMount
+	status    contract.MountRuntimeStatus
+	statusErr error
+}
 
-func (m builtinStatusRefreshMount) Refresh(context.Context, contract.RefreshRequest) (contract.RefreshResult, error) {
+func (m builtinRefreshMount) Refresh(context.Context, contract.RefreshRequest) (contract.RefreshResult, error) {
 	return contract.RefreshResult{}, nil
 }
 
-type builtinStatusStatsMount struct{ builtinStatusMount }
+func (m builtinRefreshMount) MountStatus(context.Context) (contract.MountRuntimeStatus, error) {
+	if m.statusErr != nil {
+		return contract.MountRuntimeStatus{}, m.statusErr
+	}
+	return m.status, nil
+}
 
-func (m builtinStatusStatsMount) Stats(context.Context) (contract.MountStats, error) {
+type builtinStatsMount struct{ builtinStatusMount }
+
+func (m builtinStatsMount) Stats(context.Context) (contract.MountStats, error) {
 	return contract.MountStats{}, nil
 }
 
@@ -39,18 +52,22 @@ func TestRunMountsTextAndJSON(t *testing.T) {
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinStatusRefreshMount{builtinStatusMount{
-					point: alphaPath,
-					profile: contract.MountProfile{
-						TruthModel:          contract.MountTruthProjection,
-						MaterializationMode: contract.MountMaterializationCached,
-						WriteSemantics:      contract.MountWriteReadOnly,
-						LatencyClass:        contract.MountLatencyRemoteModerate,
-						SupportedCLIClasses: []contract.MountCLIClass{contract.MountCLIList, contract.MountCLIFind},
-						SLO:                 contract.MountSLO{MaxSearchPaths: 2},
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteModerate,
+							SupportedCLIClasses: []contract.MountCLIClass{contract.MountCLIList, contract.MountCLIFind},
+							Consistency:         contract.MountConsistency{RefreshRequired: true},
+							SLO:                 contract.MountSLO{MaxSearchPaths: 2},
+						},
 					},
-				}},
-				builtinStatusStatsMount{builtinStatusMount{
+					status: contract.MountRuntimeStatus{Freshness: "stale", Materialization: "partial", Detail: "awaiting refresh"},
+				},
+				builtinStatsMount{builtinStatusMount{
 					point: betaPath,
 					profile: contract.MountProfile{
 						TruthModel:          contract.MountTruthFactual,
@@ -65,12 +82,53 @@ func TestRunMountsTextAndJSON(t *testing.T) {
 	}
 
 	text, code := runMounts(runtime, nil)
-	if code != 0 || !strings.Contains(text, alphaPath) || !strings.Contains(text, "refresh=true") || !strings.Contains(text, betaPath) {
-		t.Fatalf("runMounts(text) = (%q, %d), want mount summary rows", text, code)
+	if code != 0 || !strings.Contains(text, alphaPath) || !strings.Contains(text, "refresh=true") || !strings.Contains(text, "status=true") || !strings.Contains(text, "freshness=stale") || !strings.Contains(text, betaPath) {
+		t.Fatalf("runMounts(text) = (%q, %d), want mount status rows", text, code)
 	}
 
 	jsonOut, code := runMounts(runtime, []string{"--fmt", "json"})
-	if code != 0 || !strings.Contains(jsonOut, "\"mounts\"") || !strings.Contains(jsonOut, "\"mount_point\": \""+alphaPath+"\"") || !strings.Contains(jsonOut, "\"has_refresher\": true") || !strings.Contains(jsonOut, "\"has_stats\": true") {
+	if code != 0 ||
+		!strings.Contains(jsonOut, "\"mounts\"") ||
+		!strings.Contains(jsonOut, "\"mount_point\": \""+alphaPath+"\"") ||
+		!strings.Contains(jsonOut, "\"has_refresher\": true") ||
+		!strings.Contains(jsonOut, "\"has_status\": true") ||
+		!strings.Contains(jsonOut, "\"freshness\": \"stale\"") ||
+		!strings.Contains(jsonOut, "\"has_stats\": true") {
 		t.Fatalf("runMounts(json) = (%q, %d), want structured mount records", jsonOut, code)
 	}
 }
+
+func TestRunMountsStatusProviderFailureStaysSeparateFromMountTruth(t *testing.T) {
+	alphaPath := "/" + "alpha"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteModerate,
+						},
+					},
+					statusErr: assertErr("status unavailable"),
+				},
+			},
+		},
+	}
+
+	jsonOut, code := runMounts(runtime, []string{"--fmt", "json"})
+	if code != 0 || !strings.Contains(jsonOut, "\"status_error\": \"status unavailable\"") {
+		t.Fatalf("runMounts(status failure json) = (%q, %d), want status_error truth", jsonOut, code)
+	}
+	if strings.Contains(jsonOut, "\"freshness\": \"unknown\"") || strings.Contains(jsonOut, "\"materialization\": \"failed\"") {
+		t.Fatalf("runMounts(status failure json) = %q, status transport failure must not masquerade as mount truth", jsonOut)
+	}
+}
+
+type assertErr string
+
+func (e assertErr) Error() string { return string(e) }
