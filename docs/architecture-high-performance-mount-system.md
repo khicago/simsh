@@ -349,10 +349,16 @@ Refresh requests should be explicit, scope-aware, and budgeted. In particular:
 
 - `remote_high_latency` mounts SHOULD require explicit scoped refresh targets
   rather than allowing implicit full-mount refresh
+- mount-root targets SHOULD NOT be treated as narrow refresh scope; if callers
+  require narrowness, the target should be a strict descendant below the mount
+  root
 - refresh target count SHOULD honor declared mount SLO budgets when such budgets
   are published
 - refresh refusal should stay explicit and machine-visible instead of silently
   broadening scope
+- if adapters report an effective refresh scope, that scope should stay
+  machine-visible so runtime and callers can detect broadening instead of
+  inferring it from side effects
 
 If a mount wants callers to reason about refresh need, stale state, or current
 materialization without triggering that refresh, it SHOULD expose a separate

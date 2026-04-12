@@ -298,14 +298,22 @@ func RefreshMount(ctx context.Context, mount VirtualMount, req RefreshRequest) (
 	if mount == nil {
 		return RefreshResult{}, ErrUnsupported
 	}
-	if err := checkMountRefreshBudget(mount, req); err != nil {
+	normalizedReq, err := normalizeRefreshRequest(mount, req)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	if err := checkMountRefreshBudget(mount, normalizedReq); err != nil {
 		return RefreshResult{}, err
 	}
 	refresher, ok := mount.(Refresher)
 	if !ok {
 		return RefreshResult{}, unsupportedMountCapability(mount, "refresh")
 	}
-	return refresher.Refresh(ctx, req)
+	result, err := refresher.Refresh(ctx, normalizedReq)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	return normalizeRefreshResult(mount, normalizedReq, result)
 }
 
 func CheckMountPathOp(mount VirtualMount, op PathOp) error {
@@ -432,14 +440,28 @@ func checkMountMutationBudget(mount VirtualMount, batch MutationBatch) error {
 func checkMountRefreshBudget(mount VirtualMount, req RefreshRequest) error {
 	profile := NormalizeMountProfile(mount.Profile())
 	targets := normalizeMountPaths(req.Targets)
-	if req.RequireNarrow && len(targets) == 0 {
-		return overMountBudget(mount, "refresh", "explicit scope narrowing is required")
+	if req.RequireNarrow {
+		if len(targets) == 0 {
+			return overMountBudget(mount, "refresh", "explicit scope narrowing is required")
+		}
+		for _, target := range targets {
+			if !isNarrowRefreshTarget(mount, target) {
+				return overMountBudget(mount, "refresh", fmt.Sprintf("target %s is not narrow relative to mount root %s", target, mount.MountPoint()))
+			}
+		}
 	}
 	if profile.SLO.MaxRefreshTargets > 0 && len(targets) > profile.SLO.MaxRefreshTargets {
 		return overMountBudget(mount, "refresh", fmt.Sprintf("requested refresh targets=%d exceeds declared mount refresh target budget=%d", len(targets), profile.SLO.MaxRefreshTargets))
 	}
 	if profile.LatencyClass == MountLatencyRemoteHigh && len(targets) == 0 {
 		return overMountBudget(mount, "refresh", "remote_high_latency refresh requires explicit scoped targets")
+	}
+	if profile.LatencyClass == MountLatencyRemoteHigh {
+		for _, target := range targets {
+			if !isNarrowRefreshTarget(mount, target) {
+				return overMountBudget(mount, "refresh", fmt.Sprintf("remote_high_latency refresh target %s is not scoped below mount root %s", target, mount.MountPoint()))
+			}
+		}
 	}
 	return nil
 }
@@ -452,6 +474,63 @@ func overMountBudget(mount VirtualMount, capability string, detail string) error
 		LatencyClass: profile.LatencyClass,
 		Detail:       fmt.Sprintf("%s: %s", mount.MountPoint(), detail),
 	}
+}
+
+func normalizeRefreshRequest(mount VirtualMount, req RefreshRequest) (RefreshRequest, error) {
+	req.Targets = normalizeMountPaths(req.Targets)
+	if req.RequireNarrow {
+		for _, target := range req.Targets {
+			if !isNarrowRefreshTarget(mount, target) {
+				return RefreshRequest{}, overMountBudget(mount, "refresh", fmt.Sprintf("target %s is not narrow relative to mount root %s", target, mount.MountPoint()))
+			}
+		}
+	}
+	return req, nil
+}
+
+func normalizeRefreshResult(mount VirtualMount, req RefreshRequest, result RefreshResult) (RefreshResult, error) {
+	result.EffectiveTargets = normalizeMountPaths(result.EffectiveTargets)
+	result.RefreshedTargets = normalizeMountPaths(result.RefreshedTargets)
+	result.RefusedTargets = normalizeMountPaths(result.RefusedTargets)
+	if len(result.EffectiveTargets) == 0 {
+		result.EffectiveTargets = append([]string(nil), req.Targets...)
+	}
+	if req.RequireNarrow {
+		if err := checkNarrowRefreshResultTargets(mount, "effective", result.EffectiveTargets); err != nil {
+			return RefreshResult{}, err
+		}
+		if err := checkNarrowRefreshResultTargets(mount, "refreshed", result.RefreshedTargets); err != nil {
+			return RefreshResult{}, err
+		}
+		if err := checkNarrowRefreshResultTargets(mount, "refused", result.RefusedTargets); err != nil {
+			return RefreshResult{}, err
+		}
+	}
+	return result, nil
+}
+
+func checkNarrowRefreshResultTargets(mount VirtualMount, label string, targets []string) error {
+	for _, target := range targets {
+		if !isNarrowRefreshTarget(mount, target) {
+			return overMountBudget(mount, "refresh", fmt.Sprintf("refresher broadened %s target %s beyond required narrow scope under %s", label, target, mount.MountPoint()))
+		}
+	}
+	return nil
+}
+
+func isNarrowRefreshTarget(mount VirtualMount, target string) bool {
+	if mount == nil {
+		return false
+	}
+	mountPoint := strings.TrimSpace(mount.MountPoint())
+	target = strings.TrimSpace(target)
+	if mountPoint == "" || target == "" {
+		return false
+	}
+	if target == mountPoint {
+		return false
+	}
+	return strings.HasPrefix(target, mountPoint+"/")
 }
 
 func mountPathsFromEntries(entries []MountEntry) []string {

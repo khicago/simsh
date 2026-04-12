@@ -31,7 +31,7 @@ type mountStatusRow struct {
 	MaterializationMode contract.MountMaterializationMode `json:"materialization_mode,omitempty"`
 	WriteSemantics      contract.MountWriteSemantics      `json:"write_semantics,omitempty"`
 	LatencyClass        contract.MountLatencyClass        `json:"latency_class,omitempty"`
-	SupportedCLIClasses []contract.MountCLIClass         `json:"supported_cli_classes,omitempty"`
+	SupportedCLIClasses []contract.MountCLIClass          `json:"supported_cli_classes,omitempty"`
 	Consistency         contract.MountConsistency         `json:"consistency"`
 	SLO                 contract.MountSLO                 `json:"slo"`
 	HasRefresher        bool                              `json:"has_refresher"`
@@ -41,10 +41,11 @@ type mountStatusRow struct {
 }
 
 type mountRefreshRow struct {
-	MountPoint       string                    `json:"mount_point"`
-	RequestedTargets []string                  `json:"requested_targets,omitempty"`
-	RefreshedTargets []string                  `json:"refreshed_targets,omitempty"`
-	RefusedTargets   []string                  `json:"refused_targets,omitempty"`
+	MountPoint       string                      `json:"mount_point"`
+	RequestedTargets []string                    `json:"requested_targets,omitempty"`
+	EffectiveTargets []string                    `json:"effective_targets,omitempty"`
+	RefreshedTargets []string                    `json:"refreshed_targets,omitempty"`
+	RefusedTargets   []string                    `json:"refused_targets,omitempty"`
 	RuntimeStatus    contract.MountRuntimeStatus `json:"runtime_status,omitempty"`
 }
 
@@ -68,8 +69,8 @@ func specMounts() engine.CommandSpec {
 			"mounts refresh " + "/" + "knowledge_base",
 			"mounts refresh --require-narrow " + "/" + "knowledge_base",
 		},
-		DetailedManual:   LoadEmbeddedManual("mounts"),
-		Run:              runMounts,
+		DetailedManual: LoadEmbeddedManual("mounts"),
+		Run:            runMounts,
 	}
 }
 
@@ -175,17 +176,19 @@ func runMountsRefresh(runtime engine.CommandRuntime, opts mountsOptions) (string
 		})
 		if err != nil {
 			if errors.Is(err, contract.ErrUnsupported) {
-				return fmt.Sprintf("mounts refresh: %s: refresh is not supported", group.mount.MountPoint()), contract.ExitCodeUnsupported
+				return fmt.Sprintf("mounts refresh: %v", err), contract.ExitCodeUnsupported
 			}
 			return fmt.Sprintf("mounts refresh: %v", err), contract.ExitCodeGeneral
 		}
 		row := mountRefreshRow{
 			MountPoint:       group.mount.MountPoint(),
 			RequestedTargets: append([]string(nil), group.targets...),
+			EffectiveTargets: append([]string(nil), result.EffectiveTargets...),
 			RefreshedTargets: append([]string(nil), result.RefreshedTargets...),
 			RefusedTargets:   append([]string(nil), result.RefusedTargets...),
 			RuntimeStatus:    readMountRuntimeStatus(runtime, group.mount),
 		}
+		sort.Strings(row.EffectiveTargets)
 		sort.Strings(row.RefreshedTargets)
 		sort.Strings(row.RefusedTargets)
 		rows = append(rows, row)
@@ -202,7 +205,7 @@ func runMountsRefresh(runtime engine.CommandRuntime, opts mountsOptions) (string
 	}
 	lines := make([]string, 0, len(rows))
 	for _, row := range rows {
-		line := fmt.Sprintf("%s refreshed=%d refused=%d", row.MountPoint, len(row.RefreshedTargets), len(row.RefusedTargets))
+		line := fmt.Sprintf("%s refreshed=%d refused=%d effective=%d", row.MountPoint, len(row.RefreshedTargets), len(row.RefusedTargets), len(row.EffectiveTargets))
 		if row.RuntimeStatus.Freshness != "" {
 			line += " freshness=" + row.RuntimeStatus.Freshness
 		}

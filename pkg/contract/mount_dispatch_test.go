@@ -80,10 +80,21 @@ func (m *dispatchListerMount) ListEntries(_ context.Context, req ListEntriesRequ
 
 type dispatchRefreshMount struct {
 	*dispatchTestMount
+	result RefreshResult
 }
 
 func (m *dispatchRefreshMount) Refresh(_ context.Context, req RefreshRequest) (RefreshResult, error) {
-	return RefreshResult{RefreshedTargets: append([]string(nil), req.Targets...)}, nil
+	if len(m.result.EffectiveTargets) > 0 || len(m.result.RefreshedTargets) > 0 || len(m.result.RefusedTargets) > 0 {
+		return RefreshResult{
+			EffectiveTargets: append([]string(nil), m.result.EffectiveTargets...),
+			RefreshedTargets: append([]string(nil), m.result.RefreshedTargets...),
+			RefusedTargets:   append([]string(nil), m.result.RefusedTargets...),
+		}, nil
+	}
+	return RefreshResult{
+		EffectiveTargets: append([]string(nil), req.Targets...),
+		RefreshedTargets: append([]string(nil), req.Targets...),
+	}, nil
 }
 
 func TestAllowsUnsupportedFallbackPreservesLocalFallbacks(t *testing.T) {
@@ -245,6 +256,39 @@ func TestRefreshMountRemoteHighRequiresExplicitScope(t *testing.T) {
 	}
 }
 
+func TestRefreshMountRemoteHighRejectsMountRootTarget(t *testing.T) {
+	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteHigh,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+		Consistency:         MountConsistency{RefreshRequired: true},
+	})}
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{Targets: []string{mount.point}})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "not scoped below mount root") {
+		t.Fatalf("RefreshMount(...) error = %v, want remote_high_latency narrow refusal", err)
+	}
+}
+
+func TestRefreshMountRequireNarrowRejectsMountRootTarget(t *testing.T) {
+	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteModerate,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+		Consistency:         MountConsistency{RefreshRequired: true},
+	})}
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets:       []string{mount.point},
+		RequireNarrow: true,
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "is not narrow relative to mount root") {
+		t.Fatalf("RefreshMount(...) error = %v, want require_narrow refusal", err)
+	}
+}
+
 func TestRefreshMountRejectsRefreshPathBudgetOverSLO(t *testing.T) {
 	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
 		LatencyClass:        MountLatencyRemoteModerate,
@@ -261,4 +305,76 @@ func TestRefreshMountRejectsRefreshPathBudgetOverSLO(t *testing.T) {
 	if !strings.Contains(err.Error(), "refresh target budget") {
 		t.Fatalf("RefreshMount(...) error = %v, want refresh-target budget refusal", err)
 	}
+}
+
+func TestRefreshMountRequireNarrowRejectsBroadenedEffectiveTargets(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteModerate,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot()},
+			RefreshedTargets: []string{mountRefreshTestRoot()},
+		},
+	}
+	target := mount.point + "/" + "data.json"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets:       []string{target},
+		RequireNarrow: true,
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "broadened effective target") {
+		t.Fatalf("RefreshMount(...) error = %v, want broaden refusal", err)
+	}
+}
+
+func TestRefreshMountRequireNarrowRejectsBroadenedReportedTargets(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteModerate,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "data.json"},
+			RefreshedTargets: []string{mountRefreshTestRoot()},
+		},
+	}
+	target := mount.point + "/" + "data.json"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets:       []string{target},
+		RequireNarrow: true,
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "broadened refreshed target") {
+		t.Fatalf("RefreshMount(...) error = %v, want reported-target broaden refusal", err)
+	}
+}
+
+func TestRefreshMountDefaultsEffectiveTargetsToRequestedTargets(t *testing.T) {
+	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteModerate,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+		Consistency:         MountConsistency{RefreshRequired: true},
+	})}
+	target := mount.point + "/" + "data.json"
+	result, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets: []string{target},
+	})
+	if err != nil {
+		t.Fatalf("RefreshMount(...) error = %v", err)
+	}
+	if len(result.EffectiveTargets) != 1 || result.EffectiveTargets[0] != target {
+		t.Fatalf("RefreshMount(...).EffectiveTargets = %#v, want requested target", result.EffectiveTargets)
+	}
+}
+
+func mountRefreshTestRoot() string {
+	return "/" + "remote"
 }

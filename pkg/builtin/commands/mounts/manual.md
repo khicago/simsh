@@ -26,8 +26,9 @@ behavior.
 
 - `--fmt text|json` -- Output format. `json` emits machine-readable mount
   contract records.
-- `--require-narrow` -- Require refresh requests to name explicit scoped
-  targets instead of allowing an adapter-defined broader refresh.
+- `--require-narrow` -- Require refresh requests to name strict descendant
+  targets below the mount root instead of allowing a mount-root or
+  adapter-defined broader refresh.
 
 ## EXAMPLES
 
@@ -52,6 +53,9 @@ Require explicit narrow refresh target:
 - `mounts` status output is read-only.
 - `mounts refresh` is explicit control-plane work and stays subject to refresh
   scope/budget/refusal rules; it is not a hidden side effect of status reads.
+- `requested_targets` records what the caller asked for. `effective_targets`
+  records the actual refresh scope after contract checks. Narrow refresh must
+  keep that effective scope narrow instead of silently broadening it.
 - The output is intended to make mount point, latency class, consistency, and
   declared SLO budgets visible before running high-fanout workloads.
 - `has_refresher`, `has_status`, and `has_stats` only indicate capability

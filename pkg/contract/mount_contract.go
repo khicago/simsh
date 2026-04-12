@@ -197,11 +197,12 @@ type MutationResult struct {
 }
 
 type RefreshRequest struct {
-	Targets      []string `json:"targets,omitempty"`
-	RequireNarrow bool   `json:"require_narrow,omitempty"`
+	Targets       []string `json:"targets,omitempty"`
+	RequireNarrow bool     `json:"require_narrow,omitempty"`
 }
 
 type RefreshResult struct {
+	EffectiveTargets []string `json:"effective_targets,omitempty"`
 	RefreshedTargets []string `json:"refreshed_targets,omitempty"`
 	RefusedTargets   []string `json:"refused_targets,omitempty"`
 }

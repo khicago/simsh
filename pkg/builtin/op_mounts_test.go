@@ -24,14 +24,20 @@ func (m builtinStatusMount) ReadContent(context.Context, string) (string, error)
 
 type builtinRefreshMount struct {
 	builtinStatusMount
-	status    contract.MountRuntimeStatus
-	statusErr error
-	refreshed []string
-	refused   []string
+	status     contract.MountRuntimeStatus
+	statusErr  error
+	effective  []string
+	refreshed  []string
+	refused    []string
+	refreshErr error
 }
 
 func (m builtinRefreshMount) Refresh(context.Context, contract.RefreshRequest) (contract.RefreshResult, error) {
+	if m.refreshErr != nil {
+		return contract.RefreshResult{}, m.refreshErr
+	}
 	return contract.RefreshResult{
+		EffectiveTargets: append([]string(nil), m.effective...),
 		RefreshedTargets: append([]string(nil), m.refreshed...),
 		RefusedTargets:   append([]string(nil), m.refused...),
 	}, nil
@@ -122,6 +128,7 @@ func TestRunMountsRefresh(t *testing.T) {
 							SLO:                 contract.MountSLO{MaxRefreshTargets: 1},
 						},
 					},
+					effective: []string{nestedPath},
 					refreshed: []string{nestedPath},
 					status:    contract.MountRuntimeStatus{Freshness: "live", Materialization: "materialized"},
 				},
@@ -130,13 +137,47 @@ func TestRunMountsRefresh(t *testing.T) {
 	}
 
 	text, code := runMounts(runtime, []string{"refresh", nestedPath})
-	if code != 0 || !strings.Contains(text, "refreshed=1") || !strings.Contains(text, "refused=0") || !strings.Contains(text, "freshness=live") {
+	if code != 0 || !strings.Contains(text, "refreshed=1") || !strings.Contains(text, "refused=0") || !strings.Contains(text, "effective=1") || !strings.Contains(text, "freshness=live") {
 		t.Fatalf("runMounts(refresh text) = (%q, %d), want refresh summary", text, code)
 	}
 
 	jsonOut, code := runMounts(runtime, []string{"refresh", nestedPath, "--fmt", "json"})
-	if code != 0 || !strings.Contains(jsonOut, "\"refresh\"") || !strings.Contains(jsonOut, "\"requested_targets\"") || !strings.Contains(jsonOut, "\"refreshed_targets\"") || !strings.Contains(jsonOut, nestedPath) {
+	if code != 0 || !strings.Contains(jsonOut, "\"refresh\"") || !strings.Contains(jsonOut, "\"requested_targets\"") || !strings.Contains(jsonOut, "\"effective_targets\"") || !strings.Contains(jsonOut, "\"refreshed_targets\"") || !strings.Contains(jsonOut, nestedPath) {
 		t.Fatalf("runMounts(refresh json) = (%q, %d), want refresh rows", jsonOut, code)
+	}
+}
+
+func TestRunMountsRefreshPreservesUnsupportedDetail(t *testing.T) {
+	alphaPath := "/" + "alpha"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteHigh,
+							Consistency:         contract.MountConsistency{RefreshRequired: true},
+						},
+					},
+					refreshErr: &contract.MountUnsupportedError{
+						MountPoint:   alphaPath,
+						Capability:   "refresh",
+						LatencyClass: contract.MountLatencyRemoteHigh,
+						Detail:       alphaPath + ": remote_high_latency refresh target " + alphaPath + " is not scoped below mount root " + alphaPath,
+					},
+				},
+			},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", alphaPath})
+	if code != contract.ExitCodeUnsupported || !strings.Contains(out, "not scoped below mount root") {
+		t.Fatalf("runMounts(refresh unsupported detail) = (%q, %d), want preserved refusal detail", out, code)
 	}
 }
 
