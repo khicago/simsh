@@ -389,7 +389,7 @@ func TestRefreshMountRequireNarrowRejectsRequestScopeBroadening(t *testing.T) {
 			Consistency:         MountConsistency{RefreshRequired: true},
 		}),
 		result: RefreshResult{
-			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha"},
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha" + "/" + "data.json"},
 			RefreshedTargets: []string{mountRefreshTestRoot() + "/" + "other"},
 		},
 	}
@@ -414,7 +414,8 @@ func TestRefreshMountRemoteHighRejectsRequestScopeBroadening(t *testing.T) {
 			Consistency:         MountConsistency{RefreshRequired: true},
 		}),
 		result: RefreshResult{
-			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha"},
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha" + "/" + "data.json"},
+			RefusedTargets:   []string{mountRefreshTestRoot() + "/" + "other"},
 		},
 	}
 	target := mount.point + "/" + "alpha" + "/" + "data.json"
@@ -426,6 +427,29 @@ func TestRefreshMountRemoteHighRejectsRequestScopeBroadening(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "requested refresh scope") {
 		t.Fatalf("RefreshMount(...) error = %v, want remote_high_latency request-scope broaden refusal", err)
+	}
+}
+
+func TestRefreshMountRejectsCanonicalRequestScopeEscape(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteHigh,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha" + "/" + ".." + "/" + "other"},
+		},
+	}
+	target := mount.point + "/" + "alpha"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets: []string{target},
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "requested refresh scope") {
+		t.Fatalf("RefreshMount(...) error = %v, want canonical request-scope refusal", err)
 	}
 }
 

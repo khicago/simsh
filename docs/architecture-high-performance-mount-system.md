@@ -362,6 +362,9 @@ Refresh requests should be explicit, scope-aware, and budgeted. In particular:
 - when narrowness is required, reported effective/refreshed/refused targets
   should remain within the explicitly requested refresh scope rather than
   broadening to sibling or ancestor paths
+- refresh scope checks should use canonical path identity so malformed
+  adapter-reported paths cannot escape the requested scope through `..` or
+  equivalent path segments
 
 If a mount wants callers to reason about refresh need, stale state, or current
 materialization without triggering that refresh, it SHOULD expose a separate

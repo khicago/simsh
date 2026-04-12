@@ -523,12 +523,12 @@ func checkScopedRefreshResultTargets(mount VirtualMount, label string, targets [
 }
 
 func isWithinRefreshRequestScope(target string, requested []string) bool {
-	target = strings.TrimSpace(target)
+	target = normalizeMountPath(target)
 	if target == "" {
 		return false
 	}
 	for _, requestTarget := range requested {
-		requestTarget = strings.TrimSpace(requestTarget)
+		requestTarget = normalizeMountPath(requestTarget)
 		if requestTarget == "" {
 			continue
 		}
@@ -543,8 +543,8 @@ func isNarrowRefreshTarget(mount VirtualMount, target string) bool {
 	if mount == nil {
 		return false
 	}
-	mountPoint := strings.TrimSpace(mount.MountPoint())
-	target = strings.TrimSpace(target)
+	mountPoint := normalizeMountPath(mount.MountPoint())
+	target = normalizeMountPath(target)
 	if mountPoint == "" || target == "" {
 		return false
 	}
@@ -569,18 +569,26 @@ func normalizeMountPaths(paths []string) []string {
 	seen := map[string]struct{}{}
 	out := make([]string, 0, len(paths))
 	for _, pathValue := range paths {
-		trimmed := strings.TrimSpace(pathValue)
-		if trimmed == "" {
+		normalized := normalizeMountPath(pathValue)
+		if normalized == "" {
 			continue
 		}
-		if _, exists := seen[trimmed]; exists {
+		if _, exists := seen[normalized]; exists {
 			continue
 		}
-		seen[trimmed] = struct{}{}
-		out = append(out, trimmed)
+		seen[normalized] = struct{}{}
+		out = append(out, normalized)
 	}
 	sort.Strings(out)
 	return out
+}
+
+func normalizeMountPath(pathValue string) string {
+	trimmed := strings.TrimSpace(pathValue)
+	if trimmed == "" {
+		return ""
+	}
+	return path.Clean(trimmed)
 }
 
 func filterMountPathsByGlob(paths []string, globs []string) ([]string, error) {
