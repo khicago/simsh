@@ -78,6 +78,14 @@ func (m *dispatchListerMount) ListEntries(_ context.Context, req ListEntriesRequ
 	return ListEntriesResult{Entries: []MountEntry{m.entries[m.point+"/data.json"]}}, nil
 }
 
+type dispatchRefreshMount struct {
+	*dispatchTestMount
+}
+
+func (m *dispatchRefreshMount) Refresh(_ context.Context, req RefreshRequest) (RefreshResult, error) {
+	return RefreshResult{RefreshedTargets: append([]string(nil), req.Targets...)}, nil
+}
+
 func TestAllowsUnsupportedFallbackPreservesLocalFallbacks(t *testing.T) {
 	mount := newDispatchTestMount(MountProfile{
 		LatencyClass:        MountLatencyLocalFast,
@@ -219,5 +227,38 @@ func TestApplyMountMutationsRemoteHighRequiresMutator(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "mutation batch") {
 		t.Fatalf("ApplyMountMutations(...) error = %v, want mutation batch refusal", err)
+	}
+}
+
+func TestRefreshMountRemoteHighRequiresExplicitScope(t *testing.T) {
+	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteHigh,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+		Consistency:         MountConsistency{RefreshRequired: true},
+	})}
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "requires explicit scoped targets") {
+		t.Fatalf("RefreshMount(...) error = %v, want explicit scoped refresh refusal", err)
+	}
+}
+
+func TestRefreshMountRejectsRefreshPathBudgetOverSLO(t *testing.T) {
+	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
+		LatencyClass:        MountLatencyRemoteModerate,
+		SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+		Consistency:         MountConsistency{RefreshRequired: true},
+		SLO:                 MountSLO{MaxRefreshTargets: 1},
+	})}
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets: []string{mount.point, mount.point + "/" + "data.json"},
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "refresh target budget") {
+		t.Fatalf("RefreshMount(...) error = %v, want refresh-target budget refusal", err)
 	}
 }

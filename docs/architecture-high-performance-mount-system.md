@@ -345,6 +345,14 @@ type Refresher interface {
 ```
 
 Do not make ordinary reads double as hidden refresh triggers.
+Refresh requests should be explicit, scope-aware, and budgeted. In particular:
+
+- `remote_high_latency` mounts SHOULD require explicit scoped refresh targets
+  rather than allowing implicit full-mount refresh
+- refresh target count SHOULD honor declared mount SLO budgets when such budgets
+  are published
+- refresh refusal should stay explicit and machine-visible instead of silently
+  broadening scope
 
 If a mount wants callers to reason about refresh need, stale state, or current
 materialization without triggering that refresh, it SHOULD expose a separate

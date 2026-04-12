@@ -69,9 +69,11 @@ type MountSLO struct {
 	ReadManyLatency       MountLatencySLO `json:"read_many_latency,omitempty"`
 	SearchLatency         MountLatencySLO `json:"search_latency,omitempty"`
 	ApplyMutationsLatency MountLatencySLO `json:"apply_mutations_latency,omitempty"`
+	RefreshLatency        MountLatencySLO `json:"refresh_latency,omitempty"`
 	MaxBatchCount         int             `json:"max_batch_count,omitempty"`
 	MaxBatchBytes         int64           `json:"max_batch_bytes,omitempty"`
 	MaxSearchPaths        int             `json:"max_search_paths,omitempty"`
+	MaxRefreshTargets     int             `json:"max_refresh_targets,omitempty"`
 	TimeoutSemantics      string          `json:"timeout_semantics,omitempty"`
 	PartialResultMode     string          `json:"partial_result_mode,omitempty"`
 	RetryabilityClass     string          `json:"retryability_class,omitempty"`
@@ -195,11 +197,13 @@ type MutationResult struct {
 }
 
 type RefreshRequest struct {
-	Paths []string `json:"paths,omitempty"`
+	Targets      []string `json:"targets,omitempty"`
+	RequireNarrow bool   `json:"require_narrow,omitempty"`
 }
 
 type RefreshResult struct {
-	RefreshedPaths []string `json:"refreshed_paths,omitempty"`
+	RefreshedTargets []string `json:"refreshed_targets,omitempty"`
+	RefusedTargets   []string `json:"refused_targets,omitempty"`
 }
 
 type MountRuntimeStatus struct {

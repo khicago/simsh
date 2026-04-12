@@ -5,17 +5,22 @@
     {
       "id": "T-001",
       "title": "Finalize umbrella proposal and lane boundaries",
-      "status": "todo",
+      "status": "done",
       "summary": "Turn the umbrella feat into an execution-grade lane plan with explicit boundaries between mount refresh, external seam, and proof-layer follow-up work.",
       "gate_result": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
-      "notes": []
+      "notes": [
+        "Execution order is T-002 -> T-003 -> T-004.",
+        "T-002 goes first because mount refresh scope/budget/refusal semantics are the clearest leftover contract gap from f-223crkgwk and should not be retrofitted after new control surfaces appear.",
+        "T-003 follows T-002 so external seam phase 2 can evolve without stealing mount-control semantics or widening shell scope casually.",
+        "T-004 remains downstream proof work and must validate or harden checked-in evidence without driving upstream runtime semantics."
+      ]
     },
     {
       "id": "T-002",
       "title": "Add explicit mount refresh scope, budget, and refusal contract",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Make mount refresh an explicit, budgeted, scope-aware control surface instead of a hidden or adapter-inferred action.",
       "gate_result": null,
       "last_gate_commands": [],

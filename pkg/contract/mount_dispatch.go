@@ -294,6 +294,20 @@ func ApplyMountMutations(ctx context.Context, mount VirtualMount, batch Mutation
 	return mutator.ApplyMutations(ctx, batch)
 }
 
+func RefreshMount(ctx context.Context, mount VirtualMount, req RefreshRequest) (RefreshResult, error) {
+	if mount == nil {
+		return RefreshResult{}, ErrUnsupported
+	}
+	if err := checkMountRefreshBudget(mount, req); err != nil {
+		return RefreshResult{}, err
+	}
+	refresher, ok := mount.(Refresher)
+	if !ok {
+		return RefreshResult{}, unsupportedMountCapability(mount, "refresh")
+	}
+	return refresher.Refresh(ctx, req)
+}
+
 func CheckMountPathOp(mount VirtualMount, op PathOp) error {
 	profile := NormalizeMountProfile(mount.Profile())
 	switch op {
@@ -411,6 +425,21 @@ func checkMountMutationBudget(mount VirtualMount, batch MutationBatch) error {
 		if total > profile.SLO.MaxBatchBytes {
 			return overMountBudget(mount, "mutation batch", fmt.Sprintf("requested batch bytes=%d exceeds declared mount batch bytes=%d", total, profile.SLO.MaxBatchBytes))
 		}
+	}
+	return nil
+}
+
+func checkMountRefreshBudget(mount VirtualMount, req RefreshRequest) error {
+	profile := NormalizeMountProfile(mount.Profile())
+	targets := normalizeMountPaths(req.Targets)
+	if req.RequireNarrow && len(targets) == 0 {
+		return overMountBudget(mount, "refresh", "explicit scope narrowing is required")
+	}
+	if profile.SLO.MaxRefreshTargets > 0 && len(targets) > profile.SLO.MaxRefreshTargets {
+		return overMountBudget(mount, "refresh", fmt.Sprintf("requested refresh targets=%d exceeds declared mount refresh target budget=%d", len(targets), profile.SLO.MaxRefreshTargets))
+	}
+	if profile.LatencyClass == MountLatencyRemoteHigh && len(targets) == 0 {
+		return overMountBudget(mount, "refresh", "remote_high_latency refresh requires explicit scoped targets")
 	}
 	return nil
 }

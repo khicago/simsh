@@ -26,10 +26,15 @@ type builtinRefreshMount struct {
 	builtinStatusMount
 	status    contract.MountRuntimeStatus
 	statusErr error
+	refreshed []string
+	refused   []string
 }
 
 func (m builtinRefreshMount) Refresh(context.Context, contract.RefreshRequest) (contract.RefreshResult, error) {
-	return contract.RefreshResult{}, nil
+	return contract.RefreshResult{
+		RefreshedTargets: append([]string(nil), m.refreshed...),
+		RefusedTargets:   append([]string(nil), m.refused...),
+	}, nil
 }
 
 func (m builtinRefreshMount) MountStatus(context.Context) (contract.MountRuntimeStatus, error) {
@@ -45,7 +50,7 @@ func (m builtinStatsMount) Stats(context.Context) (contract.MountStats, error) {
 	return contract.MountStats{}, nil
 }
 
-func TestRunMountsTextAndJSON(t *testing.T) {
+func TestRunMountsStatusTextAndJSON(t *testing.T) {
 	alphaPath := "/" + "alpha"
 	betaPath := "/" + "beta"
 	runtime := engine.CommandRuntime{
@@ -95,6 +100,43 @@ func TestRunMountsTextAndJSON(t *testing.T) {
 		!strings.Contains(jsonOut, "\"freshness\": \"stale\"") ||
 		!strings.Contains(jsonOut, "\"has_stats\": true") {
 		t.Fatalf("runMounts(json) = (%q, %d), want structured mount records", jsonOut, code)
+	}
+}
+
+func TestRunMountsRefresh(t *testing.T) {
+	alphaPath := "/" + "alpha"
+	nestedPath := alphaPath + "/" + "nested"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteModerate,
+							Consistency:         contract.MountConsistency{RefreshRequired: true},
+							SLO:                 contract.MountSLO{MaxRefreshTargets: 1},
+						},
+					},
+					refreshed: []string{nestedPath},
+					status:    contract.MountRuntimeStatus{Freshness: "live", Materialization: "materialized"},
+				},
+			},
+		},
+	}
+
+	text, code := runMounts(runtime, []string{"refresh", nestedPath})
+	if code != 0 || !strings.Contains(text, "refreshed=1") || !strings.Contains(text, "refused=0") || !strings.Contains(text, "freshness=live") {
+		t.Fatalf("runMounts(refresh text) = (%q, %d), want refresh summary", text, code)
+	}
+
+	jsonOut, code := runMounts(runtime, []string{"refresh", nestedPath, "--fmt", "json"})
+	if code != 0 || !strings.Contains(jsonOut, "\"refresh\"") || !strings.Contains(jsonOut, "\"requested_targets\"") || !strings.Contains(jsonOut, "\"refreshed_targets\"") || !strings.Contains(jsonOut, nestedPath) {
+		t.Fatalf("runMounts(refresh json) = (%q, %d), want refresh rows", jsonOut, code)
 	}
 }
 

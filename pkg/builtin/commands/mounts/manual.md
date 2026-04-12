@@ -1,14 +1,15 @@
 ---
 name: mounts
-synopsis: "mounts [--fmt text|json]"
+synopsis: "mounts [--fmt text|json]\nmounts refresh [--require-narrow] MOUNT_POINT..."
 category: introspection
 ---
 
-# mounts -- show active mount contracts and optional runtime status
+# mounts -- show active mount contracts and run explicit scoped refresh
 
 ## SYNOPSIS
 
     mounts [--fmt text|json]
+    mounts refresh [--require-narrow] MOUNT_POINT...
 
 ## DESCRIPTION
 
@@ -16,10 +17,17 @@ Display the active virtual mounts currently visible to the runtime, including
 their normalized mount profile, declared SLO fields, and whether refresh/stats
 capabilities exist.
 
+`mounts refresh` is the explicit refresh control-plane entry for mounts that
+implement the optional refresh capability. It remains target-scoped and
+budgeted; the command does not make ordinary reads trigger hidden refresh
+behavior.
+
 ## FLAGS
 
 - `--fmt text|json` -- Output format. `json` emits machine-readable mount
   contract records.
+- `--require-narrow` -- Require refresh requests to name explicit scoped
+  targets instead of allowing an adapter-defined broader refresh.
 
 ## EXAMPLES
 
@@ -31,9 +39,19 @@ Show structured mount metadata:
 
     mounts --fmt json
 
+Refresh one explicit mount target:
+
+    mounts refresh <mount-target>
+
+Require explicit narrow refresh target:
+
+    mounts refresh --require-narrow <mount-target>
+
 ## NOTES
 
-- This command is read-only. It does not trigger refresh or mutate mount state.
+- `mounts` status output is read-only.
+- `mounts refresh` is explicit control-plane work and stays subject to refresh
+  scope/budget/refusal rules; it is not a hidden side effect of status reads.
 - The output is intended to make mount point, latency class, consistency, and
   declared SLO budgets visible before running high-fanout workloads.
 - `has_refresher`, `has_status`, and `has_stats` only indicate capability
