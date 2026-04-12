@@ -164,6 +164,87 @@ func TestBuildFailureTaxonomyRollup(t *testing.T) {
 	}
 }
 
+func TestCheckedInRawSnapshotMatchesTaskManifest(t *testing.T) {
+	t.Parallel()
+
+	manifest, err := LoadTaskManifest(DefaultTaskManifestPath)
+	if err != nil {
+		t.Fatalf("LoadTaskManifest(%q) failed: %v", DefaultTaskManifestPath, err)
+	}
+	snapshot, err := LoadPairedRunSnapshot(DefaultSnapshotPath)
+	if err != nil {
+		t.Fatalf("LoadPairedRunSnapshot(%q) failed: %v", DefaultSnapshotPath, err)
+	}
+
+	if snapshot.TaskManifestPath != DefaultTaskManifestPath {
+		t.Errorf("LoadPairedRunSnapshot(%q).TaskManifestPath = %q, want %q", DefaultSnapshotPath, snapshot.TaskManifestPath, DefaultTaskManifestPath)
+	}
+	if snapshot.ComparisonRule != manifest.ComparisonRule {
+		t.Errorf("LoadPairedRunSnapshot(%q).ComparisonRule = %q, want %q", DefaultSnapshotPath, snapshot.ComparisonRule, manifest.ComparisonRule)
+	}
+	if snapshot.AgentID != manifest.AgentID {
+		t.Errorf("LoadPairedRunSnapshot(%q).AgentID = %q, want %q", DefaultSnapshotPath, snapshot.AgentID, manifest.AgentID)
+	}
+	if snapshot.BaselineSubstrate != manifest.BaselineSubstrate {
+		t.Errorf("LoadPairedRunSnapshot(%q).BaselineSubstrate = %q, want %q", DefaultSnapshotPath, snapshot.BaselineSubstrate, manifest.BaselineSubstrate)
+	}
+	if snapshot.SimshSubstrate != manifest.SimshSubstrate {
+		t.Errorf("LoadPairedRunSnapshot(%q).SimshSubstrate = %q, want %q", DefaultSnapshotPath, snapshot.SimshSubstrate, manifest.SimshSubstrate)
+	}
+	if len(snapshot.Tasks) != len(manifest.Tasks) {
+		t.Fatalf("LoadPairedRunSnapshot(%q).Tasks length = %d, want %d", DefaultSnapshotPath, len(snapshot.Tasks), len(manifest.Tasks))
+	}
+
+	manifestByScenario := make(map[string]PairedTaskManifest, len(manifest.Tasks))
+	for _, task := range manifest.Tasks {
+		manifestByScenario[task.ScenarioID] = task
+	}
+	for _, task := range snapshot.Tasks {
+		want, ok := manifestByScenario[task.ScenarioID]
+		if !ok {
+			t.Errorf("LoadPairedRunSnapshot(%q) includes scenario %q missing from %q", DefaultSnapshotPath, task.ScenarioID, DefaultTaskManifestPath)
+			continue
+		}
+		delete(manifestByScenario, task.ScenarioID)
+		if task.AgentID != manifest.AgentID {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].AgentID = %q, want %q", DefaultSnapshotPath, task.ScenarioID, task.AgentID, manifest.AgentID)
+		}
+		if task.PairSeed != want.PairSeed {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].PairSeed = %d, want %d", DefaultSnapshotPath, task.ScenarioID, task.PairSeed, want.PairSeed)
+		}
+		if task.RunOrder != want.RunOrder {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].RunOrder = %q, want %q", DefaultSnapshotPath, task.ScenarioID, task.RunOrder, want.RunOrder)
+		}
+		if task.Budget.MaxSteps != want.MaxSteps {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].Budget.MaxSteps = %d, want %d", DefaultSnapshotPath, task.ScenarioID, task.Budget.MaxSteps, want.MaxSteps)
+		}
+		if task.Budget.MaxObservationTokens != want.MaxObservationTokens {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].Budget.MaxObservationTokens = %d, want %d", DefaultSnapshotPath, task.ScenarioID, task.Budget.MaxObservationTokens, want.MaxObservationTokens)
+		}
+		if !slices.Equal(task.ExpectedOutputs, want.ExpectedOutputs) {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].ExpectedOutputs = %v, want %v", DefaultSnapshotPath, task.ScenarioID, task.ExpectedOutputs, want.ExpectedOutputs)
+		}
+		if task.WhySelected != want.WhySelected {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].WhySelected = %q, want %q", DefaultSnapshotPath, task.ScenarioID, task.WhySelected, want.WhySelected)
+		}
+		wantRefs := []string{
+			DefaultTaskManifestPath + "#" + task.ScenarioID,
+			externalmapping.DefaultScenarioInventoryPath + "#" + task.ScenarioID,
+		}
+		if !slices.Equal(task.EvidenceRefs, wantRefs) {
+			t.Errorf("LoadPairedRunSnapshot(%q).Tasks[%q].EvidenceRefs = %v, want %v", DefaultSnapshotPath, task.ScenarioID, task.EvidenceRefs, wantRefs)
+		}
+	}
+	if len(manifestByScenario) != 0 {
+		missing := make([]string, 0, len(manifestByScenario))
+		for scenarioID := range manifestByScenario {
+			missing = append(missing, scenarioID)
+		}
+		slices.Sort(missing)
+		t.Errorf("LoadPairedRunSnapshot(%q) is missing manifest scenarios: %v", DefaultSnapshotPath, missing)
+	}
+}
+
 func TestCheckedInReportsMatchSnapshot(t *testing.T) {
 	t.Parallel()
 
