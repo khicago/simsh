@@ -22,10 +22,16 @@
       "title": "Add explicit mount refresh scope, budget, and refusal contract",
       "status": "in_progress",
       "summary": "Make mount refresh an explicit, budgeted, scope-aware control surface instead of a hidden or adapter-inferred action.",
-      "gate_result": null,
-      "last_gate_commands": [],
-      "last_commit_hash": null,
-      "notes": []
+      "gate_result": "pass",
+      "last_gate_commands": [
+        "go test ./pkg/contract ./pkg/builtin ./pkg/engine -count=1",
+        "go test ./pkg/fs ./pkg/mount ./pkg/service ./pkg/engine/runtime -count=1"
+      ],
+      "last_commit_hash": "b04c47b",
+      "notes": [
+        "Wave 1 establishes a generic target-scoped refresh request/result contract plus fail-closed remote_high_latency refusal and refresh-target budget checks.",
+        "Wave 1 also adds an explicit mounts refresh front door without introducing refresh-on-read or adapter-inferred silent broadening."
+      ]
     },
     {
       "id": "T-003",
