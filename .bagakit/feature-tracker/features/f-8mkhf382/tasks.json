@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkhf382",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Finalize umbrella proposal and lane boundaries",
+      "status": "todo",
+      "summary": "Turn the umbrella feat into an execution-grade lane plan with explicit boundaries between mount refresh, external seam, and proof-layer follow-up work.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Add explicit mount refresh scope, budget, and refusal contract",
+      "status": "todo",
+      "summary": "Make mount refresh an explicit, budgeted, scope-aware control surface instead of a hidden or adapter-inferred action.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-003",
+      "title": "Advance external seam and adapter-boundary structured contracts",
+      "status": "todo",
+      "summary": "Strengthen the next bounded external seam truths where compatibility layers still hide too much machine-relevant structure.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-004",
+      "title": "Strengthen proof-layer phase 2 evidence and regeneration contracts",
+      "status": "todo",
+      "summary": "Improve downstream proof layers and regeneration/auditability contracts without widening benchmark scope.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    }
+  ]
+}

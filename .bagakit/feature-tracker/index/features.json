@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "generated_by": "bagakit-feature-tracker",
+  "feature_id_issuance": {
+    "scheme": "feature-tracker-id-v1-c3n2g4",
+    "next_cursor": 2
+  },
+  "features": [
+    {
+      "feat_id": "f-222cr56ww",
+      "title": "Elevate simsh architecture craft and design quality",
+      "status": "in_progress",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": ""
+    },
+    {
+      "feat_id": "f-223crkgwk",
+      "title": "Advance simsh runtime contracts and proof surfaces",
+      "status": "done",
+      "workspace_mode": "current_tree",
+      "branch": "",
+      "worktree_name": ""
+    },
+    {
+      "feat_id": "f-8mkhf382",
+      "title": "Advance simsh mount control, external seam, and proof layers",
+      "status": "proposal",
+      "workspace_mode": "proposal_only",
+      "branch": "",
+      "worktree_name": ""
+    }
+  ]
+}

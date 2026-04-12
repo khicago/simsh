@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkhf382",
+  "title": "Advance simsh mount control, external seam, and proof layers",
+  "slug": "simsh-mount-refresh-external-proof-phase-2",
+  "goal": "Implement the next-stage simsh work after f-223crkgwk by adding explicit mount refresh scope/budget contracts, advancing the external command and adapter seam where the next general contract gains are clearest, and strengthening proof layers without collapsing those lanes into one undifferentiated rewrite.",
+  "status": "proposal",
+  "workspace_mode": "proposal_only",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "current_task_id": "",
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    }
+  ]
+}

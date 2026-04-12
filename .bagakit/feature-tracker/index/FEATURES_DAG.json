@@ -1,0 +1,44 @@
+{
+  "version": 1,
+  "generated_by": "bagakit-feature-tracker",
+  "features": [
+    {
+      "feat_id": "f-222cr56ww",
+      "depends_on": [],
+      "dependents": [],
+      "layer": 0
+    },
+    {
+      "feat_id": "f-223crkgwk",
+      "depends_on": [],
+      "dependents": [
+        "f-8mkhf382"
+      ],
+      "layer": 0
+    },
+    {
+      "feat_id": "f-8mkhf382",
+      "depends_on": [
+        "f-223crkgwk"
+      ],
+      "dependents": [],
+      "layer": 1
+    }
+  ],
+  "layers": [
+    {
+      "layer": 0,
+      "feat_ids": [
+        "f-222cr56ww",
+        "f-223crkgwk"
+      ]
+    },
+    {
+      "layer": 1,
+      "feat_ids": [
+        "f-8mkhf382"
+      ]
+    }
+  ],
+  "notes": []
+}
