@@ -2,6 +2,7 @@ package engine_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -345,6 +346,9 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	if len(warn.Trace.Executed) == 0 || warn.Trace.Executed[0].Namespace != contract.CommandNamespaceExternal {
 		t.Fatalf("unexpected executed external trace: %+v", warn.Trace.Executed)
 	}
+	if len(warn.Trace.ExternalOutcomes) == 0 || warn.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeSuccess {
+		t.Fatalf("unexpected successful external outcome kind: %+v", warn.Trace.ExternalOutcomes)
+	}
 
 	fail := eng.ExecuteResult(context.Background(), "report_tool --fail", ops)
 	if fail.ExitCode != 17 {
@@ -364,6 +368,9 @@ func TestEngineExecuteResultPreservesExternalCommandStderr(t *testing.T) {
 	}
 	if len(fail.Trace.ExternalOutcomes) == 0 || fail.Trace.ExternalOutcomes[0].ExitCode == nil || *fail.Trace.ExternalOutcomes[0].ExitCode != 17 || fail.Trace.ExternalOutcomes[0].RawExitCode != nil {
 		t.Fatalf("unexpected failing external outcome trace: %+v", fail.Trace.ExternalOutcomes)
+	}
+	if fail.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeNonZeroExit {
+		t.Fatalf("unexpected failing external outcome kind: %+v", fail.Trace.ExternalOutcomes[0])
 	}
 }
 
@@ -415,6 +422,9 @@ func TestEngineExecuteResultTraceExecutedExcludesExternalProviderFailures(t *tes
 	if result.Trace.ExternalOutcomes[0].ResolvedPath == "" {
 		t.Fatalf("provider failure outcome lost resolved path: %+v", result.Trace.ExternalOutcomes[0])
 	}
+	if result.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeUnsupported {
+		t.Fatalf("provider failure outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, contract.ExternalOutcomeUnsupported)
+	}
 }
 
 func TestEngineExecuteResultRecordsUnsupportedExternalOutcome(t *testing.T) {
@@ -435,6 +445,80 @@ func TestEngineExecuteResultRecordsUnsupportedExternalOutcome(t *testing.T) {
 	}
 	if result.Trace.ExternalOutcomes[0].ExitCode == nil || *result.Trace.ExternalOutcomes[0].ExitCode != contract.ExitCodeUnsupported {
 		t.Fatalf("unsupported external outcome exit_code mismatch: %+v", result.Trace.ExternalOutcomes[0])
+	}
+	if result.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeUnsupported {
+		t.Fatalf("unsupported external outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, contract.ExternalOutcomeUnsupported)
+	}
+}
+
+func TestEngineExecuteResultDoesNotInferExternalCommandNotFoundFromUnsupported(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+	ops.RootDir = ""
+	ops.RequireAbsolutePath = func(raw string) (string, error) {
+		return raw, nil
+	}
+
+	externalPath := contract.VirtualExternalBinDir + "/" + "missing_tool"
+	result := eng.ExecuteResult(context.Background(), externalPath, ops)
+	if result.ExitCode != contract.ExitCodeUnsupported {
+		t.Fatalf("pathlike external unsupported exit_code=%d, want %d", result.ExitCode, contract.ExitCodeUnsupported)
+	}
+	if len(result.Trace.ExternalOutcomes) != 1 {
+		t.Fatalf("external_outcomes = %+v, want 1 unsupported outcome", result.Trace.ExternalOutcomes)
+	}
+	if result.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeUnsupported {
+		t.Fatalf("pathlike external outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, contract.ExternalOutcomeUnsupported)
+	}
+}
+
+func TestEngineExecuteResultClassifiesExternalCommandNotFound(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+	ops.RunExternalCommand = func(context.Context, contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+		return contract.ExternalCommandResult{ProviderError: "missing command"}, contract.ErrExternalCommandNotFound
+	}
+
+	result := eng.ExecuteResult(context.Background(), "missing_tool", ops)
+	if result.ExitCode != contract.ExitCodeGeneral {
+		t.Fatalf("external command not found exit_code=%d, want %d", result.ExitCode, contract.ExitCodeGeneral)
+	}
+	if len(result.Trace.ExternalOutcomes) != 1 {
+		t.Fatalf("external_outcomes = %+v, want 1 command-not-found outcome", result.Trace.ExternalOutcomes)
+	}
+	if result.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeCommandNotFound {
+		t.Fatalf("external command not found outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, contract.ExternalOutcomeCommandNotFound)
+	}
+}
+
+func TestEngineExecuteResultClassifiesExternalProviderFailure(t *testing.T) {
+	registry := engine.NewRegistry()
+	builtin.RegisterDefaults(registry)
+	eng := engine.New(registry)
+	ops := contract.OpsFromFilesystem(newTestFS())
+	ops.Profile = contract.ProfileBashPlus
+	ops.Policy = contract.DefaultPolicy()
+	ops.RunExternalCommand = func(context.Context, contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+		return contract.ExternalCommandResult{ProviderError: "provider unavailable"}, errors.New("provider unavailable")
+	}
+
+	result := eng.ExecuteResult(context.Background(), "report_tool", ops)
+	if result.ExitCode != contract.ExitCodeGeneral {
+		t.Fatalf("provider failure exit_code=%d, want %d", result.ExitCode, contract.ExitCodeGeneral)
+	}
+	if len(result.Trace.ExternalOutcomes) != 1 {
+		t.Fatalf("external_outcomes = %+v, want 1 provider failure outcome", result.Trace.ExternalOutcomes)
+	}
+	if result.Trace.ExternalOutcomes[0].OutcomeKind != contract.ExternalOutcomeProviderFailure {
+		t.Fatalf("provider failure outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, contract.ExternalOutcomeProviderFailure)
 	}
 }
 

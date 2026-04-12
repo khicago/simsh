@@ -113,6 +113,12 @@ Adapters that expose session memory SHOULD implement a standard lifecycle even i
 ## Trace Consumption Contract
 - Adapters MUST document which trace fields they consume and why.
 - If an adapter relies on write sets, denied paths, or duration budgets for planning, those dependencies SHOULD appear in adapter tests.
+- External command observations SHOULD consume `ExecutionTrace.ExternalOutcomes`
+  as structured seam truth. `outcome_kind` is the machine-facing reason, while
+  rendered output and compatibility exit codes remain shell-shaped presentation.
+  Adapters should only report command absence through an explicit
+  command-not-found signal, not by overloading generic unsupported capability
+  failures.
 - Unused trace fields are acceptable; undocumented hidden dependencies are not.
 
 ## Reference Implementation Requirement

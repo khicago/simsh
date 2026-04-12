@@ -9,3 +9,5 @@ const (
 )
 
 var ErrUnsupported = errors.New("simsh: unsupported operation")
+
+var ErrExternalCommandNotFound = errors.New("simsh: external command not found")

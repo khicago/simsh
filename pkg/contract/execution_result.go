@@ -46,18 +46,33 @@ type ExecutionTrace struct {
 }
 
 type ExecutionTraceStep struct {
-	Command         string `json:"command"`
-	Argv            []string `json:"argv,omitempty"`
-	Namespace       string `json:"namespace,omitempty"`
-	ResolvedPath    string `json:"resolved_path,omitempty"`
-	Executed        bool   `json:"executed,omitempty"`
-	ExitCode        *int   `json:"exit_code,omitempty"`
-	RawExitCode     *int   `json:"raw_exit_code,omitempty"`
-	StdoutBytes     *int   `json:"stdout_bytes,omitempty"`
-	StderrBytes     *int   `json:"stderr_bytes,omitempty"`
-	ProviderError   string `json:"provider_error,omitempty"`
-	TerminationKind string `json:"termination_kind,omitempty"`
+	Command         string              `json:"command"`
+	Argv            []string            `json:"argv,omitempty"`
+	Namespace       string              `json:"namespace,omitempty"`
+	ResolvedPath    string              `json:"resolved_path,omitempty"`
+	Executed        bool                `json:"executed,omitempty"`
+	OutcomeKind     ExternalOutcomeKind `json:"outcome_kind,omitempty"`
+	ExitCode        *int                `json:"exit_code,omitempty"`
+	RawExitCode     *int                `json:"raw_exit_code,omitempty"`
+	StdoutBytes     *int                `json:"stdout_bytes,omitempty"`
+	StderrBytes     *int                `json:"stderr_bytes,omitempty"`
+	ProviderError   string              `json:"provider_error,omitempty"`
+	TerminationKind string              `json:"termination_kind,omitempty"`
 }
+
+// ExternalOutcomeKind classifies external command outcomes at the adapter seam.
+// Compatibility messages and exit codes may still be shell-shaped, but this
+// field should preserve the adapter-visible reason instead of inferring one from
+// a rendered message.
+type ExternalOutcomeKind string
+
+const (
+	ExternalOutcomeSuccess         ExternalOutcomeKind = "success"
+	ExternalOutcomeNonZeroExit     ExternalOutcomeKind = "non_zero_exit"
+	ExternalOutcomeUnsupported     ExternalOutcomeKind = "unsupported"
+	ExternalOutcomeCommandNotFound ExternalOutcomeKind = "command_not_found"
+	ExternalOutcomeProviderFailure ExternalOutcomeKind = "provider_failure"
+)
 
 func (r ExecutionResult) FlattenOutput() string {
 	switch {
