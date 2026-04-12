@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkjav3p",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Define bounded external seam phase-2 target",
+      "status": "todo",
+      "summary": "Choose and lock the next external seam truth gaps to fix without opening a broad redesign.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Implement structured external seam phase-2 contract upgrades",
+      "status": "todo",
+      "summary": "Land the next external seam contract improvements with tests.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-003",
+      "title": "Align adapter-boundary docs and conformance expectations",
+      "status": "todo",
+      "summary": "Update adapter-boundary docs and validation to match the new structured seam truth.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    }
+  ]
+}

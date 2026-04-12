@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkj92dt",
+  "title": "Advance simsh explicit mount refresh contracts",
+  "slug": "simsh-explicit-mount-refresh-contracts",
+  "goal": "Finish the explicit mount refresh contract work by making refresh scope, narrowness, refusal, and execution semantics fully reviewable and adapter-safe without introducing hidden refresh behavior.",
+  "status": "proposal",
+  "workspace_mode": "proposal_only",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "current_task_id": "",
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    }
+  ]
+}

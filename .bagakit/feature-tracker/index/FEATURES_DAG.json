@@ -21,8 +21,37 @@
       "depends_on": [
         "f-223crkgwk"
       ],
-      "dependents": [],
+      "dependents": [
+        "f-8mkj92dt",
+        "f-8mkjav3p",
+        "f-8mkjcd6x"
+      ],
       "layer": 1
+    },
+    {
+      "feat_id": "f-8mkj92dt",
+      "depends_on": [
+        "f-8mkhf382"
+      ],
+      "dependents": [],
+      "layer": 2
+    },
+    {
+      "feat_id": "f-8mkjav3p",
+      "depends_on": [
+        "f-8mkhf382",
+        "f-8mkj92dt"
+      ],
+      "dependents": [],
+      "layer": 3
+    },
+    {
+      "feat_id": "f-8mkjcd6x",
+      "depends_on": [
+        "f-8mkhf382"
+      ],
+      "dependents": [],
+      "layer": 2
     }
   ],
   "layers": [
@@ -38,7 +67,22 @@
       "feat_ids": [
         "f-8mkhf382"
       ]
+    },
+    {
+      "layer": 2,
+      "feat_ids": [
+        "f-8mkj92dt",
+        "f-8mkjcd6x"
+      ]
+    },
+    {
+      "layer": 3,
+      "feat_ids": [
+        "f-8mkjav3p"
+      ]
     }
   ],
-  "notes": []
+  "notes": [
+    "f-8mkhf382 is now a planning shell; execution should continue in the lane-specific feats it fans out into."
+  ]
 }

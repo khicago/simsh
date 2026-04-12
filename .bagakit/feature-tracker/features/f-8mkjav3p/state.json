@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkjav3p",
+  "title": "Advance simsh external seam and adapter-boundary phase 2",
+  "slug": "simsh-external-seam-adapter-boundary-phase-2",
+  "goal": "Strengthen the next bounded external seam and adapter-boundary contracts where compatibility layers still hide too much machine-relevant structure, without broadening shell scope or pushing product semantics into core.",
+  "status": "proposal",
+  "workspace_mode": "proposal_only",
+  "base_ref": "main",
+  "branch": "",
+  "worktree_name": "",
+  "worktree_path": "",
+  "current_task_id": "",
+  "counters": {
+    "gate_fail_streak": 0,
+    "no_progress_rounds": 0,
+    "round_count": 0
+  },
+  "gate": {
+    "last_result": null,
+    "last_task_id": null,
+    "last_check_commands": [],
+    "last_log_path": null
+  },
+  "history": [
+    {
+      "action": "feat_created",
+      "detail": "workspace_mode=proposal_only; base_ref=main; root_branch=main"
+    }
+  ]
+}

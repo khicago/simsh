@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkj92dt",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Close refresh narrowness and refusal semantics",
+      "status": "todo",
+      "summary": "Make refresh scope, narrowness, and refusal semantics explicit and testable.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Harden builtin and adapter-facing refresh execution rules",
+      "status": "todo",
+      "summary": "Align mounts builtin behavior and generic adapter-facing expectations with the final refresh contract.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-003",
+      "title": "Close refresh docs, tests, and tracker evidence",
+      "status": "todo",
+      "summary": "Finish validation, documentation, and tracker truth for the refresh contract lane.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    }
+  ]
+}

@@ -24,7 +24,31 @@
     },
     {
       "feat_id": "f-8mkhf382",
-      "title": "Advance simsh mount control, external seam, and proof layers",
+      "title": "Plan simsh post-f-223crkgwk lane decomposition",
+      "status": "proposal",
+      "workspace_mode": "proposal_only",
+      "branch": "",
+      "worktree_name": ""
+    },
+    {
+      "feat_id": "f-8mkj92dt",
+      "title": "Advance simsh explicit mount refresh contracts",
+      "status": "proposal",
+      "workspace_mode": "proposal_only",
+      "branch": "",
+      "worktree_name": ""
+    },
+    {
+      "feat_id": "f-8mkjav3p",
+      "title": "Advance simsh external seam and adapter-boundary phase 2",
+      "status": "proposal",
+      "workspace_mode": "proposal_only",
+      "branch": "",
+      "worktree_name": ""
+    },
+    {
+      "feat_id": "f-8mkjcd6x",
+      "title": "Advance simsh proof-layer phase 2 evidence contracts",
       "status": "proposal",
       "workspace_mode": "proposal_only",
       "branch": "",

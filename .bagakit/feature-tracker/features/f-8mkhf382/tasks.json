@@ -20,38 +20,38 @@
     {
       "id": "T-002",
       "title": "Add explicit mount refresh scope, budget, and refusal contract",
-      "status": "in_progress",
-      "summary": "Make mount refresh an explicit, budgeted, scope-aware control surface instead of a hidden or adapter-inferred action.",
-      "gate_result": "pass",
-      "last_gate_commands": [
-        "go test ./pkg/contract ./pkg/builtin ./pkg/engine -count=1",
-        "go test ./pkg/fs ./pkg/mount ./pkg/service ./pkg/engine/runtime -count=1"
-      ],
-      "last_commit_hash": "b04c47b",
+      "status": "todo",
+      "summary": "Superseded by lane-specific feat f-8mkj92dt.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
       "notes": [
-        "Wave 1 establishes a generic target-scoped refresh request/result contract plus fail-closed remote_high_latency refusal and refresh-target budget checks.",
-        "Wave 1 also adds an explicit mounts refresh front door without introducing refresh-on-read or adapter-inferred silent broadening."
+        "Execution moved to f-8mkj92dt so the refresh lane can proceed as its own feat instead of continuing inside the umbrella shell."
       ]
     },
     {
       "id": "T-003",
       "title": "Advance external seam and adapter-boundary structured contracts",
       "status": "todo",
-      "summary": "Strengthen the next bounded external seam truths where compatibility layers still hide too much machine-relevant structure.",
+      "summary": "Superseded by lane-specific feat f-8mkjav3p.",
       "gate_result": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
-      "notes": []
+      "notes": [
+        "Execution moved to f-8mkjav3p."
+      ]
     },
     {
       "id": "T-004",
       "title": "Strengthen proof-layer phase 2 evidence and regeneration contracts",
       "status": "todo",
-      "summary": "Improve downstream proof layers and regeneration/auditability contracts without widening benchmark scope.",
+      "summary": "Superseded by lane-specific feat f-8mkjcd6x.",
       "gate_result": null,
       "last_gate_commands": [],
       "last_commit_hash": null,
-      "notes": []
+      "notes": [
+        "Execution moved to f-8mkjcd6x."
+      ]
     }
   ]
 }

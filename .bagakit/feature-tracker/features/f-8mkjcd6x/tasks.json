@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "feat_id": "f-8mkjcd6x",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Define proof-layer phase 2 target set",
+      "status": "todo",
+      "summary": "Choose the next evidence/regeneration integrity gaps to close without broadening benchmark scope.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-002",
+      "title": "Implement proof-layer integrity and regeneration guardrails",
+      "status": "todo",
+      "summary": "Land the next proof-layer contracts and guard tests.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    },
+    {
+      "id": "T-003",
+      "title": "Close downstream proof docs and feature evidence",
+      "status": "todo",
+      "summary": "Update docs, artifact breadcrumbs, and tracker evidence for the proof lane.",
+      "gate_result": null,
+      "last_gate_commands": [],
+      "last_commit_hash": null,
+      "notes": []
+    }
+  ]
+}
