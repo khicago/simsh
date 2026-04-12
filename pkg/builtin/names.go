@@ -12,6 +12,7 @@ const (
 	CommandHead        = "head"
 	CommandJSON        = "json"
 	CommandLS          = "ls"
+	CommandMounts      = "mounts"
 	CommandTree        = "tree"
 	CommandMan         = "man"
 	CommandSed         = "sed"

@@ -79,6 +79,7 @@ func defaultCommandSpecs() []engine.CommandSpec {
 func defaultBuiltinRegistrations() []defaultBuiltinRegistration {
 	return []defaultBuiltinRegistration{
 		{Name: CommandLS, CanonicalSource: "pkg/builtin/op_listing.go", Build: specLS},
+		{Name: CommandMounts, CanonicalSource: "pkg/builtin/op_mounts.go", Build: specMounts},
 		{Name: CommandTree, CanonicalSource: "pkg/builtin/op_tree.go", Build: specTree},
 		{Name: CommandCd, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specCd},
 		{Name: CommandPwd, CanonicalSource: "pkg/builtin/op_command_lookup.go", Build: specPwd},

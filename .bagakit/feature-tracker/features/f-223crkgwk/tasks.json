@@ -41,7 +41,7 @@
         "go test ./pkg/contract ./pkg/engine ./pkg/engine/runtime ./pkg/service ./pkg/service/httpapi -count=1",
         "go test ./cmd/simsh-cli ./cmd/simshd ./pkg/adapter/... ./pkg/builtin ./pkg/cmd ./pkg/fs ./pkg/mount ./pkg/sh -count=1"
       ],
-      "last_commit_hash": "PENDING",
+      "last_commit_hash": "80e6873",
       "notes": [
         "Wave 1 targets runtime-executed trace truth plus structured external outcome preservation without removing the existing aggregate compatibility surface.",
         "Wave 2 unified truncation truth, preserved provider failure structure, and kept compatibility flatten mirrors explicit.",
@@ -54,7 +54,7 @@
     {
       "id": "T-004",
       "title": "Make mount execution limits and control surfaces more operational",
-      "status": "todo",
+      "status": "in_progress",
       "summary": "Expose and enforce more of the documented mount contract around budgets, refresh/status, and execution-time scope control.",
       "gate_result": null,
       "last_gate_commands": [],
