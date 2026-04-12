@@ -4,6 +4,7 @@
   "paired_uplift_refresh_command": "make benchmark-uplift",
   "native_baseline": {
     "report_path": "benchmarks/simsh_native_reference/reports/baseline-20260404.json",
+    "report_sha256": "a06f155c448321a0445f7b9e274dfac9e944da9f6f75272e41057367bc61d8d2",
     "volatile_fields": [
       "generated_at",
       "scenarios[*].duration_ms"
@@ -11,21 +12,57 @@
   },
   "terminal_bench_prototype": {
     "scope_path": "benchmarks/terminal_bench_compare/prototype_scope.json",
+    "scope_sha256": "56594596b2278b1686f77725be6d0f217a4a4cd7e2df2ed78ccb61f7b321d0c3",
     "artifact_json_path": "benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.json",
+    "artifact_json_sha256": "d9bbae1d14d8f3b74a59a40b32a44f23a07ec0d6ae84bec0831c7156874c22bc",
     "artifact_md_path": "benchmarks/terminal_bench_compare/reports/prototype-baseline-20260404.md",
+    "artifact_md_sha256": "75da1adb966633c14ce9a559375a747ac084b6324c4c6dbf9cadadd25d54b1a6",
     "source_report_path_field": "source.report_path"
   },
   "paired_uplift": {
     "task_manifest_path": "benchmarks/paired_uplift/task_set.json",
+    "task_manifest_sha256": "16b042e73261e58b7d46860ebf41bd69ba2dc717d565f0ff086d531ae88e54fd",
     "raw_snapshot_path": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json",
+    "raw_snapshot_sha256": "ed05d55a12a7133db417fb983c01b3695fdf857101eca9771fe26e740cdcfafc",
     "artifact_json_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.json",
+    "artifact_json_sha256": "072dc3dd744d815c101e7ee63a664e00f30d4d645020646488d5c3c828857d4e",
     "artifact_md_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.md",
+    "artifact_md_sha256": "c0c294a5451268d10a96a65fc9948bb63b009bb23a9e3cd7cb145b128c5f691a",
     "failure_taxonomy_path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.failures.json",
+    "failure_taxonomy_sha256": "5aec6d25c56df82454750a971df8054e069e789bdd18e0ca5daf43d384aa2db7",
     "source_snapshot_path_field": "source_snapshot_path",
-    "task_manifest_path_field": "task_manifest_path"
+    "task_manifest_path_field": "task_manifest_path",
+    "downstream_artifacts": [
+      {
+        "path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.json",
+        "kind": "aggregate_json",
+        "derived_from": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json"
+      },
+      {
+        "path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.md",
+        "kind": "summary_md",
+        "derived_from": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json"
+      },
+      {
+        "path": "benchmarks/paired_uplift/reports/paired-baseline-20260406.failures.json",
+        "kind": "failure_taxonomy_json",
+        "derived_from": "benchmarks/paired_uplift/reports/raw-baseline-20260406.json"
+      }
+    ],
+    "volatile_fields": [
+      "raw_snapshot.generated_at",
+      "raw_snapshot.tasks[*].simsh.duration_ms",
+      "raw_snapshot.tasks[*].baseline.duration_ms",
+      "artifact_json.generated_at",
+      "artifact_json.tasks[*].simsh.duration_ms",
+      "artifact_json.tasks[*].baseline.duration_ms",
+      "artifact_json.tasks[*].delta.duration_ms_delta",
+      "failure_taxonomy.generated_at"
+    ]
   },
   "notes": [
-    "This manifest is the checked-in proof-surface SSOT for benchmark evidence paths and canonical refresh entrypoints.",
-    "Refresh commands regenerate freshness snapshots first, then deterministic downstream artifacts."
+    "This manifest is the checked-in proof-surface SSOT for benchmark evidence paths, current byte fingerprints, and canonical refresh entrypoints.",
+    "Refresh commands regenerate freshness snapshots first, then deterministic downstream artifacts.",
+    "SHA-256 fields are breadcrumbs for the currently checked-in bytes; volatile fields document values expected to move on regeneration."
   ]
 }

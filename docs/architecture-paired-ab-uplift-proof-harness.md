@@ -59,6 +59,9 @@ It must not rewrite their semantics.
 The repo-level checked-in breadcrumb for those proof artifacts is
 `benchmarks/evidence_manifest.json`; it indexes the current evidence set and
 canonical refresh entrypoints without creating a second benchmark harness.
+Its byte fingerprints audit the currently checked-in artifact bytes, while the
+volatile-field declarations mark values expected to move when reports are
+regenerated.
 
 ## Core Invariant
 

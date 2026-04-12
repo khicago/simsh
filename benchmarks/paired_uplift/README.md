@@ -56,6 +56,8 @@ Repo-level evidence breadcrumb:
 - `../evidence_manifest.json`
   - the checked-in proof-surface SSOT that indexes this harness together with
     the native baseline and Terminal-Bench comparison artifacts
+  - records current byte fingerprints, downstream artifact breadcrumbs, and
+    volatile fields that are expected to move on regeneration
 
 ## Run It
 
