@@ -65,14 +65,18 @@ type ExternalCommandRequest struct {
 }
 
 // ExternalCommandResult is the output of one external command invocation.
+// Return ErrExternalCommandNotFound with this result when command absence is
+// known; use ErrUnsupported for generic adapter capability gaps.
+// Result fields are still recorded in ExecutionTrace.ExternalOutcomes when an
+// error is returned.
 type ExternalCommandResult struct {
-	Stdout           string
-	Stderr           string
-	ExitCode         int
-	RawExitCode      *int
-	CanonicalTarget  string
-	ProviderError    string
-	TerminationKind  string
+	Stdout          string
+	Stderr          string
+	ExitCode        int
+	RawExitCode     *int
+	CanonicalTarget string
+	ProviderError   string
+	TerminationKind string
 }
 
 // BuiltinCommandDoc provides prompt/introspection-friendly command metadata.

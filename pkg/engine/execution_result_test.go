@@ -522,6 +522,40 @@ func TestEngineExecuteResultClassifiesExternalProviderFailure(t *testing.T) {
 	}
 }
 
+func TestEngineExecuteResultClassifiesExternalContextErrors(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want contract.ExternalOutcomeKind
+	}{
+		{name: "canceled", err: context.Canceled, want: contract.ExternalOutcomeCanceled},
+		{name: "timed_out", err: context.DeadlineExceeded, want: contract.ExternalOutcomeTimedOut},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			registry := engine.NewRegistry()
+			builtin.RegisterDefaults(registry)
+			eng := engine.New(registry)
+			ops := contract.OpsFromFilesystem(newTestFS())
+			ops.Profile = contract.ProfileBashPlus
+			ops.Policy = contract.DefaultPolicy()
+			ops.RunExternalCommand = func(context.Context, contract.ExternalCommandRequest) (contract.ExternalCommandResult, error) {
+				return contract.ExternalCommandResult{}, tc.err
+			}
+
+			result := eng.ExecuteResult(context.Background(), "report_tool", ops)
+			if result.ExitCode != contract.ExitCodeGeneral {
+				t.Fatalf("ExecuteResult(report_tool) exit_code=%d, want %d", result.ExitCode, contract.ExitCodeGeneral)
+			}
+			if len(result.Trace.ExternalOutcomes) != 1 {
+				t.Fatalf("ExecuteResult(report_tool).Trace.ExternalOutcomes = %+v, want 1 outcome", result.Trace.ExternalOutcomes)
+			}
+			if result.Trace.ExternalOutcomes[0].OutcomeKind != tc.want {
+				t.Fatalf("ExecuteResult(report_tool) outcome kind = %q, want %q", result.Trace.ExternalOutcomes[0].OutcomeKind, tc.want)
+			}
+		})
+	}
+}
+
 func TestEngineExecuteResultMarksCanceledContext(t *testing.T) {
 	registry := engine.NewRegistry()
 	builtin.RegisterDefaults(registry)

@@ -54,6 +54,8 @@ type ExternalCommandLister interface {
 }
 
 type ExternalCommandRunner interface {
+	// RunExternalCommand should return ErrExternalCommandNotFound when the
+	// adapter can distinguish command absence from generic unsupported execution.
 	RunExternalCommand(ctx context.Context, req ExternalCommandRequest) (ExternalCommandResult, error)
 }
 

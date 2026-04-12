@@ -596,6 +596,11 @@ func (e *Engine) runExternalCommand(ctx context.Context, ref contract.CommandRef
 			}
 			return output
 		}
+		if errors.Is(err, context.DeadlineExceeded) {
+			outcomeStep.OutcomeKind = contract.ExternalOutcomeTimedOut
+		} else if errors.Is(err, context.Canceled) {
+			outcomeStep.OutcomeKind = contract.ExternalOutcomeCanceled
+		}
 		out := fmt.Sprintf("%s: %v", display, err)
 		emitAudit(ctx, ops, contract.AuditEvent{Time: time.Now(), Phase: contract.AuditPhaseCommandError, Command: cmd, Args: append([]string(nil), args...), ExitCode: contract.ExitCodeGeneral, Message: out})
 		if strings.TrimSpace(output.stdout) == "" && strings.TrimSpace(output.stderr) == "" {

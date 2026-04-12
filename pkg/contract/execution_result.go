@@ -71,6 +71,8 @@ const (
 	ExternalOutcomeNonZeroExit     ExternalOutcomeKind = "non_zero_exit"
 	ExternalOutcomeUnsupported     ExternalOutcomeKind = "unsupported"
 	ExternalOutcomeCommandNotFound ExternalOutcomeKind = "command_not_found"
+	ExternalOutcomeCanceled        ExternalOutcomeKind = "canceled"
+	ExternalOutcomeTimedOut        ExternalOutcomeKind = "timed_out"
 	ExternalOutcomeProviderFailure ExternalOutcomeKind = "provider_failure"
 )
 

@@ -265,6 +265,9 @@ func TestSummarizeTraceFiltersReferenceReadsAndMutations(t *testing.T) {
 		ReadPaths:    []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json", "/skills/draft-plan/SKILL.md", "/knowledge_base/other.md"},
 		WrittenPaths: []string{"/task_outputs/report.md"},
 		DeniedPaths:  []string{"/knowledge_base/reference/guide.md"},
+		ExternalOutcomes: []contract.ExecutionTraceStep{
+			{Command: "missing-tool", OutcomeKind: contract.ExternalOutcomeCommandNotFound},
+		},
 	})
 	want := []string{
 		"read-ref:/knowledge_base/reference/guide.md",
@@ -272,9 +275,28 @@ func TestSummarizeTraceFiltersReferenceReadsAndMutations(t *testing.T) {
 		"read-skill:/skills/draft-plan/SKILL.md",
 		"wrote:/task_outputs/report.md",
 		"denied:/knowledge_base/reference/guide.md",
+		"external-outcome:command_not_found:missing-tool",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("summarizeTrace(...) = %#v, want %#v", got, want)
+	}
+}
+
+func TestSummarizeTraceExternalOutcomeFallbacks(t *testing.T) {
+	got := summarizeTrace(contract.ExecutionTrace{
+		ExternalOutcomes: []contract.ExecutionTraceStep{
+			{ResolvedPath: contract.VirtualExternalBinDir + "/" + "missing-tool", OutcomeKind: contract.ExternalOutcomeCommandNotFound},
+			{Argv: []string{"report-tool"}, OutcomeKind: contract.ExternalOutcomeCanceled},
+			{Command: "raw-tool"},
+		},
+	})
+	want := []string{
+		"external-outcome:command_not_found:" + contract.VirtualExternalBinDir + "/" + "missing-tool",
+		"external-outcome:canceled:report-tool",
+		"external-outcome:unknown:raw-tool",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("summarizeTrace(external outcomes) = %#v, want %#v", got, want)
 	}
 }
 

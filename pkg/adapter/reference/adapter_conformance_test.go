@@ -9,6 +9,8 @@ import (
 	"github.com/khicago/simsh/pkg/contract"
 )
 
+const referenceConformanceExternalObservation = "external-outcome:command_not_found:missing-tool"
+
 func TestReferenceAdapterConformance(t *testing.T) {
 	adapter := New(referenceConformanceOptions())
 
@@ -76,11 +78,20 @@ func TestReferenceAdapterConformance(t *testing.T) {
 			if !strings.Contains(observations, "denied:/knowledge_base/reference/guide.md") {
 				t.Fatalf("observed observations missing denial: %q", observations)
 			}
+			if !strings.Contains(observations, referenceConformanceExternalObservation) {
+				t.Fatalf("observed observations missing external outcome: %q", observations)
+			}
+			if !containsObservation(state.Observations, referenceConformanceExternalObservation) {
+				t.Fatalf("observed state observations = %v, want external outcome", state.Observations)
+			}
 		},
 		CheckCheckpointed: func(t *testing.T, snapshot contracttest.Snapshot) {
 			state := decodeReferenceState(t, []byte(snapshot.ReadFile(t, "/memory/status.json")))
 			if state.Freshness != "checkpointed" {
 				t.Fatalf("checkpointed freshness = %q, want %q", state.Freshness, "checkpointed")
+			}
+			if !containsObservation(state.Observations, referenceConformanceExternalObservation) {
+				t.Fatalf("checkpointed observations = %v, want external outcome preserved", state.Observations)
 			}
 		},
 		CheckResumed: func(t *testing.T, snapshot contracttest.Snapshot) {
@@ -93,6 +104,12 @@ func TestReferenceAdapterConformance(t *testing.T) {
 			}
 			if !containsObservation(state.Observations, "denied:/knowledge_base/reference/guide.md") {
 				t.Fatalf("resumed observations = %v, want denied guide observation preserved", state.Observations)
+			}
+			if !containsObservation(state.Observations, referenceConformanceExternalObservation) {
+				t.Fatalf("resumed observations = %v, want external outcome preserved", state.Observations)
+			}
+			if observations := snapshot.ReadFile(t, virtualPath("memory", "observations.md")); !strings.Contains(observations, referenceConformanceExternalObservation) {
+				t.Fatalf("resumed observations file missing external outcome: %q", observations)
 			}
 		},
 		CheckClosed: func(t *testing.T, snapshot contracttest.Snapshot) {
@@ -188,6 +205,9 @@ func referenceConformanceObserveResult() contract.ExecutionResult {
 			ReadPaths:    []string{"/knowledge_base/reference/guide.md", "/resources/checklists/plan.json"},
 			WrittenPaths: []string{"/task_outputs/plan.txt"},
 			DeniedPaths:  []string{"/knowledge_base/reference/guide.md"},
+			ExternalOutcomes: []contract.ExecutionTraceStep{
+				{Command: "missing-tool", OutcomeKind: contract.ExternalOutcomeCommandNotFound},
+			},
 		},
 	}
 }

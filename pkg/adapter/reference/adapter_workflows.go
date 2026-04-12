@@ -27,7 +27,33 @@ func summarizeTrace(trace contract.ExecutionTrace) []string {
 	for _, pathValue := range trace.DeniedPaths {
 		lines = append(lines, "denied:"+pathValue)
 	}
+	for _, outcome := range trace.ExternalOutcomes {
+		command := externalOutcomeObservationCommand(outcome)
+		kind := strings.TrimSpace(string(outcome.OutcomeKind))
+		if kind == "" {
+			kind = "unknown"
+		}
+		lines = append(lines, fmt.Sprintf("external-outcome:%s:%s", kind, command))
+	}
 	return lines
+}
+
+func externalOutcomeObservationCommand(outcome contract.ExecutionTraceStep) string {
+	command := strings.TrimSpace(outcome.Command)
+	if command != "" {
+		return command
+	}
+	resolvedPath := strings.TrimSpace(outcome.ResolvedPath)
+	if resolvedPath != "" {
+		return resolvedPath
+	}
+	for _, arg := range outcome.Argv {
+		arg = strings.TrimSpace(arg)
+		if arg != "" {
+			return arg
+		}
+	}
+	return "unknown"
 }
 
 func collectPrefixedPaths(paths []string, prefix string) []string {
