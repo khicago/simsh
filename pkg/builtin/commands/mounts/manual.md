@@ -44,9 +44,9 @@ Refresh one explicit mount target:
 
     mounts refresh <mount-target>
 
-Require explicit narrow refresh target:
+Require an explicit narrow refresh target below the mount root:
 
-    mounts refresh --require-narrow <mount-target>
+    mounts refresh --require-narrow <mount-target>/<child>
 
 ## NOTES
 

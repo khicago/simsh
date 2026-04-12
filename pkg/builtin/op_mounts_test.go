@@ -147,8 +147,68 @@ func TestRunMountsRefresh(t *testing.T) {
 	}
 }
 
+func TestRunMountsRefreshRequireNarrowRejectsMountRootTarget(t *testing.T) {
+	alphaPath := "/" + "alpha"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteModerate,
+							Consistency:         contract.MountConsistency{RefreshRequired: true},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", "--require-narrow", alphaPath})
+	if code != contract.ExitCodeUnsupported || !strings.Contains(out, "is not narrow relative to mount root") {
+		t.Fatalf("runMounts(refresh require narrow root) = (%q, %d), want narrow refusal", out, code)
+	}
+}
+
+func TestRunMountsRefreshRequireNarrowAcceptsDescendantTarget(t *testing.T) {
+	alphaPath := "/" + "alpha"
+	target := alphaPath + "/" + "nested"
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{
+				builtinRefreshMount{
+					builtinStatusMount: builtinStatusMount{
+						point: alphaPath,
+						profile: contract.MountProfile{
+							TruthModel:          contract.MountTruthProjection,
+							MaterializationMode: contract.MountMaterializationCached,
+							WriteSemantics:      contract.MountWriteReadOnly,
+							LatencyClass:        contract.MountLatencyRemoteModerate,
+							Consistency:         contract.MountConsistency{RefreshRequired: true},
+						},
+					},
+					effective: []string{target},
+					refreshed: []string{target},
+				},
+			},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", "--require-narrow", target})
+	if code != 0 || !strings.Contains(out, "refreshed=1") || !strings.Contains(out, "effective=1") {
+		t.Fatalf("runMounts(refresh require narrow descendant) = (%q, %d), want refresh summary", out, code)
+	}
+}
+
 func TestRunMountsRefreshPreservesUnsupportedDetail(t *testing.T) {
 	alphaPath := "/" + "alpha"
+	target := alphaPath + "/" + "nested"
 	runtime := engine.CommandRuntime{
 		Ctx: context.Background(),
 		Ops: contract.Ops{
@@ -168,15 +228,15 @@ func TestRunMountsRefreshPreservesUnsupportedDetail(t *testing.T) {
 						MountPoint:   alphaPath,
 						Capability:   "refresh",
 						LatencyClass: contract.MountLatencyRemoteHigh,
-						Detail:       alphaPath + ": remote_high_latency refresh target " + alphaPath + " is not scoped below mount root " + alphaPath,
+						Detail:       alphaPath + ": adapter refused refresh target " + target,
 					},
 				},
 			},
 		},
 	}
 
-	out, code := runMounts(runtime, []string{"refresh", alphaPath})
-	if code != contract.ExitCodeUnsupported || !strings.Contains(out, "not scoped below mount root") {
+	out, code := runMounts(runtime, []string{"refresh", target})
+	if code != contract.ExitCodeUnsupported || !strings.Contains(out, "adapter refused refresh target") {
 		t.Fatalf("runMounts(refresh unsupported detail) = (%q, %d), want preserved refusal detail", out, code)
 	}
 }

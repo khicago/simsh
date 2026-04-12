@@ -67,7 +67,7 @@ func specMounts() engine.CommandSpec {
 			"mounts",
 			"mounts --fmt json",
 			"mounts refresh " + "/" + "knowledge_base",
-			"mounts refresh --require-narrow " + "/" + "knowledge_base",
+			"mounts refresh --require-narrow " + "/" + "knowledge_base" + "/" + "guide.md",
 		},
 		DetailedManual: LoadEmbeddedManual("mounts"),
 		Run:            runMounts,
