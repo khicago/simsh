@@ -381,6 +381,54 @@ func TestRefreshMountRequireNarrowRejectsBroadenedReportedTargets(t *testing.T) 
 	}
 }
 
+func TestRefreshMountRequireNarrowRejectsRequestScopeBroadening(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteModerate,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha"},
+			RefreshedTargets: []string{mountRefreshTestRoot() + "/" + "other"},
+		},
+	}
+	target := mount.point + "/" + "alpha" + "/" + "data.json"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets:       []string{target},
+		RequireNarrow: true,
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "requested refresh scope") {
+		t.Fatalf("RefreshMount(...) error = %v, want request-scope broaden refusal", err)
+	}
+}
+
+func TestRefreshMountRemoteHighRejectsRequestScopeBroadening(t *testing.T) {
+	mount := &dispatchRefreshMount{
+		dispatchTestMount: newDispatchTestMount(MountProfile{
+			LatencyClass:        MountLatencyRemoteHigh,
+			SupportedCLIClasses: []MountCLIClass{MountCLIRead},
+			Consistency:         MountConsistency{RefreshRequired: true},
+		}),
+		result: RefreshResult{
+			EffectiveTargets: []string{mountRefreshTestRoot() + "/" + "alpha"},
+		},
+	}
+	target := mount.point + "/" + "alpha" + "/" + "data.json"
+	_, err := RefreshMount(context.Background(), mount, RefreshRequest{
+		Targets: []string{target},
+	})
+	if !errors.Is(err, ErrUnsupported) {
+		t.Fatalf("RefreshMount(...) error = %v, want ErrUnsupported", err)
+	}
+	if !strings.Contains(err.Error(), "requested refresh scope") {
+		t.Fatalf("RefreshMount(...) error = %v, want remote_high_latency request-scope broaden refusal", err)
+	}
+}
+
 func TestRefreshMountDefaultsEffectiveTargetsToRequestedTargets(t *testing.T) {
 	mount := &dispatchRefreshMount{dispatchTestMount: newDispatchTestMount(MountProfile{
 		LatencyClass:        MountLatencyRemoteModerate,

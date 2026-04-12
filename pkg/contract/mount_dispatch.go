@@ -497,26 +497,46 @@ func normalizeRefreshResult(mount VirtualMount, req RefreshRequest, result Refre
 		result.EffectiveTargets = append([]string(nil), req.Targets...)
 	}
 	if req.RequireNarrow || profile.LatencyClass == MountLatencyRemoteHigh {
-		if err := checkNarrowRefreshResultTargets(mount, "effective", result.EffectiveTargets); err != nil {
+		if err := checkScopedRefreshResultTargets(mount, "effective", result.EffectiveTargets, req.Targets); err != nil {
 			return RefreshResult{}, err
 		}
-		if err := checkNarrowRefreshResultTargets(mount, "refreshed", result.RefreshedTargets); err != nil {
+		if err := checkScopedRefreshResultTargets(mount, "refreshed", result.RefreshedTargets, req.Targets); err != nil {
 			return RefreshResult{}, err
 		}
-		if err := checkNarrowRefreshResultTargets(mount, "refused", result.RefusedTargets); err != nil {
+		if err := checkScopedRefreshResultTargets(mount, "refused", result.RefusedTargets, req.Targets); err != nil {
 			return RefreshResult{}, err
 		}
 	}
 	return result, nil
 }
 
-func checkNarrowRefreshResultTargets(mount VirtualMount, label string, targets []string) error {
+func checkScopedRefreshResultTargets(mount VirtualMount, label string, targets []string, requested []string) error {
 	for _, target := range targets {
 		if !isNarrowRefreshTarget(mount, target) {
 			return overMountBudget(mount, "refresh", fmt.Sprintf("refresher broadened %s target %s beyond required narrow scope under %s", label, target, mount.MountPoint()))
 		}
+		if !isWithinRefreshRequestScope(target, requested) {
+			return overMountBudget(mount, "refresh", fmt.Sprintf("refresher broadened %s target %s beyond requested refresh scope", label, target))
+		}
 	}
 	return nil
+}
+
+func isWithinRefreshRequestScope(target string, requested []string) bool {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return false
+	}
+	for _, requestTarget := range requested {
+		requestTarget = strings.TrimSpace(requestTarget)
+		if requestTarget == "" {
+			continue
+		}
+		if target == requestTarget || strings.HasPrefix(target, requestTarget+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func isNarrowRefreshTarget(mount VirtualMount, target string) bool {
