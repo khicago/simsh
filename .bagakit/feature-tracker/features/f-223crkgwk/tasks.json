@@ -79,7 +79,7 @@
         "go test ./benchmarks/... -count=1",
         "go test ./..."
       ],
-      "last_commit_hash": "PENDING",
+      "last_commit_hash": "9f15d1b",
       "notes": [
         "Added a repo-level evidence manifest that indexes the checked-in native baseline, Terminal-Bench comparison artifacts, paired uplift artifacts, and canonical refresh commands.",
         "Added a guard test so checked-in proof artifacts, source report breadcrumbs, task manifest breadcrumbs, and snapshot breadcrumbs cannot silently drift apart."

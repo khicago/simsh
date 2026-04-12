@@ -4,13 +4,13 @@
   "title": "Advance simsh runtime contracts and proof surfaces",
   "slug": "simsh-runtime-proof-evolution",
   "goal": "Implement the next-stage upgrades for simsh around session execution state, trace fidelity, external seam contracts, mount contract execution, and proof/attestation surfaces, after prep refactors have landed.",
-  "status": "in_progress",
+  "status": "done",
   "workspace_mode": "current_tree",
   "base_ref": "main",
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
-  "current_task_id": "T-005",
+  "current_task_id": "",
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
@@ -18,10 +18,10 @@
   },
   "gate": {
     "last_result": "pass",
-    "last_task_id": "T-004",
+    "last_task_id": "T-005",
     "last_check_commands": [
-      "go test ./pkg/contract ./pkg/engine ./pkg/builtin -count=1",
-      "go test ./pkg/fs ./pkg/mount ./pkg/service ./pkg/engine/runtime -count=1"
+      "go test ./benchmarks/... -count=1",
+      "go test ./..."
     ],
     "last_log_path": null
   },
@@ -77,6 +77,14 @@
     {
       "action": "task_started",
       "detail": "T-005"
+    },
+    {
+      "action": "task_finished",
+      "detail": "T-005 -> done"
+    },
+    {
+      "action": "feat_finished",
+      "detail": "f-223crkgwk -> done"
     }
   ]
 }
