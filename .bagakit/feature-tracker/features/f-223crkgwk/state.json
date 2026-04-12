@@ -10,7 +10,7 @@
   "branch": "",
   "worktree_name": "",
   "worktree_path": "",
-  "current_task_id": "T-004",
+  "current_task_id": "T-005",
   "counters": {
     "gate_fail_streak": 0,
     "no_progress_rounds": 0,
@@ -18,10 +18,10 @@
   },
   "gate": {
     "last_result": "pass",
-    "last_task_id": "T-003",
+    "last_task_id": "T-004",
     "last_check_commands": [
-      "go test ./pkg/contract ./pkg/engine ./pkg/engine/runtime ./pkg/service ./pkg/service/httpapi -count=1",
-      "go test ./cmd/simsh-cli ./cmd/simshd ./pkg/adapter/... ./pkg/builtin ./pkg/cmd ./pkg/fs ./pkg/mount ./pkg/sh -count=1"
+      "go test ./pkg/contract ./pkg/engine ./pkg/builtin -count=1",
+      "go test ./pkg/fs ./pkg/mount ./pkg/service ./pkg/engine/runtime -count=1"
     ],
     "last_log_path": null
   },
@@ -69,6 +69,14 @@
     {
       "action": "task_started",
       "detail": "T-004"
+    },
+    {
+      "action": "task_finished",
+      "detail": "T-004 -> done"
+    },
+    {
+      "action": "task_started",
+      "detail": "T-005"
     }
   ]
 }

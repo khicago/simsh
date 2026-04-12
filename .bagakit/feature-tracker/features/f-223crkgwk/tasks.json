@@ -54,18 +54,19 @@
     {
       "id": "T-004",
       "title": "Make mount execution limits and control surfaces more operational",
-      "status": "in_progress",
+      "status": "done",
       "summary": "Expose and enforce more of the documented mount contract around budgets, refresh/status, and execution-time scope control.",
       "gate_result": "pass",
       "last_gate_commands": [
         "go test ./pkg/contract ./pkg/engine ./pkg/builtin -count=1",
         "go test ./pkg/fs ./pkg/mount ./pkg/service ./pkg/engine/runtime -count=1"
       ],
-      "last_commit_hash": "f69de07",
+      "last_commit_hash": "2e3be7b",
       "notes": [
         "Wave 1A made declared mount scope/batch/search budgets executable as preflight refusals.",
         "Wave 1B added a generic read-only mounts builtin for active mount profile/SLO/capability introspection.",
-        "Wave 1C adds an optional runtime-status evidence surface and keeps status transport failures separate from mount freshness/materialization truth."
+        "Wave 1C adds an optional runtime-status evidence surface and keeps status transport failures separate from mount freshness/materialization truth.",
+        "Explicit refresh control was deliberately left out of T-004 closeout until refresh scope/budget semantics become a generic runtime contract."
       ]
     },
     {
