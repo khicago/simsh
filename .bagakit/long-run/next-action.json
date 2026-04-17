@@ -1,7 +1,0 @@
-{
-  "selection_strategy": "status_confidence_evidence_priority",
-  "resume_command": "bash .bagakit/long-run/check_and_resume.sh",
-  "next_row": null,
-  "next_feature": null,
-  "footer_line": "- LongRun: Item=none; Status=blocked; Confidence=0.00; Evidence=no actionable row; Next=bash .bagakit/long-run/check_and_resume.sh"
-}

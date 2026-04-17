@@ -1,5 +1,0 @@
-gate_time=2026-04-06T09:19:00Z
-project_type=non_ui
-result=pass
-commands:
-- go test ./... => pass (0)
