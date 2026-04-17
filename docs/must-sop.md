@@ -4,7 +4,7 @@ This SOP is generated from docs frontmatter. Do not edit manually.
 
 ## Update Requirements
 - When a document with SOP frontmatter changes, regenerate this file and commit the result:
-  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="${BAGAKIT_LIVING_DOCS_SKILL_DIR:-${BAGAKIT_HOME:-$HOME/.bagakit}/skills/bagakit-living-docs}"`
+  - `export BAGAKIT_LIVING_DOCS_SKILL_DIR="<path-to-bagakit-living-docs-skill>"`
   - `sh "$BAGAKIT_LIVING_DOCS_SKILL_DIR/scripts/living-docs-generate-sop.sh" .`
 - Add new SOP items by updating the `sop` list in the source document frontmatter.
 - Keep SOP items small and actionable; use the source document for details.
@@ -149,6 +149,14 @@ Source: `docs/notes-v0-3-0-release-readiness.md`
 Source: `docs/notes-v0-3-1-patch-release-readiness.md`
 - Read this doc before cutting the v0.3.1 patch line or claiming the current post-v0.3.0 tree is ready to tag.
 - Update this doc when the v0.3.1 patch scope, evidence set, or cut criteria change.
+- Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
+
+### Verification Scheme
+Source: `docs/notes-verification-scheme.md`
+- Read this doc before adding a new test layer, benchmark family, or CI gate.
+- Keep the five verification layers distinct: unit/contract, release kernel gate, native reference, external comparison, paired uplift.
+- Do not adopt an external benchmark wholesale, and do not put LLM-in-the-loop work on the default CI path.
+- Update this doc when Makefile verify targets, CI jobs, or layer ownership change.
 - Regenerate `docs/must-sop.md` after SOP/frontmatter changes.
 
 ### Execute Preflight Performance References

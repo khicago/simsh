@@ -297,7 +297,19 @@ func TestNewDefaultFilesystemUsesBaseAndCwdFallback(t *testing.T) {
 
 	t.Run("cwd fallback", func(t *testing.T) {
 		base := t.TempDir()
-		t.Chdir(base)
+		previous, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("os.Getwd() error = %v", err)
+		}
+		if err := os.Chdir(base); err != nil {
+			t.Fatalf("os.Chdir(%q) error = %v", base, err)
+		}
+		t.Setenv("PWD", base)
+		t.Cleanup(func() {
+			if err := os.Chdir(previous); err != nil {
+				t.Errorf("restore cwd to %q: %v", previous, err)
+			}
+		})
 		fsys := newDefaultFilesystemForTest(t, "")
 		assertDefaultZoneLayout(t, fsys, base)
 	})

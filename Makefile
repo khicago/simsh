@@ -1,5 +1,6 @@
 GO ?= go
 GOLANGCI_LINT ?= golangci-lint
+STATICCHECK ?= staticcheck
 PNPM ?= pnpm
 
 export CODEX_HOME := $(PWD)/.codex
@@ -9,17 +10,23 @@ LISTEN ?= :18080
 PROFILE ?= core-strict
 CMD ?= env PATH
 
-.PHONY: help test test-race test-race-core perf-check lint check release-check doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
+.PHONY: help test test-unit test-native test-compare test-uplift test-proof test-race test-race-core perf-check lint check release-check verify doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
 
 help:
 	@echo "Common targets:"
 	@echo "  make test        # go test ./..."
+	@echo "  make test-unit   # L0: pkg + cmd package tests"
+	@echo "  make test-native # L2: native reference suite tests"
+	@echo "  make test-compare # L3: external mapping + Terminal-Bench prototype tests"
+	@echo "  make test-uplift # L4: paired uplift package tests (no report refresh)"
+	@echo "  make test-proof  # L2-L4 benchmark package tests"
 	@echo "  make test-race   # go test -race ./..."
 	@echo "  make test-race-core # focused race gate for core runtime entrypoints"
 	@echo "  make perf-check  # allocation regression gate for prepared execution"
-	@echo "  make lint        # staticcheck ./... (if installed)"
+	@echo "  make lint        # staticcheck ./... (required)"
 	@echo "  make check       # test + lint"
 	@echo "  make release-check # check + perf gate + focused race gate"
+	@echo "  make verify      # default operator/CI gate: release-check"
 	@echo "  make doc         # regenerate simsh.md"
 	@echo "  make cli         # run interactive simsh-cli"
 	@echo "  make cli-c CMD='ls -l /'    # run one command via simsh-cli"
@@ -32,6 +39,20 @@ help:
 test:
 	$(GO) test ./...
 
+test-unit:
+	$(GO) test ./pkg/... ./cmd/...
+
+test-native:
+	$(GO) test ./benchmarks/simsh_native_reference ./benchmarks -count=1
+
+test-compare:
+	$(GO) test ./benchmarks/external_mapping ./benchmarks/terminal_bench_compare -count=1
+
+test-uplift:
+	$(GO) test ./benchmarks/paired_uplift -count=1
+
+test-proof: test-native test-compare test-uplift
+
 test-race:
 	$(GO) test -race ./...
 
@@ -42,15 +63,17 @@ perf-check:
 	$(GO) test ./pkg/engine -run 'TestExecutePrepared(AllocReductionGate|MatchesExecute)|TestExecuteCachesPreparedOpsForStableOps' -count=1
 
 lint:
-	@if command -v staticcheck >/dev/null 2>&1; then \
-		staticcheck ./...; \
-	else \
-		echo "staticcheck not installed; skip lint"; \
-	fi
+	@command -v $(STATICCHECK) >/dev/null 2>&1 || { \
+		echo "staticcheck is required; install the version pinned by CI"; \
+		exit 1; \
+	}
+	$(STATICCHECK) ./...
 
 check: test lint
 
 release-check: check perf-check test-race-core
+
+verify: release-check
 
 doc:
 	$(GO) run ./cmd/simsh-doc

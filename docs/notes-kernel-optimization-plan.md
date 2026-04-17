@@ -74,24 +74,27 @@ Adapter-specific product logic is also out of scope except where it pressure-tes
 
 ## Current Pressure Points
 
-These are the main areas where the current kernel needs to improve:
+The original P0-P3 kernel gaps below were closed by K-001 through K-036.
+Treat them as historical pressure, not as the current work queue.
 
-### 1. Boundary trust
-- Path access/capability claims are not yet strong enough to be treated as hard truth in all cases.
-- Real-path escape handling in default filesystem implementations needs to be tightened.
+### Resolved in the current tree
 
-### 2. Trace fidelity
-- `ExecutionTrace` is directionally right but does not yet capture every important mutation/seam with enough precision to be considered full SSOT.
+1. Boundary trust: default filesystems share `pathguard` real-path checks; mixed mount/filesystem mutation batches fail closed; mount-backed paths stay immutable.
+2. Path resolution: session-local virtual `cwd` and relative-path resolution exist and stay capability-limited.
+3. Trace fidelity: mutation, denial, cancel/timeout, and structured `ExternalOutcomes` are first-class enough for planners and the paired proof harness.
+4. External seam: injected external-command results keep kind, exit, stderr, and provider-failure truth instead of collapsing to stdout.
+5. Session interruption: filesystem and engine loops honor `ctx`; session cancel is observable.
 
-### 3. Path resolution model
-- The kernel currently leans heavily on absolute paths and a fixed root view, which is safe but not yet natural enough for agent work.
-- The project still lacks a fully explicit model for session-local `cwd`, relative path resolution, and how those semantics interact with mounts and capability restrictions.
+### Remaining pressure
 
-### 4. External seam completeness
-- The `/bin` external command seam is still too text-first and loses structured detail that planners and reviewers would want.
+These are the current gaps. They are mostly product-boundary and proof-scope issues, not missing kernel nouns.
 
-### 5. Session and cancellation realism
-- Sessions exist, but the broader kernel model for long-running, isolated, and interruptible work is not yet fully hardened.
+1. Isolation is logical, not OS-level. `simsh` is a constrained workspace, not a container.
+2. HTTP one-shot execute still accepts host-root and policy overrides. That is a trusted-local integration surface, not a multi-tenant ceiling.
+3. Compatibility profiles (`bash-plus`, `zsh-lite`) are thin. Do not advertise them as shell completeness.
+4. Proof is real but narrow: native scenarios, one Terminal-Bench prototype pair, and a 3-task paired uplift. Do not treat those numbers as a leaderboard.
+5. Entry TUI is an operator console, not a product. Polish it as a status surface; do not grow it into a multiplexer or AgentOS.
+6. Documentation and inbox can lag the tree. Treat freshness as part of kernel quality.
 
 ## Workstreams
 
@@ -242,11 +245,18 @@ When choosing whether to defer something:
 
 ## Immediate Next Actions
 
-The next kernel-focused loop should start with:
-- iterating on the committed `simsh`-native reference benchmark after the first baseline report;
-- raising benchmark realism carefully without turning P4 into product orchestration work;
-- keeping legacy feat schema and archive cleanup in a separate non-kernel maintenance feat;
-- using the benchmark results to decide future kernel investment rather than adding primitives by default.
+The K-001 through K-036 kernel and proof wave is closed.
+`v0.3.0` is tagged; current `main` is the `v0.3.1` patch candidate.
+
+Do not open another primitive wave by default. The next useful moves are:
+
+1. Keep the verification scheme honest: `docs/notes-verification-scheme.md`, named Makefile targets, and CI on `make verify`.
+2. Grow L2/L4 only when a task pressures kernel truth (cwd, search/edit, mount refusal, traces). Do not adopt Terminal-Bench or SWE-bench wholesale.
+3. Find one real embedder / dogfood path before adding more synthetic adapters.
+4. If the operator console is touched, steal status language (idle / running / failed) and keep TUI downstream of the kernel.
+5. Tag `v0.3.1` when release-check and the checked-in evidence set still match the patch-closeout note.
+
+Use `docs/notes-kernel-execution-backlog.md` for historical item evidence, not as an open queue.
 
 ## Broader System Evolution
 
@@ -272,7 +282,7 @@ External research and field notes collected for this plan:
 - `knowledge_base/papers/agent-runtime/`
 
 Current execution artifacts:
-- `.bagakit/ft-harness/feats/f-20260321-default-filesystem-boundary-enforcement/`
-- `.bagakit/ft-harness/feats/f-20260321-virtual-cwd-path-resolution/`
-- `.bagakit/ft-harness/feats/f-20260321-mutation-trace-fidelity/`
-- `.bagakit/ft-harness/feats/f-20260321-cancel-timeout-effectiveness/`
+- `docs/notes-kernel-execution-backlog.md`
+- `docs/notes-verification-scheme.md`
+- `docs/notes-v0-3-1-patch-release-readiness.md`
+- archived feats under `.bagakit/ft-harness/feats-archived/`

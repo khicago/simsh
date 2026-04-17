@@ -35,6 +35,8 @@ This guidebook is a reading map. Keep it stable and index-style; do not duplicat
   - `docs/architecture-memory-skills-extension.md`
   - `docs/architecture-high-performance-mount-system.md`
   - `docs/architecture-paired-ab-uplift-proof-harness.md`
+- Verification scheme:
+  - `docs/notes-verification-scheme.md`
 - Historical implementation retrospective:
   - `docs/notes-first-version-plan.md`
 
