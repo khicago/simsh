@@ -112,15 +112,6 @@ func defaultBuiltinRegistrations() []defaultBuiltinRegistration {
 	}
 }
 
-func defaultBuiltinOwnershipByName() map[string]defaultBuiltinRegistration {
-	registrations := defaultBuiltinRegistrations()
-	ownership := make(map[string]defaultBuiltinRegistration, len(registrations))
-	for _, registration := range registrations {
-		ownership[registration.Name] = registration
-	}
-	return ownership
-}
-
 func normalizeDefaultCommandName(name string) string {
 	return strings.TrimSpace(name)
 }
