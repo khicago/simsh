@@ -1206,11 +1206,11 @@ func TestExecutePreparedMatchesExecute(t *testing.T) {
 	}
 }
 
-func TestExecutePreparedAllocReduction(t *testing.T) {
+func TestExecutePreparedAllocReductionGate(t *testing.T) {
 	eng := newTestEngine()
 	ops := readOnlyOps(newTestFS())
 	// Force non-cacheable Execute path so this test continues to measure
-	// PrepareOps overhead against ExecutePrepared.
+	// repeated PrepareOps overhead against the explicit prepared hot path.
 	ops.CommandAliases = map[string][]string{"noop": {"echo"}}
 	prepared, err := eng.PrepareOps(context.Background(), ops)
 	if err != nil {
@@ -1232,7 +1232,10 @@ func TestExecutePreparedAllocReduction(t *testing.T) {
 	})
 
 	if preparedAllocs >= baseAllocs {
-		t.Fatalf("expected prepared execution to allocate less: prepared=%.2f base=%.2f", preparedAllocs, baseAllocs)
+		t.Fatalf("TestExecutePreparedAllocReductionGate: prepared execution allocations/op = %.2f, want less than cold Execute allocations/op %.2f", preparedAllocs, baseAllocs)
+	}
+	if preparedAllocs > baseAllocs*0.95 {
+		t.Fatalf("TestExecutePreparedAllocReductionGate: prepared execution allocations/op = %.2f, want at least 5%% below cold Execute allocations/op %.2f", preparedAllocs, baseAllocs)
 	}
 }
 

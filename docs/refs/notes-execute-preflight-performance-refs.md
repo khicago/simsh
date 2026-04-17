@@ -59,7 +59,20 @@ This reference list targets one class of latency issue: **command execution is f
 - Validate optimizations with statistical rigor:
   - Keep microbenchmarks for representative commands (e.g. `echo`, redirect write).
   - Compare with `benchstat` and track allocs/op, B/op, and ns/op.
+  - Use wall-clock benchmark deltas as review evidence, not as a brittle local
+    release gate, unless the project has a stable CI performance environment.
+  - Protect repeatable hot-path properties in CI with allocation or operation
+    count gates when those properties are deterministic enough to test.
 
 - Keep correctness guardrails:
   - Add behavior-equivalence tests between default execute path and prepared execute path.
   - Keep policy/timeout and path-access semantics unchanged.
+
+- Current release gate:
+  - `make perf-check` runs the prepared-execution allocation gate plus
+    behavior-equivalence checks.
+  - `make release-check` includes `perf-check`, full tests, lint, and the
+    focused race gate.
+  - The gate protects the cold-preflight-vs-prepared allocation relationship;
+    microbenchmarks under `pkg/engine` remain advisory evidence for deeper
+    tuning and should be compared with `benchstat` during performance work.

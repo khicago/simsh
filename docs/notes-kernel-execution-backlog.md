@@ -1122,6 +1122,36 @@ Current `f-223crkgwk / T-004` alignment:
 - Rollback note:
   - If a future adapter needs richer breadcrumb identity, add an explicit public identity field to the artifact schema instead of reintroducing raw host-local paths.
 
+### K-036: Add prepared execution performance regression gates
+- Feat: `f-227crtkb5`
+- Status: done
+- Why now: the project already has `PreparedOps` and advisory microbenchmarks, but release validation did not yet include an explicit performance contract. To move toward world-class performance discipline, the first step should protect a deterministic hot-path property rather than depend on noisy local wall-clock thresholds.
+- Kernel invariant: prepared execution should preserve runtime semantics while avoiding repeated cold-path normalization and bootstrap overhead; performance gates must not change runtime behavior to make benchmark numbers look better.
+- Files to touch:
+  - `Makefile`
+  - `pkg/engine/engine_test.go`
+  - `docs/refs/notes-execute-preflight-performance-refs.md`
+  - `docs/notes-kernel-optimization-plan.md`
+  - `docs/notes-kernel-execution-backlog.md`
+- Validation command:
+  - `make perf-check`
+  - `go test ./pkg/engine -run 'TestExecutePrepared(AllocReductionGate|MatchesExecute)|TestExecuteCachesPreparedOpsForStableOps' -count=1`
+  - `make release-check`
+- Done gate:
+  - A dedicated `perf-check` target exists and is included in `release-check`.
+  - The gate protects the prepared execution allocation relationship against a non-cacheable cold `Execute` path.
+  - Existing behavior-equivalence and warm-cache checks stay part of the performance gate.
+  - Docs distinguish deterministic allocation gates from advisory wall-clock microbenchmarks.
+- Notes:
+  - `pkg/engine` microbenchmarks remain useful review evidence, especially with `benchstat`, but they are not hard release gates because local wall-clock timing is too environment-sensitive.
+  - This slice intentionally does not change `PrepareOps`, dispatch, mount, adapter, or proof semantics.
+- Non-goals:
+  - Do not introduce machine-specific ns/op thresholds.
+  - Do not tune runtime code before the gate is in place.
+  - Do not broaden this into full performance CI, pprof automation, or mount fanout metrics in the same slice.
+- Rollback note:
+  - If the allocation gate proves flaky on CI, keep the `perf-check` target and behavior-equivalence checks, then replace the allocation assertion with a more deterministic operation-count or fixture-level gate rather than dropping performance validation entirely.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

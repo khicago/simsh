@@ -9,16 +9,17 @@ LISTEN ?= :18080
 PROFILE ?= core-strict
 CMD ?= env PATH
 
-.PHONY: help test test-race test-race-core lint check release-check doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
+.PHONY: help test test-race test-race-core perf-check lint check release-check doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
 
 help:
 	@echo "Common targets:"
 	@echo "  make test        # go test ./..."
 	@echo "  make test-race   # go test -race ./..."
 	@echo "  make test-race-core # focused race gate for core runtime entrypoints"
+	@echo "  make perf-check  # allocation regression gate for prepared execution"
 	@echo "  make lint        # staticcheck ./... (if installed)"
 	@echo "  make check       # test + lint"
-	@echo "  make release-check # check + focused race gate"
+	@echo "  make release-check # check + perf gate + focused race gate"
 	@echo "  make doc         # regenerate simsh.md"
 	@echo "  make cli         # run interactive simsh-cli"
 	@echo "  make cli-c CMD='ls -l /'    # run one command via simsh-cli"
@@ -37,6 +38,9 @@ test-race:
 test-race-core:
 	$(GO) test -race ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine ./cmd/simsh-cli
 
+perf-check:
+	$(GO) test ./pkg/engine -run 'TestExecutePrepared(AllocReductionGate|MatchesExecute)|TestExecuteCachesPreparedOpsForStableOps' -count=1
+
 lint:
 	@if command -v staticcheck >/dev/null 2>&1; then \
 		staticcheck ./...; \
@@ -46,7 +50,7 @@ lint:
 
 check: test lint
 
-release-check: check test-race-core
+release-check: check perf-check test-race-core
 
 doc:
 	$(GO) run ./cmd/simsh-doc

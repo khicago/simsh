@@ -198,10 +198,16 @@ First-pass metric gates:
 - session success threshold: `>= 0.80` across well-scoped reference tasks
 - reviewable patch latency target: median `<= 15m` on the reference patch tasks
 - async completion success target: `>= 0.60` for tasks designed to finish without step-by-step supervision
+- prepared execution preflight-overhead gate: release checks should include a
+  deterministic allocation gate that proves the reusable prepared execution
+  path stays cheaper than repeatedly rebuilding cold execution state
 
 Exit criteria:
 - At least one reference workload demonstrates that the kernel abstractions improve real agent work rather than only unit-test cleanliness.
 - Benchmark reports include threshold-based pass/fail judgments, not only raw metric output.
+- Release validation includes at least one repeatable hot-path performance
+  regression gate, while wall-clock microbenchmarks remain review evidence
+  unless the CI environment can support stable timing thresholds.
 
 ## Sequencing
 
