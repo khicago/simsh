@@ -27,6 +27,8 @@ const (
 	misunderstandingNoSessionCWD   = "session_cwd_not_persistent"
 	taxonomyBucketFailure          = "failure"
 	taxonomyBucketMisunderstanding = "environment_misunderstanding"
+	classificationSourceStructured = "structured_external_outcome"
+	classificationSourceCompatText = "compatibility_output"
 )
 
 type TaskManifest struct {
@@ -55,18 +57,27 @@ type PairedTaskBudget struct {
 }
 
 type StepRecord struct {
-	Index                    int    `json:"index"`
-	Label                    string `json:"label"`
-	Command                  string `json:"command"`
-	ExitCode                 int    `json:"exit_code"`
-	ObservationBytes         int    `json:"observation_bytes"`
-	ApproxObservationTokens  int    `json:"approx_observation_tokens"`
-	Classification           string `json:"classification"`
-	Retry                    bool   `json:"retry,omitempty"`
-	Wasted                   bool   `json:"wasted,omitempty"`
-	EnvironmentMisunderstood bool   `json:"environment_misunderstood,omitempty"`
-	MisunderstandingKind     string `json:"misunderstanding_kind,omitempty"`
-	Note                     string `json:"note,omitempty"`
+	Index                    int                      `json:"index"`
+	Label                    string                   `json:"label"`
+	Command                  string                   `json:"command"`
+	ExitCode                 int                      `json:"exit_code"`
+	ObservationBytes         int                      `json:"observation_bytes"`
+	ApproxObservationTokens  int                      `json:"approx_observation_tokens"`
+	Classification           string                   `json:"classification"`
+	ClassificationSource     string                   `json:"classification_source,omitempty"`
+	Retry                    bool                     `json:"retry,omitempty"`
+	Wasted                   bool                     `json:"wasted,omitempty"`
+	EnvironmentMisunderstood bool                     `json:"environment_misunderstood,omitempty"`
+	MisunderstandingKind     string                   `json:"misunderstanding_kind,omitempty"`
+	Note                     string                   `json:"note,omitempty"`
+	ExternalOutcomes         []ExternalOutcomeSummary `json:"external_outcomes,omitempty"`
+}
+
+type ExternalOutcomeSummary struct {
+	Command      string `json:"command,omitempty"`
+	ResolvedPath string `json:"resolved_path,omitempty"`
+	OutcomeKind  string `json:"outcome_kind,omitempty"`
+	ExitCode     *int   `json:"exit_code,omitempty"`
 }
 
 type SubstrateRunRecord struct {
@@ -171,11 +182,13 @@ type PairedUpliftArtifact struct {
 }
 
 type FailureTaxonomyEntry struct {
-	Bucket      string   `json:"bucket"`
-	Runtime     string   `json:"runtime"`
-	Kind        string   `json:"kind"`
-	Count       int      `json:"count"`
-	ScenarioIDs []string `json:"scenario_ids"`
+	Bucket                string   `json:"bucket"`
+	Runtime               string   `json:"runtime"`
+	Kind                  string   `json:"kind"`
+	Count                 int      `json:"count"`
+	ScenarioIDs           []string `json:"scenario_ids"`
+	ClassificationSources []string `json:"classification_sources,omitempty"`
+	ExternalOutcomeKinds  []string `json:"external_outcome_kinds,omitempty"`
 }
 
 type FailureTaxonomyReport struct {

@@ -50,16 +50,18 @@ func RenderPairedUpliftMarkdown(artifact PairedUpliftArtifact, taxonomy FailureT
 		"",
 		"## Failure Taxonomy",
 		"",
-		"| bucket | runtime | kind | count | scenarios |",
-		"| --- | --- | --- | --- | --- |",
+		"| bucket | runtime | kind | count | scenarios | sources | external outcomes |",
+		"| --- | --- | --- | --- | --- | --- | --- |",
 	)
 	for _, entry := range taxonomy.Entries {
-		lines = append(lines, fmt.Sprintf("| `%s` | `%s` | `%s` | %d | `%s` |",
+		lines = append(lines, fmt.Sprintf("| `%s` | `%s` | `%s` | %d | %s | %s | %s |",
 			entry.Bucket,
 			entry.Runtime,
 			entry.Kind,
 			entry.Count,
-			strings.Join(entry.ScenarioIDs, "`, `"),
+			markdownListCell(entry.ScenarioIDs),
+			markdownListCell(entry.ClassificationSources),
+			markdownListCell(entry.ExternalOutcomeKinds),
 		))
 	}
 	lines = append(lines,
@@ -71,4 +73,11 @@ func RenderPairedUpliftMarkdown(artifact PairedUpliftArtifact, taxonomy FailureT
 		"- Raw paired runs are freshness snapshots; this markdown is a deterministic downstream rendering of the checked-in snapshot.",
 	)
 	return strings.Join(lines, "\n") + "\n"
+}
+
+func markdownListCell(values []string) string {
+	if len(values) == 0 {
+		return "`n/a`"
+	}
+	return "`" + strings.Join(values, "`, `") + "`"
 }

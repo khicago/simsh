@@ -9,6 +9,7 @@ import (
 	"time"
 
 	externalmapping "github.com/khicago/simsh/benchmarks/external_mapping"
+	"github.com/khicago/simsh/pkg/contract"
 )
 
 func TestTaskManifestMatchesSupportedScenarioScope(t *testing.T) {
@@ -96,6 +97,148 @@ func TestRunPairedUpliftProducesExpectedOutcomes(t *testing.T) {
 	}
 }
 
+func TestClassifyCommandSurfaceUnavailableUsesStructuredExternalOutcome(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name           string
+		result         contract.ExecutionResult
+		command        string
+		wantMissing    bool
+		wantStructured bool
+		wantKind       contract.ExternalOutcomeKind
+	}{
+		{
+			name: "command not found",
+			result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeGeneral,
+				Stdout:   "json: command failed for a different reason",
+				Trace: contract.ExecutionTrace{
+					ExternalOutcomes: []contract.ExecutionTraceStep{
+						{Command: "json", OutcomeKind: contract.ExternalOutcomeCommandNotFound},
+					},
+				},
+			},
+			command:        "json",
+			wantMissing:    true,
+			wantStructured: true,
+			wantKind:       contract.ExternalOutcomeCommandNotFound,
+		},
+		{
+			name: "unsupported command",
+			result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeUnsupported,
+				Trace: contract.ExecutionTrace{
+					ExternalOutcomes: []contract.ExecutionTraceStep{
+						{ResolvedPath: contract.VirtualExternalBinDir + "/" + "rg", OutcomeKind: contract.ExternalOutcomeUnsupported},
+					},
+				},
+			},
+			command:        "rg",
+			wantMissing:    true,
+			wantStructured: true,
+			wantKind:       contract.ExternalOutcomeUnsupported,
+		},
+		{
+			name: "structured success defeats compatibility text",
+			result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeGeneral,
+				Stdout:   "json: not found",
+				Trace: contract.ExecutionTrace{
+					ExternalOutcomes: []contract.ExecutionTraceStep{
+						{Argv: []string{"json"}, OutcomeKind: contract.ExternalOutcomeSuccess},
+					},
+				},
+			},
+			command:        "json",
+			wantMissing:    false,
+			wantStructured: true,
+			wantKind:       contract.ExternalOutcomeSuccess,
+		},
+		{
+			name: "legacy compatibility fallback without structured outcome",
+			result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeGeneral,
+				Stderr:   "rg: not supported",
+			},
+			command:     "rg",
+			wantMissing: true,
+		},
+		{
+			name: "wrong command outcome does not classify",
+			result: contract.ExecutionResult{
+				ExitCode: contract.ExitCodeGeneral,
+				Trace: contract.ExecutionTrace{
+					ExternalOutcomes: []contract.ExecutionTraceStep{
+						{Command: "other", OutcomeKind: contract.ExternalOutcomeCommandNotFound},
+					},
+				},
+			},
+			command: "json",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := classifyCommandSurfaceUnavailable(tt.result, tt.command)
+			if got.Missing != tt.wantMissing {
+				t.Fatalf("classifyCommandSurfaceUnavailable(%q).Missing = %t, want %t; signal=%+v", tt.command, got.Missing, tt.wantMissing, got)
+			}
+			if got.UsedStructured != tt.wantStructured {
+				t.Fatalf("classifyCommandSurfaceUnavailable(%q).UsedStructured = %t, want %t; signal=%+v", tt.command, got.UsedStructured, tt.wantStructured, got)
+			}
+			if got.OutcomeKind != tt.wantKind {
+				t.Fatalf("classifyCommandSurfaceUnavailable(%q).OutcomeKind = %q, want %q; signal=%+v", tt.command, got.OutcomeKind, tt.wantKind, got)
+			}
+		})
+	}
+}
+
+func TestRecordStepKeepsExternalOutcomeBreadcrumb(t *testing.T) {
+	t.Parallel()
+
+	state := newTaskExecutionState(substrateThinCoreStateless, PairedTaskBudget{
+		MaxSteps:             3,
+		MaxObservationTokens: 100,
+	})
+	exitCode := contract.ExitCodeUnsupported
+	result := contract.ExecutionResult{
+		ExitCode: exitCode,
+		Trace: contract.ExecutionTrace{
+			ExternalOutcomes: []contract.ExecutionTraceStep{
+				{
+					Command:      "json",
+					ResolvedPath: contract.VirtualExternalBinDir + "/" + "json",
+					OutcomeKind:  contract.ExternalOutcomeUnsupported,
+					ExitCode:     &exitCode,
+				},
+			},
+		},
+	}
+
+	state.recordStep("read_task_count", "json len --fmt json", result, classificationMisunderstandingWithSource(misunderstandingMissingJSON, "json unavailable", classificationSourceStructured))
+
+	if len(state.run.StepsDetail) != 1 {
+		t.Fatalf("recordStep(...).StepsDetail length = %d, want 1", len(state.run.StepsDetail))
+	}
+	step := state.run.StepsDetail[0]
+	if step.ClassificationSource != classificationSourceStructured {
+		t.Fatalf("recordStep(...).ClassificationSource = %q, want %q", step.ClassificationSource, classificationSourceStructured)
+	}
+	if len(step.ExternalOutcomes) != 1 {
+		t.Fatalf("recordStep(...).ExternalOutcomes length = %d, want 1; step=%+v", len(step.ExternalOutcomes), step)
+	}
+	outcome := step.ExternalOutcomes[0]
+	if outcome.Command != "json" || outcome.ResolvedPath != contract.VirtualExternalBinDir+"/"+"json" || outcome.OutcomeKind != string(contract.ExternalOutcomeUnsupported) {
+		t.Fatalf("recordStep(...).ExternalOutcomes[0] = %+v, want json unsupported breadcrumb", outcome)
+	}
+	if outcome.ExitCode == nil || *outcome.ExitCode != contract.ExitCodeUnsupported {
+		t.Fatalf("recordStep(...).ExternalOutcomes[0].ExitCode = %v, want %d", outcome.ExitCode, contract.ExitCodeUnsupported)
+	}
+}
+
 func TestBuildFailureTaxonomyRollup(t *testing.T) {
 	t.Parallel()
 
@@ -116,8 +259,18 @@ func TestBuildFailureTaxonomyRollup(t *testing.T) {
 					Substrate:   substrateThinCoreStateless,
 					FailureKind: failureKindBudgetAfterFallback,
 					StepsDetail: []StepRecord{
-						{EnvironmentMisunderstood: true, MisunderstandingKind: misunderstandingMissingRG},
-						{EnvironmentMisunderstood: true, MisunderstandingKind: misunderstandingMissingRG},
+						{
+							EnvironmentMisunderstood: true,
+							MisunderstandingKind:     misunderstandingMissingRG,
+							ClassificationSource:     classificationSourceStructured,
+							ExternalOutcomes:         []ExternalOutcomeSummary{{OutcomeKind: string(contract.ExternalOutcomeUnsupported)}},
+						},
+						{
+							EnvironmentMisunderstood: true,
+							MisunderstandingKind:     misunderstandingMissingRG,
+							ClassificationSource:     classificationSourceStructured,
+							ExternalOutcomes:         []ExternalOutcomeSummary{{OutcomeKind: string(contract.ExternalOutcomeUnsupported)}},
+						},
 					},
 				},
 			},
@@ -126,7 +279,11 @@ func TestBuildFailureTaxonomyRollup(t *testing.T) {
 				Baseline: SubstrateRunRecord{
 					Substrate: substrateThinCoreStateless,
 					StepsDetail: []StepRecord{
-						{EnvironmentMisunderstood: true, MisunderstandingKind: misunderstandingMissingJSON},
+						{
+							EnvironmentMisunderstood: true,
+							MisunderstandingKind:     misunderstandingMissingJSON,
+							ClassificationSource:     classificationSourceCompatText,
+						},
 					},
 				},
 			},
@@ -161,6 +318,15 @@ func TestBuildFailureTaxonomyRollup(t *testing.T) {
 	}
 	if rgEntry.Count != 2 {
 		t.Fatalf("rg misunderstanding count = %d, want 2", rgEntry.Count)
+	}
+	if !slices.Equal(rgEntry.ClassificationSources, []string{classificationSourceStructured}) {
+		t.Fatalf("rg classification sources = %v, want structured source", rgEntry.ClassificationSources)
+	}
+	if !slices.Equal(rgEntry.ExternalOutcomeKinds, []string{string(contract.ExternalOutcomeUnsupported)}) {
+		t.Fatalf("rg external outcome kinds = %v, want unsupported", rgEntry.ExternalOutcomeKinds)
+	}
+	if !slices.Equal(jsonEntry.ClassificationSources, []string{classificationSourceCompatText}) {
+		t.Fatalf("json classification sources = %v, want compatibility text source", jsonEntry.ClassificationSources)
 	}
 }
 

@@ -23,6 +23,14 @@ type stepClassification struct {
 	kind                 string
 	note                 string
 	misunderstandingKind string
+	source               string
+}
+
+type commandSurfaceSignal struct {
+	Missing          bool
+	UsedStructured   bool
+	OutcomeKind      contract.ExternalOutcomeKind
+	CompatibilityHit string
 }
 
 func newTaskExecutionState(substrate string, budget PairedTaskBudget) *taskExecutionState {
@@ -51,7 +59,9 @@ func (s *taskExecutionState) recordStep(label, command string, result contract.E
 		ObservationBytes:        observationBytes,
 		ApproxObservationTokens: observationTokens,
 		Classification:          class.kind,
+		ClassificationSource:    strings.TrimSpace(class.source),
 		Note:                    strings.TrimSpace(class.note),
+		ExternalOutcomes:        summarizeExternalOutcomes(result.Trace.ExternalOutcomes),
 	}
 	s.run.Steps++
 	s.run.DurationMS += result.DurationMS
@@ -135,10 +145,15 @@ func classificationWasted(note string) stepClassification {
 }
 
 func classificationMisunderstanding(kind, note string) stepClassification {
+	return classificationMisunderstandingWithSource(kind, note, "")
+}
+
+func classificationMisunderstandingWithSource(kind, note string, source string) stepClassification {
 	return stepClassification{
 		kind:                 stepClassEnvMisunderstanding,
 		note:                 note,
 		misunderstandingKind: kind,
+		source:               source,
 	}
 }
 
@@ -305,8 +320,8 @@ func runInspectEditWriteTask(ctx context.Context, substrate commandSubstrate, ta
 	}
 
 	var targetPath string
-	if resultLooksLikeMissingCommand(searchResult, "rg") {
-		state.recordStep("search_target", searchCommand, searchResult, classificationMisunderstanding(misunderstandingMissingRG, "rg is unavailable; falling back to grep -r"))
+	if signal := classifyCommandSurfaceUnavailable(searchResult, "rg"); signal.Missing {
+		state.recordStep("search_target", searchCommand, searchResult, classificationMisunderstandingWithSource(misunderstandingMissingRG, "rg is unavailable; falling back to grep -r", classificationSourceForCommandSurfaceSignal(signal)))
 		if !state.canContinue() {
 			state.run.DurationMS = time.Since(started).Milliseconds()
 			return state.run, nil
@@ -392,8 +407,8 @@ func runTracePlanningTask(ctx context.Context, substrate commandSubstrate, task 
 	count := 0
 	owner := ""
 	status := ""
-	if resultLooksLikeMissingCommand(lenResult, "json") {
-		state.recordStep("read_task_count", lenCommand, lenResult, classificationMisunderstanding(misunderstandingMissingJSON, "json inspector is unavailable; falling back to full-file read"))
+	if signal := classifyCommandSurfaceUnavailable(lenResult, "json"); signal.Missing {
+		state.recordStep("read_task_count", lenCommand, lenResult, classificationMisunderstandingWithSource(misunderstandingMissingJSON, "json inspector is unavailable; falling back to full-file read", classificationSourceForCommandSurfaceSignal(signal)))
 		if !state.canContinue() {
 			state.run.DurationMS = time.Since(started).Milliseconds()
 			return state.run, nil
@@ -579,22 +594,115 @@ func hostPathForVirtualPath(hostRoot, virtualPath string) (string, error) {
 	}
 }
 
-func resultLooksLikeMissingCommand(result contract.ExecutionResult, command string) bool {
-	if result.ExitCode == 0 {
-		return false
-	}
+func classifyCommandSurfaceUnavailable(result contract.ExecutionResult, command string) commandSurfaceSignal {
 	lowerStdout := strings.ToLower(result.Stdout)
 	lowerStderr := strings.ToLower(result.Stderr)
+	normalizedCommand := strings.ToLower(strings.TrimSpace(command))
+	for _, outcome := range result.Trace.ExternalOutcomes {
+		if !externalOutcomeMatchesCommand(outcome, normalizedCommand) {
+			continue
+		}
+		switch outcome.OutcomeKind {
+		case contract.ExternalOutcomeCommandNotFound, contract.ExternalOutcomeUnsupported:
+			return commandSurfaceSignal{
+				Missing:        true,
+				UsedStructured: true,
+				OutcomeKind:    outcome.OutcomeKind,
+			}
+		default:
+			return commandSurfaceSignal{
+				UsedStructured: true,
+				OutcomeKind:    outcome.OutcomeKind,
+			}
+		}
+	}
+	if result.ExitCode == 0 {
+		return commandSurfaceSignal{}
+	}
 	missingTargets := []string{
 		strings.ToLower(command + ": not found"),
 		strings.ToLower(command + ": not supported"),
 	}
 	for _, target := range missingTargets {
 		if strings.Contains(lowerStdout, target) || strings.Contains(lowerStderr, target) {
+			return commandSurfaceSignal{
+				Missing:          true,
+				CompatibilityHit: target,
+			}
+		}
+	}
+	return commandSurfaceSignal{}
+}
+
+func classificationSourceForCommandSurfaceSignal(signal commandSurfaceSignal) string {
+	if signal.UsedStructured {
+		return classificationSourceStructured
+	}
+	if strings.TrimSpace(signal.CompatibilityHit) != "" {
+		return classificationSourceCompatText
+	}
+	return ""
+}
+
+func externalOutcomeMatchesCommand(outcome contract.ExecutionTraceStep, normalizedCommand string) bool {
+	if normalizedCommand == "" {
+		return false
+	}
+	candidates := []string{
+		outcome.Command,
+		strings.TrimSpace(outcome.ResolvedPath),
+	}
+	if len(outcome.Argv) > 0 {
+		candidates = append(candidates, outcome.Argv[0])
+	}
+	for _, candidate := range candidates {
+		if normalizeOutcomeCommand(candidate) == normalizedCommand {
 			return true
 		}
 	}
 	return false
+}
+
+func normalizeOutcomeCommand(raw string) string {
+	trimmed := strings.ToLower(strings.TrimSpace(raw))
+	trimmed = strings.TrimPrefix(trimmed, contract.VirtualExternalBinDir+"/")
+	trimmed = strings.TrimPrefix(trimmed, "/")
+	if strings.Contains(trimmed, "/") {
+		parts := strings.Split(trimmed, "/")
+		trimmed = parts[len(parts)-1]
+	}
+	return trimmed
+}
+
+func summarizeExternalOutcomes(outcomes []contract.ExecutionTraceStep) []ExternalOutcomeSummary {
+	if len(outcomes) == 0 {
+		return nil
+	}
+	summaries := make([]ExternalOutcomeSummary, 0, len(outcomes))
+	for _, outcome := range outcomes {
+		summary := ExternalOutcomeSummary{
+			Command:      strings.TrimSpace(outcome.Command),
+			ResolvedPath: strings.TrimSpace(outcome.ResolvedPath),
+			OutcomeKind:  string(outcome.OutcomeKind),
+			ExitCode:     cloneInt(outcome.ExitCode),
+		}
+		if summary.Command == "" && len(outcome.Argv) > 0 {
+			summary.Command = strings.TrimSpace(outcome.Argv[0])
+		}
+		if summary.Command == "" && summary.ResolvedPath == "" && summary.OutcomeKind == "" && summary.ExitCode == nil {
+			continue
+		}
+		summaries = append(summaries, summary)
+	}
+	return summaries
+}
+
+func cloneInt(value *int) *int {
+	if value == nil {
+		return nil
+	}
+	cloned := *value
+	return &cloned
 }
 
 func parseGrepFallbackPath(raw string) string {

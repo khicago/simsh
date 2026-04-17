@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generated_at": "2026-04-06T09:07:22.105346Z",
+  "generated_at": "2026-05-21T19:52:13.442311Z",
   "comparison_rule": "same_agent_same_budget_only_substrate_changes",
   "task_manifest_path": "benchmarks/paired_uplift/task_set.json",
   "agent_id": "paired_probe_agent_v1",
@@ -50,7 +50,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 16,
+        "duration_ms": 3,
         "steps": 3,
         "retries": 0,
         "wasted_steps": 0,
@@ -97,7 +97,7 @@
       "baseline": {
         "substrate": "thin_core_stateless",
         "success": true,
-        "duration_ms": 21,
+        "duration_ms": 3,
         "steps": 3,
         "retries": 1,
         "wasted_steps": 1,
@@ -152,7 +152,7 @@
         "wasted_step_delta": 1,
         "wasted_observation_tokens_delta": 1,
         "misunderstanding_delta": 1,
-        "duration_ms_delta": 5
+        "duration_ms_delta": 0
       },
       "winner": "simsh"
     },
@@ -184,7 +184,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 17,
+        "duration_ms": 8,
         "steps": 3,
         "retries": 0,
         "wasted_steps": 0,
@@ -231,7 +231,7 @@
       "baseline": {
         "substrate": "thin_core_stateless",
         "success": true,
-        "duration_ms": 70,
+        "duration_ms": 11,
         "steps": 4,
         "retries": 1,
         "wasted_steps": 1,
@@ -249,11 +249,20 @@
             "observation_bytes": 17,
             "approx_observation_tokens": 5,
             "classification": "environment_misunderstanding",
+            "classification_source": "structured_external_outcome",
             "retry": true,
             "wasted": true,
             "environment_misunderstood": true,
             "misunderstanding_kind": "missing_rg_front_door",
-            "note": "rg is unavailable; falling back to grep -r"
+            "note": "rg is unavailable; falling back to grep -r",
+            "external_outcomes": [
+              {
+                "command": "rg",
+                "resolved_path": "rg",
+                "outcome_kind": "unsupported",
+                "exit_code": 127
+              }
+            ]
           },
           {
             "index": 2,
@@ -296,7 +305,7 @@
         "wasted_step_delta": 1,
         "wasted_observation_tokens_delta": 5,
         "misunderstanding_delta": 1,
-        "duration_ms_delta": 53
+        "duration_ms_delta": 3
       },
       "winner": "simsh"
     },
@@ -327,7 +336,7 @@
       "simsh": {
         "substrate": "simsh_full_sessioned",
         "success": true,
-        "duration_ms": 34,
+        "duration_ms": 3,
         "steps": 4,
         "retries": 0,
         "wasted_steps": 0,
@@ -385,7 +394,7 @@
         "substrate": "thin_core_stateless",
         "success": false,
         "failure_kind": "budget_exhausted_after_fallback",
-        "duration_ms": 2,
+        "duration_ms": 0,
         "steps": 2,
         "retries": 1,
         "wasted_steps": 1,
@@ -403,11 +412,20 @@
             "observation_bytes": 19,
             "approx_observation_tokens": 5,
             "classification": "environment_misunderstanding",
+            "classification_source": "structured_external_outcome",
             "retry": true,
             "wasted": true,
             "environment_misunderstood": true,
             "misunderstanding_kind": "missing_json_query_surface",
-            "note": "json inspector is unavailable; falling back to full-file read"
+            "note": "json inspector is unavailable; falling back to full-file read",
+            "external_outcomes": [
+              {
+                "command": "json",
+                "resolved_path": "json",
+                "outcome_kind": "unsupported",
+                "exit_code": 127
+              }
+            ]
           },
           {
             "index": 2,
@@ -430,7 +448,7 @@
         "wasted_step_delta": 1,
         "wasted_observation_tokens_delta": 3782,
         "misunderstanding_delta": 1,
-        "duration_ms_delta": -32
+        "duration_ms_delta": -3
       },
       "winner": "simsh"
     }

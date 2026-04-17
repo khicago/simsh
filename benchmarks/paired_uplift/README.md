@@ -51,6 +51,11 @@ Checked-in outputs:
 - `reports/paired-baseline-20260406.failures.json`
   - machine-readable failure taxonomy derived from the same snapshot
 
+Per-step records preserve compact external outcome breadcrumbs when a step's
+classification depends on the external command seam. The proof layer should use
+`ExecutionTrace.ExternalOutcomes` before compatibility text so downstream
+misunderstanding counts can be audited without scraping rendered output.
+
 Repo-level evidence breadcrumb:
 
 - `../evidence_manifest.json`

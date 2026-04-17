@@ -1059,6 +1059,38 @@ Current `f-223crkgwk / T-004` alignment:
 - Rollback note:
   - If the slice starts changing technical scope instead of wording and release-facing state, stop and keep it limited to historical/truth cleanup only.
 
+### K-034: Consume structured external outcomes in paired proof classification
+- Feat: `f-225crapqy`
+- Status: done
+- Why now: after mount refresh and mutation contracts were separated from the umbrella planning shell, the next narrow external-seam gap was downstream proof code still classifying missing `rg` and `json` surfaces by rendered stdout or stderr text. The runtime already emits `ExecutionTrace.ExternalOutcomes`; the proof layer should consume that structured truth before compatibility output.
+- Kernel invariant: external seam truth should remain structured at the adapter/proof boundary; proof-layer reporting may consume runtime trace facts, but it must not change runtime semantics or benchmark scope to improve the evidence.
+- Files to touch:
+  - `benchmarks/paired_uplift/*`
+  - `benchmarks/paired_uplift/reports/*`
+  - `benchmarks/evidence_manifest.json`
+  - `docs/architecture-paired-ab-uplift-proof-harness.md`
+  - `docs/notes-kernel-execution-backlog.md`
+- Validation command:
+  - `go test ./benchmarks/paired_uplift -count=1`
+  - `go test ./benchmarks/... -count=1`
+  - `go test ./pkg/contract ./pkg/engine ./pkg/builtin ./pkg/adapter/reference ./benchmarks/paired_uplift -count=1`
+  - `make release-check`
+- Done gate:
+  - Paired proof classification consumes `ExecutionTrace.ExternalOutcomes` before compatibility stdout/stderr text for external command availability.
+  - Per-step reports preserve compact external outcome breadcrumbs and classification source when a misunderstanding is driven by external seam truth.
+  - Failure taxonomy reports include classification source and external outcome kind for external-seam misunderstanding entries.
+  - Checked-in paired uplift artifacts and `benchmarks/evidence_manifest.json` are refreshed through the canonical harness path.
+- Notes:
+  - The proof layer now records `classification_source=structured_external_outcome` and `external_outcomes` breadcrumbs for the thin baseline's missing `rg` and `json` surface.
+  - Compatibility text remains a fallback only when no structured external outcome is available, so older result shapes can still be interpreted without making rendered output the primary source of truth.
+  - No runtime, mount, or adapter command semantics changed in this slice.
+- Non-goals:
+  - Do not change `ExecutionTrace.ExternalOutcomes` semantics just to satisfy the paired proof harness.
+  - Do not broaden the paired task set or add benchmark scope while fixing classification truth.
+  - Do not infer command-not-found from generic unsupported behavior; keep outcome kinds visible.
+- Rollback note:
+  - If the classification source starts coupling proof code too tightly to runtime internals, keep the report fields and narrow the helper back to reading only public `ExecutionResult.Trace.ExternalOutcomes`.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

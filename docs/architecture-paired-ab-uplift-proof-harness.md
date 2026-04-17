@@ -228,6 +228,10 @@ Per-step records should capture:
 - exit code
 - observation size
 - classification
+- classification source when the step used a structured seam such as
+  `ExecutionTrace.ExternalOutcomes`
+- compact external outcome breadcrumbs when the step depends on external
+  command availability or capability mismatch
 - short note when a fallback branch or misunderstanding was triggered
 
 If a task fails because it exhausted the fixed budget, the report should preserve both:
@@ -268,6 +272,9 @@ That artifact should group repeated failure causes into stable categories, for e
 
 The taxonomy should stay small and diagnosis-oriented.
 It should not become a dump of one-off strings.
+When an entry is derived from external command availability, the taxonomy should
+preserve the classification source and observed external outcome kind so the
+proof artifact remains auditable without parsing stdout or stderr.
 
 ## Non-Goals
 

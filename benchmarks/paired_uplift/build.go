@@ -108,38 +108,52 @@ func BuildFailureTaxonomy(snapshot PairedRunSnapshot, snapshotPath string) Failu
 		kind    string
 	}
 	type value struct {
-		count       int
-		scenarioSet map[string]struct{}
+		count        int
+		scenarioSet  map[string]struct{}
+		sourceSet    map[string]struct{}
+		outcomeKinds map[string]struct{}
 	}
 	rollup := map[key]*value{}
-	add := func(bucket, runtime, kind, scenarioID string) {
+	add := func(bucket, runtime, kind, scenarioID string, step StepRecord) {
 		if strings.TrimSpace(kind) == "" {
 			return
 		}
 		k := key{bucket: bucket, runtime: runtime, kind: kind}
 		entry, ok := rollup[k]
 		if !ok {
-			entry = &value{scenarioSet: map[string]struct{}{}}
+			entry = &value{
+				scenarioSet:  map[string]struct{}{},
+				sourceSet:    map[string]struct{}{},
+				outcomeKinds: map[string]struct{}{},
+			}
 			rollup[k] = entry
 		}
 		entry.count++
 		entry.scenarioSet[scenarioID] = struct{}{}
+		if source := strings.TrimSpace(step.ClassificationSource); source != "" {
+			entry.sourceSet[source] = struct{}{}
+		}
+		for _, outcome := range step.ExternalOutcomes {
+			if kind := strings.TrimSpace(outcome.OutcomeKind); kind != "" {
+				entry.outcomeKinds[kind] = struct{}{}
+			}
+		}
 	}
 	for _, task := range snapshot.Tasks {
 		if task.Simsh.FailureKind != "" {
-			add(taxonomyBucketFailure, task.Simsh.Substrate, task.Simsh.FailureKind, task.ScenarioID)
+			add(taxonomyBucketFailure, task.Simsh.Substrate, task.Simsh.FailureKind, task.ScenarioID, StepRecord{})
 		}
 		if task.Baseline.FailureKind != "" {
-			add(taxonomyBucketFailure, task.Baseline.Substrate, task.Baseline.FailureKind, task.ScenarioID)
+			add(taxonomyBucketFailure, task.Baseline.Substrate, task.Baseline.FailureKind, task.ScenarioID, StepRecord{})
 		}
 		for _, step := range task.Simsh.StepsDetail {
 			if step.EnvironmentMisunderstood {
-				add(taxonomyBucketMisunderstanding, task.Simsh.Substrate, step.MisunderstandingKind, task.ScenarioID)
+				add(taxonomyBucketMisunderstanding, task.Simsh.Substrate, step.MisunderstandingKind, task.ScenarioID, step)
 			}
 		}
 		for _, step := range task.Baseline.StepsDetail {
 			if step.EnvironmentMisunderstood {
-				add(taxonomyBucketMisunderstanding, task.Baseline.Substrate, step.MisunderstandingKind, task.ScenarioID)
+				add(taxonomyBucketMisunderstanding, task.Baseline.Substrate, step.MisunderstandingKind, task.ScenarioID, step)
 			}
 		}
 	}
@@ -150,12 +164,16 @@ func BuildFailureTaxonomy(snapshot PairedRunSnapshot, snapshotPath string) Failu
 			scenarioIDs = append(scenarioIDs, scenarioID)
 		}
 		sort.Strings(scenarioIDs)
+		sources := sortedSetValues(v.sourceSet)
+		outcomeKinds := sortedSetValues(v.outcomeKinds)
 		entries = append(entries, FailureTaxonomyEntry{
-			Bucket:      k.bucket,
-			Runtime:     k.runtime,
-			Kind:        k.kind,
-			Count:       v.count,
-			ScenarioIDs: scenarioIDs,
+			Bucket:                k.bucket,
+			Runtime:               k.runtime,
+			Kind:                  k.kind,
+			Count:                 v.count,
+			ScenarioIDs:           scenarioIDs,
+			ClassificationSources: sources,
+			ExternalOutcomeKinds:  outcomeKinds,
 		})
 	}
 	sort.Slice(entries, func(i, j int) bool {
@@ -169,6 +187,18 @@ func BuildFailureTaxonomy(snapshot PairedRunSnapshot, snapshotPath string) Failu
 		SourceSnapshotPath: snapshotPath,
 		Entries:            entries,
 	}
+}
+
+func sortedSetValues(values map[string]struct{}) []string {
+	if len(values) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(values))
+	for value := range values {
+		out = append(out, value)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func compareTaskWinner(simsh, baseline SubstrateRunRecord) string {

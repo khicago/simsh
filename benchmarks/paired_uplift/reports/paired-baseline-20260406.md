@@ -37,12 +37,12 @@ Truth surfaces for `trace_consumable_planning`: `execution_trace`, `structured_r
 
 ## Failure Taxonomy
 
-| bucket | runtime | kind | count | scenarios |
-| --- | --- | --- | --- | --- |
-| `environment_misunderstanding` | `thin_core_stateless` | `missing_json_query_surface` | 1 | `trace_consumable_planning` |
-| `environment_misunderstanding` | `thin_core_stateless` | `missing_rg_front_door` | 1 | `inspect_edit_write_loop` |
-| `environment_misunderstanding` | `thin_core_stateless` | `session_cwd_not_persistent` | 1 | `relative_navigation_session` |
-| `failure` | `thin_core_stateless` | `budget_exhausted_after_fallback` | 1 | `trace_consumable_planning` |
+| bucket | runtime | kind | count | scenarios | sources | external outcomes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `environment_misunderstanding` | `thin_core_stateless` | `missing_json_query_surface` | 1 | `trace_consumable_planning` | `structured_external_outcome` | `unsupported` |
+| `environment_misunderstanding` | `thin_core_stateless` | `missing_rg_front_door` | 1 | `inspect_edit_write_loop` | `structured_external_outcome` | `unsupported` |
+| `environment_misunderstanding` | `thin_core_stateless` | `session_cwd_not_persistent` | 1 | `relative_navigation_session` | `n/a` | `n/a` |
+| `failure` | `thin_core_stateless` | `budget_exhausted_after_fallback` | 1 | `trace_consumable_planning` | `n/a` | `n/a` |
 
 ## Notes
 
