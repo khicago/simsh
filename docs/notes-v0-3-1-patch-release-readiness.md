@@ -28,6 +28,10 @@ It includes:
 - `K-031` remote high-latency mount fail-closed proof
 - `K-032` v0.3.0 release-readiness closeout and evidence refresh
 - release-facing truth cleanup so docs and process state reflect the actual tagged baseline
+- explicit mount refresh contract hardening
+- external command outcome truth at the adapter seam
+- downstream proof-layer artifact auditability
+- repository hygiene that keeps `.bagakit/` as local runtime state instead of versioned project content
 
 It does not include:
 
@@ -45,6 +49,14 @@ The current `main` line after `v0.3.0` adds two material things:
 2. stronger release/evidence alignment
    - benchmark evidence has been refreshed
    - closeout docs and handoff have been brought into one explicit SSOT
+3. explicit refresh and seam contracts
+   - `mounts refresh` now requires explicit narrow targets and refuses broad or adapter-broadened refresh scope
+   - external command trace outcomes now preserve machine-readable kind truth for unsupported, command-missing, non-zero, timeout/cancel, and provider-failure cases
+4. stronger proof auditability
+   - paired uplift snapshots are guarded against task-manifest drift
+   - evidence manifest entries carry checked-in byte fingerprints and volatile-field declarations
+5. cleaner repository boundary
+   - `.bagakit/` is ignored local runtime state and is no longer tracked by Git
 
 ## Evidence Snapshot
 
@@ -86,6 +98,13 @@ Current headline deltas:
 - `simsh observation tokens = 149`
 - `baseline observation tokens = 3826`
 
+### Repository Hygiene
+
+Current state:
+- `.bagakit/` is covered by `.gitignore`
+- `git ls-files .bagakit` returns no tracked files
+- Bagakit tracker/runtime state remains local operator state rather than release payload
+
 ## Cut Criteria
 
 The repository is ready for a deliberate `v0.3.1` patch cut when all of the following are true:
@@ -96,6 +115,12 @@ The repository is ready for a deliberate `v0.3.1` patch cut when all of the foll
 4. `make check` is green.
 5. the checked-in benchmark evidence referenced above is current.
 
+Current validation evidence:
+- `GOCACHE=<tmp> go test ./... -count=1` is green.
+- `GOCACHE=<tmp> go test -race ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine ./cmd/simsh-cli -count=1` is green.
+- `GOCACHE=<tmp> go test ./cmd/... ./pkg/... ./benchmarks/... -count=1` is green.
+- `make check` is green.
+
 ## Out Of Scope After This Patch
 
 After `v0.3.1`, the next step should be either:
@@ -104,4 +129,3 @@ After `v0.3.1`, the next step should be either:
 - or a later patch/feature release with a separately defined scope
 
 It should not be a silent continuation of release-truth cleanup.
-
