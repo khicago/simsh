@@ -24,6 +24,7 @@ func (m builtinStatusMount) ReadContent(context.Context, string) (string, error)
 
 type builtinRefreshMount struct {
 	builtinStatusMount
+	requests   []contract.RefreshRequest
 	status     contract.MountRuntimeStatus
 	statusErr  error
 	effective  []string
@@ -32,7 +33,31 @@ type builtinRefreshMount struct {
 	refreshErr error
 }
 
-func (m builtinRefreshMount) Refresh(context.Context, contract.RefreshRequest) (contract.RefreshResult, error) {
+func newBuiltinRefreshTestMount(point string) *builtinRefreshMount {
+	return &builtinRefreshMount{
+		builtinStatusMount: builtinStatusMount{
+			point: point,
+			profile: contract.MountProfile{
+				TruthModel:          contract.MountTruthProjection,
+				MaterializationMode: contract.MountMaterializationCached,
+				WriteSemantics:      contract.MountWriteReadOnly,
+				LatencyClass:        contract.MountLatencyRemoteModerate,
+				Consistency:         contract.MountConsistency{RefreshRequired: true},
+			},
+		},
+	}
+}
+
+func mountRefreshTestPath(parts ...string) string {
+	return "/" + strings.Join(parts, "/")
+}
+
+func mountRefreshRawPath(base string, parts ...string) string {
+	return base + "/" + strings.Join(parts, "/")
+}
+
+func (m *builtinRefreshMount) Refresh(_ context.Context, req contract.RefreshRequest) (contract.RefreshResult, error) {
+	m.requests = append(m.requests, req)
 	if m.refreshErr != nil {
 		return contract.RefreshResult{}, m.refreshErr
 	}
@@ -43,7 +68,7 @@ func (m builtinRefreshMount) Refresh(context.Context, contract.RefreshRequest) (
 	}, nil
 }
 
-func (m builtinRefreshMount) MountStatus(context.Context) (contract.MountRuntimeStatus, error) {
+func (m *builtinRefreshMount) MountStatus(context.Context) (contract.MountRuntimeStatus, error) {
 	if m.statusErr != nil {
 		return contract.MountRuntimeStatus{}, m.statusErr
 	}
@@ -63,7 +88,7 @@ func TestRunMountsStatusTextAndJSON(t *testing.T) {
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{
@@ -116,7 +141,7 @@ func TestRunMountsRefresh(t *testing.T) {
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{
@@ -147,13 +172,154 @@ func TestRunMountsRefresh(t *testing.T) {
 	}
 }
 
+func TestRunMountsRefreshDispatchesCanonicalDotDotTarget(t *testing.T) {
+	alphaPath := mountRefreshTestPath("alpha")
+	betaPath := mountRefreshTestPath("beta")
+	target := mountRefreshTestPath("beta", "item")
+	alphaMount := newBuiltinRefreshTestMount(alphaPath)
+	betaMount := newBuiltinRefreshTestMount(betaPath)
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{alphaMount, betaMount},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", mountRefreshRawPath(alphaPath, "..", "beta", "item")})
+	if code != 0 {
+		t.Fatalf("runMounts(refresh canonical dotdot) = (%q, %d), want beta refresh", out, code)
+	}
+	if len(alphaMount.requests) != 0 {
+		t.Fatalf("alpha refresh calls = %d, want 0 after canonical target dispatch", len(alphaMount.requests))
+	}
+	if len(betaMount.requests) != 1 {
+		t.Fatalf("beta refresh calls = %d, want 1", len(betaMount.requests))
+	}
+	if got := betaMount.requests[0].Targets; len(got) != 1 || got[0] != target {
+		t.Fatalf("beta Refresh targets = %#v, want %#v", got, []string{target})
+	}
+}
+
+func TestRunMountsRefreshCanonicalTargetCanSelectMoreSpecificMount(t *testing.T) {
+	repoPath := mountRefreshTestPath("repo")
+	subPath := mountRefreshTestPath("repo", "sub")
+	target := mountRefreshTestPath("repo", "sub", "file")
+	repoMount := newBuiltinRefreshTestMount(repoPath)
+	subMount := newBuiltinRefreshTestMount(subPath)
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{repoMount, subMount},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", mountRefreshRawPath(repoPath, "other", "..", "sub", "file")})
+	if code != 0 {
+		t.Fatalf("runMounts(refresh canonical specific) = (%q, %d), want sub refresh", out, code)
+	}
+	if len(repoMount.requests) != 0 {
+		t.Fatalf("repo refresh calls = %d, want 0 after canonical target dispatch", len(repoMount.requests))
+	}
+	if len(subMount.requests) != 1 {
+		t.Fatalf("sub refresh calls = %d, want 1", len(subMount.requests))
+	}
+	if got := subMount.requests[0].Targets; len(got) != 1 || got[0] != target {
+		t.Fatalf("sub Refresh targets = %#v, want %#v", got, []string{target})
+	}
+}
+
+func TestRunMountsRefreshCanonicalTargetCanEscapeMoreSpecificMount(t *testing.T) {
+	repoPath := mountRefreshTestPath("repo")
+	subPath := mountRefreshTestPath("repo", "sub")
+	target := mountRefreshTestPath("repo", "file")
+	repoMount := newBuiltinRefreshTestMount(repoPath)
+	subMount := newBuiltinRefreshTestMount(subPath)
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{repoMount, subMount},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", mountRefreshRawPath(subPath, "..", "file")})
+	if code != 0 {
+		t.Fatalf("runMounts(refresh canonical escape) = (%q, %d), want repo refresh", out, code)
+	}
+	if len(repoMount.requests) != 1 {
+		t.Fatalf("repo refresh calls = %d, want 1", len(repoMount.requests))
+	}
+	if len(subMount.requests) != 0 {
+		t.Fatalf("sub refresh calls = %d, want 0 after canonical target dispatch", len(subMount.requests))
+	}
+	if got := repoMount.requests[0].Targets; len(got) != 1 || got[0] != target {
+		t.Fatalf("repo Refresh targets = %#v, want %#v", got, []string{target})
+	}
+}
+
+func TestRunMountsRefreshCanonicalTargetOutsideMountRefusesBeforeDispatch(t *testing.T) {
+	alphaPath := mountRefreshTestPath("alpha")
+	alphaMount := newBuiltinRefreshTestMount(alphaPath)
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{alphaMount},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", mountRefreshRawPath(alphaPath, "..", "outside", "item")})
+	if code == 0 || !strings.Contains(out, mountRefreshTestPath("outside", "item")+": mount not found") {
+		t.Fatalf("runMounts(refresh canonical outside) = (%q, %d), want canonical mount-not-found refusal", out, code)
+	}
+	if len(alphaMount.requests) != 0 {
+		t.Fatalf("alpha refresh calls = %d, want 0 after canonical target leaves mount scope", len(alphaMount.requests))
+	}
+}
+
+func TestRunMountsRefreshOverlappingPrefixesUseLongestSegmentMatch(t *testing.T) {
+	fooPath := mountRefreshTestPath("foo")
+	fooBarPath := mountRefreshTestPath("foo", "bar")
+	foobarPath := mountRefreshTestPath("foobar")
+	fooMount := newBuiltinRefreshTestMount(fooPath)
+	fooBarMount := newBuiltinRefreshTestMount(fooBarPath)
+	foobarMount := newBuiltinRefreshTestMount(foobarPath)
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			VirtualMounts: []contract.VirtualMount{fooMount, fooBarMount, foobarMount},
+		},
+	}
+
+	out, code := runMounts(runtime, []string{"refresh", mountRefreshRawPath(fooBarPath, "file"), mountRefreshRawPath(foobarPath, "file"), mountRefreshRawPath(fooPath, "baz")})
+	if code != 0 {
+		t.Fatalf("runMounts(refresh overlapping prefixes) = (%q, %d), want one refresh row per selected mount", out, code)
+	}
+	if len(fooMount.requests) != 1 {
+		t.Fatalf("foo refresh calls = %d, want 1", len(fooMount.requests))
+	}
+	if got := fooMount.requests[0].Targets; len(got) != 1 || got[0] != mountRefreshTestPath("foo", "baz") {
+		t.Fatalf("foo Refresh targets = %#v, want %#v", got, []string{mountRefreshTestPath("foo", "baz")})
+	}
+	if len(fooBarMount.requests) != 1 {
+		t.Fatalf("foo/bar refresh calls = %d, want 1", len(fooBarMount.requests))
+	}
+	if got := fooBarMount.requests[0].Targets; len(got) != 1 || got[0] != mountRefreshTestPath("foo", "bar", "file") {
+		t.Fatalf("foo/bar Refresh targets = %#v, want %#v", got, []string{mountRefreshTestPath("foo", "bar", "file")})
+	}
+	if len(foobarMount.requests) != 1 {
+		t.Fatalf("foobar refresh calls = %d, want 1", len(foobarMount.requests))
+	}
+	if got := foobarMount.requests[0].Targets; len(got) != 1 || got[0] != mountRefreshTestPath("foobar", "file") {
+		t.Fatalf("foobar Refresh targets = %#v, want %#v", got, []string{mountRefreshTestPath("foobar", "file")})
+	}
+}
+
 func TestRunMountsRefreshRequireNarrowRejectsMountRootTarget(t *testing.T) {
 	alphaPath := "/" + "alpha"
 	runtime := engine.CommandRuntime{
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{
@@ -182,7 +348,7 @@ func TestRunMountsRefreshRequireNarrowAcceptsDescendantTarget(t *testing.T) {
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{
@@ -213,7 +379,7 @@ func TestRunMountsRefreshPreservesUnsupportedDetail(t *testing.T) {
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{
@@ -247,7 +413,7 @@ func TestRunMountsStatusProviderFailureStaysSeparateFromMountTruth(t *testing.T)
 		Ctx: context.Background(),
 		Ops: contract.Ops{
 			VirtualMounts: []contract.VirtualMount{
-				builtinRefreshMount{
+				&builtinRefreshMount{
 					builtinStatusMount: builtinStatusMount{
 						point: alphaPath,
 						profile: contract.MountProfile{

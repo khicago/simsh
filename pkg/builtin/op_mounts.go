@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"path"
 	"sort"
 	"strings"
 
@@ -239,6 +240,7 @@ func normalizeMountRefreshTarget(raw string) string {
 	if !strings.HasPrefix(trimmed, "/") {
 		trimmed = "/" + trimmed
 	}
+	trimmed = path.Clean(trimmed)
 	if len(trimmed) > 1 {
 		trimmed = strings.TrimRight(trimmed, "/")
 	}
