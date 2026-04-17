@@ -399,6 +399,9 @@ func (r mountRouter) wrapOps(ops contract.Ops) contract.Ops {
 			}
 			fsOps = append(fsOps, op)
 		}
+		if len(mountedOps) > 0 && len(fsOps) > 0 {
+			return contract.MutationResult{}, fmt.Errorf("mixed mounted and filesystem mutation batches are not supported without an explicit transaction contract")
+		}
 		if len(mountedOps) > 0 {
 			if err := validateMountedMutationBatch(mountedMount, mountedOps); err != nil {
 				return contract.MutationResult{}, err

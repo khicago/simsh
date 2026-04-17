@@ -72,7 +72,7 @@ func (m *bridgeReadableMount) ReadMany(_ context.Context, req contract.ReadManyR
 }
 
 func TestWrapOpsApplyMutationsPrevalidatesMountedBatches(t *testing.T) {
-	t.Run("invalid mount blocks local side effects", func(t *testing.T) {
+	t.Run("mixed batch blocks local side effects", func(t *testing.T) {
 		mount := &bridgeMutatingMount{bridgeTestMount: newBridgeTestMount(contract.MountProfile{
 			TruthModel:          contract.MountTruthFactual,
 			WriteSemantics:      contract.MountWriteThrough,
@@ -98,11 +98,14 @@ func TestWrapOpsApplyMutationsPrevalidatesMountedBatches(t *testing.T) {
 				{Kind: contract.MutationWriteFile, Path: virtualPath("mounted", "file.txt"), Content: "mount"},
 			},
 		})
-		if !errors.Is(err, contract.ErrUnsupported) {
-			t.Fatalf("ApplyMutations(...) error = %v, want ErrUnsupported", err)
+		if err == nil {
+			t.Fatal("ApplyMutations(...) error = nil, want mixed filesystem/mount refusal")
+		}
+		if errors.Is(err, contract.ErrUnsupported) {
+			t.Fatalf("ApplyMutations(...) error = %v, want hard refusal that cannot trigger unsupported fallback", err)
 		}
 		if localCalls != 0 {
-			t.Fatalf("local WriteFile calls = %d, want 0 before mounted validation passes", localCalls)
+			t.Fatalf("local WriteFile calls = %d, want 0 before mixed batch refusal", localCalls)
 		}
 		if len(mount.mutatedBatches) != 0 {
 			t.Fatalf("mounted ApplyMutations calls = %d, want 0", len(mount.mutatedBatches))
@@ -212,7 +215,7 @@ func TestWrapOpsReadManyBatchesFilesystemPaths(t *testing.T) {
 	}
 }
 
-func TestWrapOpsApplyMutationsPreservesRequestOrderAcrossFilesystemAndMount(t *testing.T) {
+func TestWrapOpsApplyMutationsRejectsMixedFilesystemAndMountBatchBeforeSideEffects(t *testing.T) {
 	mount := &bridgeMutatingMount{bridgeTestMount: newBridgeTestMount(contract.MountProfile{
 		TruthModel:          contract.MountTruthFactual,
 		WriteSemantics:      contract.MountWriteThrough,
@@ -225,8 +228,10 @@ func TestWrapOpsApplyMutationsPreservesRequestOrderAcrossFilesystemAndMount(t *t
 		t.Fatalf("newMountRouter(...) error = %v", err)
 	}
 
+	fsCalls := 0
 	ops := router.wrapOps(contract.Ops{
 		ApplyMutations: func(_ context.Context, req contract.MutationBatch) (contract.MutationResult, error) {
+			fsCalls++
 			records := make([]contract.MutationRecord, 0, len(req.Ops))
 			for _, op := range req.Ops {
 				records = append(records, contract.MutationRecord{Kind: op.Kind, Path: op.Path, Status: "ok"})
@@ -240,18 +245,18 @@ func TestWrapOpsApplyMutationsPreservesRequestOrderAcrossFilesystemAndMount(t *t
 		{Kind: contract.MutationWriteFile, Path: virtualPath("mounted", "mount-1.txt"), Content: "b"},
 		{Kind: contract.MutationWriteFile, Path: virtualPath("workspace", "local-2.txt"), Content: "c"},
 	}
-	result, err := ops.ApplyMutations(context.Background(), contract.MutationBatch{Ops: requestOps})
-	if err != nil {
-		t.Fatalf("ApplyMutations(...) error = %v", err)
+	_, err = ops.ApplyMutations(context.Background(), contract.MutationBatch{Ops: requestOps})
+	if err == nil {
+		t.Fatal("ApplyMutations(...) error = nil, want mixed filesystem/mount refusal")
 	}
-	if len(result.Records) != len(requestOps) {
-		t.Fatalf("record count = %d, want %d", len(result.Records), len(requestOps))
+	if errors.Is(err, contract.ErrUnsupported) {
+		t.Fatalf("ApplyMutations(...) error = %v, want hard refusal that cannot trigger unsupported fallback", err)
 	}
-	for idx, op := range requestOps {
-		record := result.Records[idx]
-		if record.Kind != op.Kind || record.Path != op.Path {
-			t.Fatalf("record[%d] = %+v, want kind=%s path=%s", idx, record, op.Kind, op.Path)
-		}
+	if fsCalls != 0 {
+		t.Fatalf("filesystem ApplyMutations calls = %d, want 0 before mixed batch refusal", fsCalls)
+	}
+	if len(mount.mutatedBatches) != 0 {
+		t.Fatalf("mounted ApplyMutations calls = %d, want 0 before mixed batch refusal", len(mount.mutatedBatches))
 	}
 }
 
