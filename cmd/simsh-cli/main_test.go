@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -48,6 +50,15 @@ func TestRunServeDefaultsToLoopbackListen(t *testing.T) {
 		rootDir: "",
 		policy:  string(contract.WriteModeReadOnly),
 		profile: string(contract.ProfileCoreStrict),
+		serveRunner: func(addr string, handler http.Handler) error {
+			if addr != "127.0.0.1:18080" {
+				t.Fatalf("serve addr = %q, want 127.0.0.1:18080", addr)
+			}
+			if handler == nil {
+				t.Fatalf("serve handler is nil")
+			}
+			return errors.New("serve stopped")
+		},
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
@@ -61,6 +72,9 @@ func TestRunServeDefaultsToLoopbackListen(t *testing.T) {
 	}
 	if !strings.Contains(stdout.String(), "root="+wd) {
 		t.Fatalf("stdout = %q, want cwd root fallback %q", stdout.String(), wd)
+	}
+	if !strings.Contains(stderr.String(), "serve stopped") {
+		t.Fatalf("stderr = %q, want injected serve failure", stderr.String())
 	}
 }
 
@@ -112,6 +126,15 @@ func TestRunServeReportsImmediateListenFailure(t *testing.T) {
 		profile:    string(contract.ProfileCoreStrict),
 		mounts:     []string{"test"},
 		listenAddr: "127.0.0.1",
+		serveRunner: func(addr string, handler http.Handler) error {
+			if addr != "127.0.0.1" {
+				t.Fatalf("serve addr = %q, want 127.0.0.1", addr)
+			}
+			if handler == nil {
+				t.Fatalf("serve handler is nil")
+			}
+			return errors.New("missing port in address")
+		},
 	}
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer

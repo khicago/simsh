@@ -38,6 +38,8 @@ type cliOptions struct {
 	mounts     []string
 	listenAddr string
 	port       int
+
+	serveRunner func(addr string, handler http.Handler) error
 }
 
 func main() {
@@ -250,7 +252,11 @@ func runServe(opts cliOptions, stdout io.Writer, stderr io.Writer) int {
 		DefaultRCFiles:  append([]string(nil), opts.rcFiles...),
 		EnableTestMount: contains(opts.mounts, "test"),
 	})
-	err := http.ListenAndServe(listenAddr, handler)
+	runServer := opts.serveRunner
+	if runServer == nil {
+		runServer = http.ListenAndServe
+	}
+	err := runServer(listenAddr, handler)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return contract.ExitCodeGeneral
