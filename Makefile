@@ -9,14 +9,16 @@ LISTEN ?= :18080
 PROFILE ?= core-strict
 CMD ?= env PATH
 
-.PHONY: help test test-race lint check doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
+.PHONY: help test test-race test-race-core lint check release-check doc cli cli-c cli-serve simshd benchmark-refresh benchmark-uplift codex-locale codex-locale-resume
 
 help:
 	@echo "Common targets:"
 	@echo "  make test        # go test ./..."
 	@echo "  make test-race   # go test -race ./..."
+	@echo "  make test-race-core # focused race gate for core runtime entrypoints"
 	@echo "  make lint        # staticcheck ./... (if installed)"
 	@echo "  make check       # test + lint"
+	@echo "  make release-check # check + focused race gate"
 	@echo "  make doc         # regenerate simsh.md"
 	@echo "  make cli         # run interactive simsh-cli"
 	@echo "  make cli-c CMD='ls -l /'    # run one command via simsh-cli"
@@ -32,6 +34,9 @@ test:
 test-race:
 	$(GO) test -race ./...
 
+test-race-core:
+	$(GO) test -race ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine ./cmd/simsh-cli
+
 lint:
 	@if command -v staticcheck >/dev/null 2>&1; then \
 		staticcheck ./...; \
@@ -40,6 +45,8 @@ lint:
 	fi
 
 check: test lint
+
+release-check: check test-race-core
 
 doc:
 	$(GO) run ./cmd/simsh-doc

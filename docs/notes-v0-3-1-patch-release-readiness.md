@@ -113,13 +113,15 @@ The repository is ready for a deliberate `v0.3.1` patch cut when all of the foll
 2. current `main` is framed consistently as the post-`v0.3.0` patch candidate line.
 3. `go test ./...` is green.
 4. `make check` is green.
-5. the checked-in benchmark evidence referenced above is current.
+5. `make release-check` is green.
+6. the checked-in benchmark evidence referenced above is current.
 
 Current validation evidence:
 - `GOCACHE=<tmp> go test ./... -count=1` is green.
 - `GOCACHE=<tmp> go test -race ./pkg/engine/runtime ./pkg/service/httpapi ./pkg/engine ./cmd/simsh-cli -count=1` is green.
 - `GOCACHE=<tmp> go test ./cmd/... ./pkg/... ./benchmarks/... -count=1` is green.
 - `make check` is green.
+- `make release-check` is green.
 
 ## Out Of Scope After This Patch
 
