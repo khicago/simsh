@@ -55,6 +55,10 @@ Per-step records preserve compact external outcome breadcrumbs when a step's
 classification depends on the external command seam. The proof layer should use
 `ExecutionTrace.ExternalOutcomes` before compatibility text so downstream
 misunderstanding counts can be audited without scraping rendered output.
+Breadcrumbs are a safe projection for checked-in proof artifacts: they preserve
+command identity, outcome kind, compatibility exit code, and virtual
+command-path identities such as `<external-bin>/rg`, but they do not serialize
+host-local provider paths.
 
 Repo-level evidence breadcrumb:
 

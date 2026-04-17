@@ -682,7 +682,7 @@ func summarizeExternalOutcomes(outcomes []contract.ExecutionTraceStep) []Externa
 	for _, outcome := range outcomes {
 		summary := ExternalOutcomeSummary{
 			Command:      strings.TrimSpace(outcome.Command),
-			ResolvedPath: strings.TrimSpace(outcome.ResolvedPath),
+			ResolvedPath: safeExternalOutcomeResolvedPath(outcome),
 			OutcomeKind:  string(outcome.OutcomeKind),
 			ExitCode:     cloneInt(outcome.ExitCode),
 		}
@@ -695,6 +695,27 @@ func summarizeExternalOutcomes(outcomes []contract.ExecutionTraceStep) []Externa
 		summaries = append(summaries, summary)
 	}
 	return summaries
+}
+
+func safeExternalOutcomeResolvedPath(outcome contract.ExecutionTraceStep) string {
+	resolvedPath := strings.TrimSpace(outcome.ResolvedPath)
+	if resolvedPath == "" {
+		return ""
+	}
+	if !strings.ContainsAny(resolvedPath, `/\`) {
+		return resolvedPath
+	}
+	switch {
+	case contract.IsCommandPathUnder(resolvedPath, contract.VirtualExternalBinDir):
+		if command := normalizeOutcomeCommand(resolvedPath); command != "" {
+			return contract.VirtualExternalBinDir + "/" + command
+		}
+	case contract.IsCommandPathUnder(resolvedPath, contract.VirtualSystemBinDir):
+		if command := normalizeOutcomeCommand(resolvedPath); command != "" {
+			return contract.VirtualSystemBinDir + "/" + command
+		}
+	}
+	return ""
 }
 
 func cloneInt(value *int) *int {

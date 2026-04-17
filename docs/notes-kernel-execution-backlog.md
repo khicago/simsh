@@ -1091,6 +1091,37 @@ Current `f-223crkgwk / T-004` alignment:
 - Rollback note:
   - If the classification source starts coupling proof code too tightly to runtime internals, keep the report fields and narrow the helper back to reading only public `ExecutionResult.Trace.ExternalOutcomes`.
 
+### K-035: Sanitize external outcome breadcrumbs in paired proof artifacts
+- Feat: `f-226crja27`
+- Status: done
+- Why now: `K-034` moved paired proof classification onto structured `ExecutionTrace.ExternalOutcomes`, but the report breadcrumb projection still needed an explicit guard against copying provider or host-local resolved paths into checked-in artifacts.
+- Kernel invariant: proof reports may consume structured runtime facts, but checked-in breadcrumbs should be compact, safe projections rather than raw trace dumps; runtime and adapter semantics must not change to satisfy proof artifact hygiene.
+- Files to touch:
+  - `benchmarks/paired_uplift/tasks.go`
+  - `benchmarks/paired_uplift/paired_uplift_test.go`
+  - `benchmarks/paired_uplift/README.md`
+  - `docs/architecture-paired-ab-uplift-proof-harness.md`
+  - `docs/notes-kernel-execution-backlog.md`
+- Validation command:
+  - `go test ./benchmarks/paired_uplift -run 'TestRecordStep(SanitizesExternalOutcomeBreadcrumbPaths|KeepsExternalOutcomeBreadcrumb)|TestClassifyCommandSurfaceUnavailableUsesStructuredExternalOutcome' -count=1`
+  - `go test ./benchmarks/paired_uplift -count=1`
+  - `go test ./benchmarks/... ./pkg/contract ./pkg/engine ./pkg/builtin ./pkg/adapter/reference -count=1`
+  - `make release-check`
+- Done gate:
+  - Paired proof classification still reads structured `ExecutionTrace.ExternalOutcomes` before compatibility text.
+  - Per-step external outcome breadcrumbs retain command identity, outcome kind, exit code, and safe virtual command paths.
+  - Host-local or provider-local absolute resolved paths are not serialized into checked-in paired proof artifact breadcrumbs.
+  - No runtime, mount, or adapter command semantics change in this slice.
+- Notes:
+  - The sanitizer is intentionally in the paired proof layer, not in `ExecutionTrace`, so runtime traces can remain truthful while checked-in artifacts stay safe to audit.
+  - Safe resolved paths currently mean bare command names and virtual command paths under the external-bin or system-bin namespaces; other path-like targets are omitted from the report breadcrumb.
+- Non-goals:
+  - Do not change `ExecutionTrace.ExternalOutcomes` semantics or erase provider truth from the runtime result.
+  - Do not broaden the paired uplift task set or failure taxonomy while sanitizing breadcrumbs.
+  - Do not infer external command identity from arbitrary host path layouts.
+- Rollback note:
+  - If a future adapter needs richer breadcrumb identity, add an explicit public identity field to the artifact schema instead of reintroducing raw host-local paths.
+
 ## Backlog Rules
 
 - P0 items outrank convenience items by default.

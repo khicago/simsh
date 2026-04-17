@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -236,6 +237,65 @@ func TestRecordStepKeepsExternalOutcomeBreadcrumb(t *testing.T) {
 	}
 	if outcome.ExitCode == nil || *outcome.ExitCode != contract.ExitCodeUnsupported {
 		t.Fatalf("recordStep(...).ExternalOutcomes[0].ExitCode = %v, want %d", outcome.ExitCode, contract.ExitCodeUnsupported)
+	}
+}
+
+func TestRecordStepSanitizesExternalOutcomeBreadcrumbPaths(t *testing.T) {
+	t.Parallel()
+
+	state := newTaskExecutionState(substrateThinCoreStateless, PairedTaskBudget{
+		MaxSteps:             3,
+		MaxObservationTokens: 100,
+	})
+	result := contract.ExecutionResult{
+		ExitCode: contract.ExitCodeGeneral,
+		Trace: contract.ExecutionTrace{
+			ExternalOutcomes: []contract.ExecutionTraceStep{
+				{
+					Command:      "host_tool",
+					ResolvedPath: "/tmp/provider/bin/host_tool",
+					OutcomeKind:  contract.ExternalOutcomeProviderFailure,
+				},
+				{
+					Command:      "rg",
+					ResolvedPath: path.Join(contract.VirtualExternalBinDir, "rg"),
+					OutcomeKind:  contract.ExternalOutcomeUnsupported,
+				},
+				{
+					Command:      "win_tool",
+					ResolvedPath: `C:\tools\win_tool.exe`,
+					OutcomeKind:  contract.ExternalOutcomeProviderFailure,
+				},
+				{
+					Command:      "json",
+					ResolvedPath: "json",
+					OutcomeKind:  contract.ExternalOutcomeCommandNotFound,
+				},
+			},
+		},
+	}
+
+	state.recordStep("inspect", "host_tool && rg && json", result, classificationProgress("checked external outcomes"))
+
+	if len(state.run.StepsDetail) != 1 {
+		t.Fatalf("recordStep(...).StepsDetail length = %d, want 1", len(state.run.StepsDetail))
+	}
+	outcomes := state.run.StepsDetail[0].ExternalOutcomes
+	if len(outcomes) != 4 {
+		t.Fatalf("recordStep(...).ExternalOutcomes length = %d, want 4; outcomes=%+v", len(outcomes), outcomes)
+	}
+	if outcomes[0].Command != "host_tool" || outcomes[0].ResolvedPath != "" {
+		t.Fatalf("host-local external outcome breadcrumb = %+v, want command preserved with empty resolved path", outcomes[0])
+	}
+	wantRGPath := path.Join(contract.VirtualExternalBinDir, "rg")
+	if outcomes[1].ResolvedPath != wantRGPath {
+		t.Fatalf("virtual external resolved path = %q, want %q", outcomes[1].ResolvedPath, wantRGPath)
+	}
+	if outcomes[2].Command != "win_tool" || outcomes[2].ResolvedPath != "" {
+		t.Fatalf("windows-local external outcome breadcrumb = %+v, want command preserved with empty resolved path", outcomes[2])
+	}
+	if outcomes[3].ResolvedPath != "json" {
+		t.Fatalf("bare command resolved path = %q, want json", outcomes[3].ResolvedPath)
 	}
 }
 

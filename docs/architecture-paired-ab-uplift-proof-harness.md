@@ -232,6 +232,10 @@ Per-step records should capture:
   `ExecutionTrace.ExternalOutcomes`
 - compact external outcome breadcrumbs when the step depends on external
   command availability or capability mismatch
+- external outcome breadcrumbs should be a safe artifact projection, not a raw
+  provider trace dump: preserve command identity, outcome kind, compatibility
+  exit code, and virtual command-path identities, but avoid serializing host-local
+  absolute paths into checked-in reports
 - short note when a fallback branch or misunderstanding was triggered
 
 If a task fails because it exhausted the fixed budget, the report should preserve both:
