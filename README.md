@@ -29,9 +29,11 @@ Historical `v0.3.0` closeout lives in [`docs/notes-v0-3-0-release-readiness.md`]
 You need Go `1.22+`. The default release gate is small and explicit:
 
 ```bash
-make check
-go test -race ./...
+make verify
 ```
+
+`make verify` is `release-check`: unit/contract tests, lint, the prepared-execution allocation gate, and the focused race gate. Named layer targets (`make test-unit`, `make test-native`, `make test-compare`, `make test-uplift`) isolate one proof question. See [`docs/notes-verification-scheme.md`](docs/notes-verification-scheme.md).
+The gate requires `staticcheck`; CI installs the pinned version before invoking it.
 
 If you only want the core binaries:
 
@@ -231,9 +233,12 @@ Common commands:
 
 ```bash
 make test
+make test-unit
+make test-proof
 make test-race
 make lint
 make check
+make verify
 make doc
 ```
 

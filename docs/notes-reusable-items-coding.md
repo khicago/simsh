@@ -18,6 +18,11 @@ This is a project-local catalog of reusable engineering assets. The goal is disc
 | Empty-directory removal command (`rmdir`) | SHOULD | Need explicit directory-only removal semantics that differ from `rm` | `pkg/builtin/op_rmdir.go` |
 | ASCII tree renderer (`tree`) | SHOULD | Need compact directory hierarchy visualization with depth/hidden controls for agent-readable context | `pkg/builtin/op_tree.go` |
 | Frontmatter multi-file inspector (`frontmatter`) | SHOULD | Need batch stat/get/print for markdown frontmatter with compact/json/md output modes and context slicing | `pkg/builtin/op_frontmatter.go`, `pkg/builtin/frontmatter_helpers.go` |
+| Human operator console | SHOULD | Need a human-facing sandbox console with history, scroll, cancel, and status chips; do not treat it as the agent execute surface | `pkg/cmd/console_tui.go` |
+| Unique snippet editor (`edit`) | SHOULD | Need an agent-facing file edit that fails on ambiguous matches instead of silently rewriting the wrong copy | `pkg/builtin/op_edit.go`, `pkg/builtin/commands/edit/manual.md` |
+| Recursive glob (`glob`) | SHOULD | Need `*.go`-style recursive path listing without teaching agents `find -name` | `pkg/builtin/op_glob.go`, `pkg/builtin/commands/glob/manual.md` |
+| Numbered file window (`view`) | SHOULD | Need a bounded numbered slice of a file so agents can inspect without `cat`-dumping | `pkg/builtin/op_view.go`, `pkg/builtin/commands/view/manual.md` |
+| Path name helpers (`dirname`/`basename`) | SHOULD | Need parent/final-component extraction on resolved virtual paths | `pkg/builtin/op_path_names.go` |
 
 ## Reusable Libraries / Packages
 | Item | MUST/SHOULD/NICE | When to Use | Source of Truth |
@@ -46,6 +51,7 @@ Examples: error handling patterns, feature flag patterns, logging/metrics conven
 | Adapter mount conformance harness | SHOULD | Need reusable `VirtualMount` list/search/describe/read-only metadata assertions across multiple adapter shapes without turning benchmark or adapter-local tests into duplicated mount smoke checks; keep it mount-only and directly self-tested | `pkg/adapter/internal/contracttest/mount.go`, `pkg/adapter/internal/contracttest/mount_test.go`, `pkg/adapter/reference/adapter_conformance_test.go`, `pkg/adapter/resourceset/adapter_test.go` |
 | Adapter composition/evolution stress proof | SHOULD | Need one harder multi-step workload that proves existing truth surfaces stay aligned together under mutation, invalidation, resume, audit, metrics, and denials without inventing new product nouns | `pkg/adapter/reference/adapter_test.go`, `benchmarks/simsh_native_reference/suite.go` |
 | Native benchmark scenario catalog + external mapping guardrail | SHOULD | Need stable native benchmark scenario ids/categories plus a downstream machine-readable mapping layer for external benchmark families; keep evaluation-feasibility artifacts aligned without mutating the native suite | `benchmarks/internal/scenarios/catalog.go`, `benchmarks/external_mapping/scenario_inventory.json`, `benchmarks/external_mapping/*_mapping.json`, `benchmarks/external_mapping/mapping_guard_test.go` |
+| Layered verification scheme | MUST | Need one SSOT for unit/contract, release kernel gate, native reference, external comparison, and paired uplift so new tests and CI jobs attach to the right question | `docs/notes-verification-scheme.md`, `Makefile`, `.github/workflows/verify.yml` |
 
 ## Deprecations
 - `pkg/builtin/manuals/*.md` -> `pkg/builtin/commands/*/manual.md` (remove duplicated manual sources and drift risk)

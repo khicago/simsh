@@ -41,7 +41,7 @@ It is:
 - the virtual root model remains explicit
 - session, trace, and adapter seams remain core runtime truth
 - one-shot execution stays supported
-- core packages remain `pkg/contract`, `pkg/sh`, `pkg/fs`, and `pkg/engine/runtime`
+- core packages remain `pkg/contract`, `pkg/engine`, `pkg/builtin`, `pkg/fs`, and `pkg/engine/runtime`; `pkg/sh` stays a thin compatibility/profile wrapper
 
 ## What Changes In v0.3.0
 

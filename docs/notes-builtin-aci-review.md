@@ -41,7 +41,24 @@ This review uses four practical costs:
 It also uses one design constraint:
 - composition cost: whether a change preserves efficient shell-style piping and command chaining where that interaction model is already valuable.
 
-## Findings
+## Current Status After K-006
+
+This review is kept as the design input that drove the builtin ACI wave.
+It is not a live inventory of missing flags.
+
+Landed in the current tree:
+- agent-native `edit` (unique snippet replace), `glob`, `view`, `dirname`, and `basename`;
+- command-contract metadata on `BuiltinCommandDoc` and `man` / `man --list --fmt json`;
+- dual-readable defaults for the worst token-waste commands, including `tree` defaulting to `outline` with `--fmt ascii|json`;
+- `--fmt jsonl` on record streams such as `grep`, `rg`, and `find`;
+- `--json` on object-style summaries such as `wc`, `env`, `type`, and mutation `--confirm/--json`;
+- a constrained `json stat/get` inspector instead of a jq-style language.
+
+If a later review needs a live inventory, read `simsh.md` and the command specs under `pkg/builtin/`, not the historical findings below as if they were still unimplemented.
+
+## Historical Findings
+
+These findings describe the pre-K-006 surface. Keep them for rationale, not as current status.
 
 ### 1. Structured output support is still sparse and inconsistent
 
