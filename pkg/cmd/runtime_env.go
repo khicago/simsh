@@ -28,11 +28,12 @@ func DescribeMarkdown() string {
 		fs.DescribeMarkdown(),
 		"",
 		"## Runtime Composition",
-		"- package `engine`: runtime composition layer (`sh + fs + policy/profile`)",
-		"- package `sh`: command language and execution semantics",
+		"- package `engine`: command language, parser, dispatch, traces, and prepared execution",
+		"- package `builtin`: default ACI command surface",
 		"- package `fs`: AI-oriented virtual filesystem contract and adapters",
-		"- package `cmd`: runtime entrypoints (CLI/TUI/serve) calling `engine`",
-		"- engine runtime wires `sh + fs` into a request-safe runtime instance",
+		"- package `sh`: compatibility wrapper plus generated runtime-profile text",
+		"- package `cmd`: runtime entrypoints (CLI/TUI/serve) calling `engine/runtime`",
+		"- engine runtime wires `engine + builtin + fs` into a request-safe runtime instance",
 		"- CLI default interactive mode uses TUI and also exposes `serve -P` for HTTP integration",
 	}
 	return strings.Join(lines, "\n") + "\n"

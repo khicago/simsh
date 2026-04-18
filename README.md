@@ -55,6 +55,8 @@ Interactive local runner:
 go run ./cmd/simsh-cli
 ```
 
+The TUI is a human operator console: history, scrollback, status chips, and cancel. Agents should use `-c` or the HTTP execute API, not this console. `?` shows keys; `ctrl+c` cancels a running command; `ctrl+d` quits.
+
 Example virtual-root output:
 
 ```text

@@ -106,6 +106,9 @@ func TestRuntimeWorkingDirPersistsAcrossExecuteCalls(t *testing.T) {
 	if out, code := runtime.Execute(context.Background(), "pwd"); code != 0 || strings.TrimSpace(out) != "/task_outputs/project" {
 		t.Fatalf("pwd after cd failed: code=%d out=%q", code, out)
 	}
+	if got := runtime.WorkingDir(); got != "/task_outputs/project" {
+		t.Fatalf("WorkingDir() = %q, want /task_outputs/project", got)
+	}
 	if out, code := runtime.Execute(context.Background(), "echo hello > note.txt"); code != 0 {
 		t.Fatalf("relative write failed: code=%d out=%q", code, out)
 	}

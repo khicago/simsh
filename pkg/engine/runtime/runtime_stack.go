@@ -88,6 +88,14 @@ func (r *Stack) ExecuteResult(ctx context.Context, commandLine string) contract.
 	return r.engine.ExecutePreparedResult(ctx, commandLine, r.prepared)
 }
 
+// WorkingDir returns the session-local virtual cwd for human operator surfaces.
+func (r *Stack) WorkingDir() string {
+	if r == nil {
+		return "/"
+	}
+	return stackWorkingDir(r.Ops())
+}
+
 func (r *Stack) Ops() contract.Ops {
 	if r == nil {
 		return contract.Ops{}

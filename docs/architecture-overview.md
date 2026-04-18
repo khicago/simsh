@@ -50,9 +50,13 @@ It owns:
 
 Core package model:
 - `pkg/contract`: stable interfaces and shared types
-- `pkg/sh`: shell runtime (`parser + planner + executor + builtin dispatch`)
+- `pkg/engine`: command language, parser, dispatch, traces, and prepared execution
+- `pkg/builtin`: default ACI command surface registered into the engine
 - `pkg/fs`: filesystem runtime (virtual zones + metadata + safety boundaries)
-- `pkg/engine/runtime`: runtime composition (`sh + fs + policy/profile`)
+- `pkg/engine/runtime`: runtime composition (`engine + builtin + fs + policy/profile`)
+- `pkg/sh`: thin compatibility wrapper plus generated runtime-profile text; it is not the parser or executor
+
+This split is the current code layout. Older docs that still say "`pkg/sh` is parser + planner + executor" are stale.
 
 The kernel is the place where trust, determinism, and default agent leverage should be judged first.
 It is also the piece a harness or AgentOS layer should depend on, rather than reimplement.
@@ -141,6 +145,7 @@ Design rule:
 - do not invent product semantics or trust-boundary rules in entry adapters first
 
 CLI/TUI are operator surfaces. HTTP is the integration surface for harnesses and higher-level systems. Both should stay downstream from kernel and adapter contracts.
+The interactive TUI is for humans: command history, scrollback, and cancel. Agent hosts should call the CLI one-shot path or HTTP execute API instead of driving the console.
 For the current shipped surface, the default HTTP listeners stay on loopback because session control exposes live execution metadata meant for local or otherwise trusted callers.
 
 ## Design Rules
@@ -158,10 +163,13 @@ Supporting but non-anchor layers:
 
 ## Current Status
 
-- [x] Core package split (`contract` / `sh` / `fs` / `engine/runtime`)
+- [x] Core package split (`contract` / `engine` / `builtin` / `fs` / `engine/runtime`)
 - [x] Unified runtime composition shared by CLI and HTTP entry surfaces
-- [x] Default workspace zones and path metadata
-- [x] Structured execution result and trace contracts
+- [x] Default workspace zones, virtual `cwd`, and path metadata
+- [x] Structured execution result and trace contracts, including external-outcome kinds
 - [x] First-class session lifecycle primitives
-- [x] Adapter-extension boundary documented
+- [x] Adapter-extension boundary documented and proof-tested
+- [x] `remote_high_latency` mounts fail closed instead of silent fanout
 - [x] CLI/TUI and HTTP surfaces available as thin runtime entry layers
+
+The current verification scheme lives in `docs/notes-verification-scheme.md`.
