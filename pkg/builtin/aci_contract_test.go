@@ -23,7 +23,7 @@ func TestCwdAwareCommandDocsAvoidAbsoluteOnlyLanguage(t *testing.T) {
 	commands := []string{
 		"ls", "tree", "find", "cat", "grep", "rg", "head", "tail", "wc",
 		"sort", "uniq", "touch", "tee", "sed", "mkdir", "rm", "rmdir",
-		"cp", "mv", "diff", "frontmatter",
+		"cp", "mv", "diff", "frontmatter", "edit", "glob", "view", "dirname", "basename",
 	}
 	banned := []string{
 		"ABS_",

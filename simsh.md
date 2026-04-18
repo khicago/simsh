@@ -8,10 +8,18 @@
 - mount-backed virtual paths are immutable (no write/edit/remove/mkdir/cp/mv on those paths)
 - default aliases: `ll` -> `ls -l`, `fm` -> `frontmatter`
 - optional rc bootstrap supports read-only `export` + `alias` statements
-- builtin commands: `cat`, `cd`, `cp`, `date`, `diff`, `echo`, `env`, `find`, `frontmatter`, `grep`, `head`, `json`, `ls`, `man`, `mkdir`, `mv`, `pwd`, `rg`, `rm`, `rmdir`, `sed`, `sort`, `tail`, `tee`, `touch`, `tree`, `type`, `uniq`, `wc`, `which`
+- builtin commands: `basename`, `cat`, `cd`, `cp`, `date`, `diff`, `dirname`, `echo`, `edit`, `env`, `find`, `frontmatter`, `glob`, `grep`, `head`, `json`, `ls`, `man`, `mkdir`, `mounts`, `mv`, `pwd`, `rg`, `rm`, `rmdir`, `sed`, `sort`, `tail`, `tee`, `touch`, `tree`, `type`, `uniq`, `view`, `wc`, `which`
 - profile gates: `core-strict`, `bash-plus`, `zsh-lite`
 
 ### Builtin Command Reference
+
+#### basename
+    basename [--] PATH
+- Prints the final component of a resolved virtual path.
+- Relative paths resolve against the session working directory before basename is applied.
+
+Examples:
+    basename /task_outputs/report.md
 
 #### cat
     cat [-n] PATH | cat (stdin passthrough)
@@ -37,7 +45,7 @@ Examples:
     cp [--confirm] [--json] SRC_PATH DEST_PATH
 - Copies a file from source to destination.
 - Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.
-- Mount-backed virtual paths are immutable and not valid copy operands.
+- Projection-backed virtual paths are not valid copy operands; factual mounts may opt into transfer support.
 
 Examples:
     cp /knowledge_base/template.md /task_outputs/report.md
@@ -62,6 +70,14 @@ Examples:
 Examples:
     diff /knowledge_base/v1.md /knowledge_base/v2.md
 
+#### dirname
+    dirname [--] PATH
+- Prints the parent of a resolved virtual path.
+- Relative paths resolve against the session working directory before dirname is applied.
+
+Examples:
+    dirname /task_outputs/report.md
+
 #### echo
     echo [ARGS...]
 - Use echo for deterministic plain text output.
@@ -69,6 +85,18 @@ Examples:
 Examples:
     echo hello world
     echo "report data" | tee /task_outputs/report.txt
+
+#### edit
+    edit [--json] [--confirm] [--all] [--count] --old OLD [--new NEW] [--] PATH
+- Default replace requires a unique OLD snippet so edits cannot silently hit the wrong copy.
+- Use --all only when every match should change, and --count to inspect matches without writing.
+- Use --confirm or --json for an explicit summary; default success is silent like other mutations.
+
+Examples:
+    edit --old TODO --new DONE /task_outputs/notes.md
+    edit --json --old unique --new patched /task_outputs/report.md
+    edit --count --old foo /task_outputs/dup.txt
+    edit --all --old foo --new bar /task_outputs/dup.txt
 
 #### env
     env [--json] [--split] [KEY]
@@ -102,6 +130,17 @@ Examples:
     frontmatter get --key title /knowledge_base/notes.md
     frontmatter print --key sop -C 2 docs/must-sop.md
 
+#### glob
+    glob [--fmt jsonl] [--] PATTERN [PATH ...]
+- A pattern without a slash matches basenames recursively, so glob '*.go' finds every Go file under the target.
+- Use ** in a path pattern for explicit directory wildcards.
+- Use --fmt jsonl for path records without changing the default path-per-line stream.
+
+Examples:
+    glob '*.go'
+    glob '**/*.md' /knowledge_base
+    glob --fmt jsonl 'pkg/*.go' /task_outputs/project
+
 #### grep
     grep [-E|-F] [-r] [-l] [-A N] [-B N] [-C N] [--fmt jsonl] PATTERN [PATH]
 - Use -r for directory search and -l to list matched files only.
@@ -125,14 +164,16 @@ Examples:
 #### json
     json <stat|get|keys|len> ...
 - Use json stat to inspect JSON shape across files and directories.
-- Use json get --path QUERY to extract a JSON subtree without dumping the whole file.
-- Use json keys and json len for narrow structure-aware JSON queries.
+- Use json get --path QUERY to extract one or a small set of JSON subtrees without dumping the whole file.
+- Use json keys and json len for narrow structure-aware queries instead of re-reading full JSON into the model.
 
 Examples:
     json stat /task_outputs/data.json
     json stat -r --fmt json /workspace
     json get --path items[0].name /task_outputs/data.json
-    json keys --path meta data.json
+    json get --path meta.author --path items[1].name --fmt json /task_outputs/data.json
+    json keys --path meta /task_outputs/data.json
+    json len -r --path items /workspace
 
 #### ls
     ls [-a] [-R] [-l] [--fmt text|md|json] [PATH...]
@@ -160,17 +201,30 @@ Examples:
     mkdir [--confirm] [--json] [-p] PATH...
 - Creates directories. -p creates parent directories as needed.
 - Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.
-- Mount-backed virtual paths are immutable and cannot be created.
+- Projection-backed virtual paths are immutable; only mounts that declare mutate support accept directory creation.
 
 Examples:
     mkdir /task_outputs/reports
     mkdir -p /task_outputs/a/b/c
 
+#### mounts
+    mounts [--fmt text|json]
+mounts refresh [--require-narrow] MOUNT_POINT...
+- mounts shows the active virtual mount contract surface visible to the runtime.
+- mounts refresh is explicit and target-scoped; ordinary reads still do not trigger hidden refresh.
+- Use --fmt json for machine-readable mount point/profile/status or refresh data.
+
+Examples:
+    mounts
+    mounts --fmt json
+    mounts refresh /knowledge_base
+    mounts refresh --require-narrow /knowledge_base/guide.md
+
 #### mv
     mv [--confirm] [--json] SRC_PATH DEST_PATH
 - Moves a file from source to destination.
 - Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.
-- Mount-backed virtual paths are immutable and cannot be moved.
+- Projection-backed virtual paths are not valid move operands; factual mounts may opt into transfer support.
 
 Examples:
     mv /task_outputs/draft.md /task_outputs/final.md
@@ -197,7 +251,7 @@ Examples:
     rm [--confirm] [--json] PATH...
 - Removes files. Does not support directory removal.
 - Use --confirm or --json when you want explicit success feedback without changing the default silent behavior.
-- Mount-backed virtual paths are immutable and cannot be removed.
+- Projection-backed virtual paths are immutable; only mounts that declare mutate support accept removals.
 
 Examples:
     rm /task_outputs/old.md
@@ -291,6 +345,17 @@ Examples:
     sort /task_outputs/log.txt | uniq -c
     uniq -d /task_outputs/sorted.txt
 
+#### view
+    view [--start N] [--lines N] [--fmt jsonl] [--] PATH
+- view prints a numbered window so agents can inspect a slice instead of dumping the whole file.
+- Line numbers are 1-based. Default window is 80 lines from the start of the file.
+- Use --fmt jsonl for {line,text} records, not --json.
+
+Examples:
+    view /knowledge_base/readme.md
+    view --start 20 --lines 40 /task_outputs/report.md
+    view --fmt jsonl --start 1 --lines 10 /task_outputs/data.json
+
 #### wc
     wc [--json] [-l] [-w] [-c] [PATH]
 - Single-metric modes keep bare numeric output for pipeline composability.
@@ -319,9 +384,10 @@ Examples:
 - metadata is AI-oriented: kind, line count, frontmatter rows, speaker-like rows, relevance
 
 ## Runtime Composition
-- package `engine`: runtime composition layer (`sh + fs + policy/profile`)
-- package `sh`: command language and execution semantics
+- package `engine`: command language, parser, dispatch, traces, and prepared execution
+- package `builtin`: default ACI command surface
 - package `fs`: AI-oriented virtual filesystem contract and adapters
-- package `cmd`: runtime entrypoints (CLI/TUI/serve) calling `engine`
-- engine runtime wires `sh + fs` into a request-safe runtime instance
+- package `sh`: compatibility wrapper plus generated runtime-profile text
+- package `cmd`: runtime entrypoints (CLI/TUI/serve) calling `engine/runtime`
+- engine runtime wires `engine + builtin + fs` into a request-safe runtime instance
 - CLI default interactive mode uses TUI and also exposes `serve -P` for HTTP integration

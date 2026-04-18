@@ -260,6 +260,7 @@ func readShellWord(input string, start int) (string, int, error) {
 	var quote byte
 	var buf strings.Builder
 	escaped := false
+	quoted := false
 	i := start
 
 	for i < len(input) {
@@ -291,9 +292,10 @@ func readShellWord(input string, start int) (string, int, error) {
 			i++
 		case '\'', '"':
 			quote = ch
+			quoted = true
 			i++
 		case ' ', '\t', '\r', '\n', '|', '&', ';', '<', '>':
-			if buf.Len() == 0 {
+			if buf.Len() == 0 && !quoted {
 				return "", start, fmt.Errorf("expected token")
 			}
 			return buf.String(), i, nil
@@ -309,7 +311,7 @@ func readShellWord(input string, start int) (string, int, error) {
 	if escaped {
 		buf.WriteByte('\\')
 	}
-	if buf.Len() == 0 {
+	if buf.Len() == 0 && !quoted {
 		return "", start, fmt.Errorf("expected token")
 	}
 	return buf.String(), i, nil

@@ -115,6 +115,33 @@ func TestRunGrepDoesNotFallbackOnRemoteHighLatencyCapabilityRefusal(t *testing.T
 	}
 }
 
+func TestRunGlobPreservesRemoteHighLatencyEnumerationRefusal(t *testing.T) {
+	mount := newBuiltinRemoteHighMount(contract.MountCLIFind)
+	readCalled := false
+	runtime := engine.CommandRuntime{
+		Ctx: context.Background(),
+		Ops: contract.Ops{
+			RequireAbsolutePath: func(raw string) (string, error) { return raw, nil },
+			IsDirPath:           func(context.Context, string) (bool, error) { return true, nil },
+			CollectFilesUnder: func(ctx context.Context, target string) ([]string, error) {
+				return contract.EnumerateMountFiles(ctx, mount, target, true)
+			},
+			ReadRawContent: func(context.Context, string) (string, error) {
+				readCalled = true
+				return "", nil
+			},
+		},
+	}
+
+	out, code := runGlob(runtime, []string{"*.go", "/remote"})
+	if code == 0 || !strings.Contains(out, "remote_high_latency") {
+		t.Fatalf("runGlob(...) = (%q, %d), want explicit remote_high_latency failure", out, code)
+	}
+	if readCalled {
+		t.Fatal("runGlob unexpectedly fell back to per-file reads after remote-high refusal")
+	}
+}
+
 func TestReadJSONInputsDoesNotFallbackOnRemoteHighLatencyBulkReadRefusal(t *testing.T) {
 	mount := newBuiltinRemoteHighMount(contract.MountCLIRead, contract.MountCLIBulkRead)
 	readRawCalled := false

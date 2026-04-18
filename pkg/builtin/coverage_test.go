@@ -1064,6 +1064,11 @@ func TestBuiltinCommandErrorCoverage(t *testing.T) {
 		{name: "sort-bad-flag", cmd: "sort -z"},
 		{name: "uniq-bad-flag", cmd: "uniq -z"},
 		{name: "diff-missing-args", cmd: "diff " + rt.abs("a.txt")},
+		{name: "edit-missing-path", cmd: "edit --old a --new b"},
+		{name: "glob-missing-pattern", cmd: "glob"},
+		{name: "view-missing-path", cmd: "view"},
+		{name: "dirname-missing-path", cmd: "dirname"},
+		{name: "basename-extra-args", cmd: "basename a b"},
 		{name: "tee-read-only", cmd: "echo x | tee " + rt.abs("deny.txt"), ops: &readOnlyOps},
 		{name: "rmdir-read-only", cmd: "rmdir " + rt.abs("deny"), ops: &readOnlyOps},
 	}

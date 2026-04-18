@@ -774,6 +774,21 @@ func TestEngineCommandReferenceNormalization(t *testing.T) {
 	})
 }
 
+func TestEngineEmptyQuotedWords(t *testing.T) {
+	eng := newTestEngine()
+	fs := newTestFS()
+	ops := readOnlyOps(fs)
+
+	out, code := eng.Execute(context.Background(), "echo ''", ops)
+	if code != 0 || out != "" {
+		t.Fatalf("echo empty quotes = (%q, %d), want empty stdout", out, code)
+	}
+	out, code = eng.Execute(context.Background(), `echo "a" '' "b"`, ops)
+	if code != 0 || out != "a  b" {
+		t.Fatalf("echo mixed empty quotes = (%q, %d), want %q", out, code, "a  b")
+	}
+}
+
 func TestEngineScriptOpsAndRedirectionPolicy(t *testing.T) {
 	eng := newTestEngine()
 	fs := newTestFS()
@@ -2211,7 +2226,7 @@ func TestPipelineIntegration(t *testing.T) {
 // ==================== Embed Manual Tests ====================
 
 func TestEmbedManualLoading(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "head", "tail", "man", "date", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff", "edit", "glob", "view", "dirname", "basename"} {
 		manual := builtin.LoadEmbeddedManual(name)
 		if manual == "" {
 			t.Errorf("missing embedded manual for %q", name)
@@ -2223,7 +2238,7 @@ func TestEmbedManualLoading(t *testing.T) {
 }
 
 func TestExamplesForAllCommands(t *testing.T) {
-	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff"} {
+	for _, name := range []string{"ls", "tree", "cd", "pwd", "env", "frontmatter", "cat", "grep", "rg", "find", "which", "type", "echo", "sed", "tee", "man", "mkdir", "cp", "mv", "rm", "rmdir", "touch", "wc", "sort", "uniq", "diff", "edit", "glob", "view", "dirname", "basename"} {
 		examples := builtin.ExamplesFor(name)
 		if len(examples) == 0 {
 			t.Errorf("missing examples for %q", name)

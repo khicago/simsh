@@ -235,11 +235,11 @@ func buildContractSearchRequest(pattern string, opts searchMatcherOptions, globs
 		return contract.SearchRequest{}
 	}
 	return contract.SearchRequest{
-		Pattern:   pattern,
-		Regex:     opts.Regex,
-		CaseMode:  searchCaseModeToContract(opts.CaseMode),
-		Targets:   append([]string(nil), targets...),
-		Globs:     append([]string(nil), globs...),
+		Pattern:    pattern,
+		Regex:      opts.Regex,
+		CaseMode:   searchCaseModeToContract(opts.CaseMode),
+		Targets:    append([]string(nil), targets...),
+		Globs:      append([]string(nil), globs...),
 		Before:     before,
 		After:      after,
 		MaxResults: maxResults,

@@ -33,4 +33,10 @@ const (
 	CommandSort  = "sort"
 	CommandUniq  = "uniq"
 	CommandDiff  = "diff"
+
+	CommandEdit     = "edit"
+	CommandGlob     = "glob"
+	CommandView     = "view"
+	CommandDirname  = "dirname"
+	CommandBasename = "basename"
 )

@@ -88,6 +88,24 @@ var commandExamples = map[string][]string{
 	"sort":  {"sort /task_outputs/names.txt", "sort -rn /task_outputs/scores.txt"},
 	"uniq":  {"sort /task_outputs/log.txt | uniq -c", "uniq -d /task_outputs/sorted.txt"},
 	"diff":  {"diff /knowledge_base/v1.md /knowledge_base/v2.md"},
+	"edit": {
+		"edit --old TODO --new DONE /task_outputs/notes.md",
+		"edit --json --old unique --new patched /task_outputs/report.md",
+		"edit --count --old foo /task_outputs/dup.txt",
+		"edit --all --old foo --new bar /task_outputs/dup.txt",
+	},
+	"glob": {
+		"glob '*.go'",
+		"glob '**/*.md' /knowledge_base",
+		"glob --fmt jsonl 'pkg/*.go' /task_outputs/project",
+	},
+	"view": {
+		"view /knowledge_base/readme.md",
+		"view --start 20 --lines 40 /task_outputs/report.md",
+		"view --fmt jsonl --start 1 --lines 10 /task_outputs/data.json",
+	},
+	"dirname":  {"dirname /task_outputs/report.md"},
+	"basename": {"basename /task_outputs/report.md"},
 }
 
 // ExamplesFor returns the example strings for a command.

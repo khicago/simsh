@@ -109,6 +109,11 @@ func defaultBuiltinRegistrations() []defaultBuiltinRegistration {
 		{Name: CommandSort, CanonicalSource: "pkg/builtin/op_sort.go", Build: specSort},
 		{Name: CommandUniq, CanonicalSource: "pkg/builtin/op_uniq.go", Build: specUniq},
 		{Name: CommandDiff, CanonicalSource: "pkg/builtin/op_diff.go", Build: specDiff},
+		{Name: CommandEdit, CanonicalSource: "pkg/builtin/op_edit.go", Build: specEdit},
+		{Name: CommandGlob, CanonicalSource: "pkg/builtin/op_glob.go", Build: specGlob},
+		{Name: CommandView, CanonicalSource: "pkg/builtin/op_view.go", Build: specView},
+		{Name: CommandDirname, CanonicalSource: "pkg/builtin/op_path_names.go", Build: specDirname},
+		{Name: CommandBasename, CanonicalSource: "pkg/builtin/op_path_names.go", Build: specBasename},
 	}
 }
 
